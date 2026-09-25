@@ -1,0 +1,121 @@
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    color: var(--color-fg);
+    background: var(--color-bg-subtle);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgb(43 92 230 / 0.16);
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(10 10 10 / 0.4);
+    outline-offset: 2px;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: default;
+  }
+
+  /*
+   * Reduced motion caps every transition-duration below. Elements without a transition utility
+   * default to `transition-property: all`, so the cap would start animating everything they change —
+   * even inherited visibility (a just-opened menu's items stay hidden for 120ms and can't take focus).
+   * In this layer, transition utilities still win; only the implicit `all` is removed.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-property: none;
+    }
+  }
+}
+
+/*
+ * Reduced motion: short opacity-only feedback, no spring / scale / blur / translate.
+ * Keyframes are redefined as fades; transitions are capped at 120ms.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 120ms !important;
+    animation-duration: 120ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 120ms !important;
+    animation-delay: 0s !important;
+  }
+
+  @keyframes enter { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes enter-sm { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes reveal { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes agent-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes spin { to { transform: none; } }
+  @keyframes breathe { to { opacity: 1; } }
+  @keyframes pulse { to { opacity: 1; } }
+}
+
+/*
+ * New Chat view transition (React Router `viewTransition`): only the chat body changes — the old
+ * conversation fades out while the empty state fades in and plays its own entrance. The rest of
+ * the page swaps without a page-wide cross-fade.
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-group(chat-body) {
+  animation-duration: 140ms;
+}
+
+::view-transition-old(chat-body) {
+  animation: chat-body-out 120ms var(--ease-standard) both;
+}
+
+::view-transition-new(chat-body) {
+  animation: chat-body-in 140ms var(--ease-standard) 40ms both;
+}
+
+@keyframes chat-body-out {
+  to { opacity: 0; transform: translateY(-4px); }
+}
+
+@keyframes chat-body-in {
+  from { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes chat-body-out { to { opacity: 0; } }
+}

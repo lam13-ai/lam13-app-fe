@@ -1,0 +1,4 @@
+/* Self-hosted fonts: Cousine (UI + chat) and Inter (long-form helper copy). */
+@import '@fontsource/cousine/400.css';
+@import '@fontsource/cousine/700.css';
+@import '@fontsource-variable/inter/index.css';

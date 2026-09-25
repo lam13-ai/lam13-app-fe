@@ -1,0 +1,83 @@
+/* Assistant message typography — measured from the reference demo (reference-ui-analysis.md §4). */
+@layer components {
+  .md-content {
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    color: var(--color-fg);
+    overflow-wrap: anywhere;
+  }
+
+  .md-content > :first-child { margin-top: 0; }
+  .md-content > :last-child { margin-bottom: 0; }
+
+  .md-content h1,
+  .md-content h2 {
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.12;
+    margin: 20px 0 12px;
+  }
+
+  .md-content h3 {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.3;
+    margin: 16px 0 8px;
+  }
+
+  .md-content p { margin: 0 0 8px; }
+  .md-content p:last-child { margin-bottom: 0; }
+
+  .md-content ol { list-style: decimal; padding-left: 20px; margin: 8px 0; }
+  .md-content ul { list-style: disc; padding-left: 16px; margin: 8px 0; }
+  .md-content li { margin-bottom: 6px; }
+  .md-content li::marker { color: var(--color-fg); }
+
+  .md-content strong { font-weight: 700; }
+
+  .md-content a {
+    color: var(--color-accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .md-content code {
+    background: var(--color-muted);
+    padding: 1px 4px;
+    font-size: 0.95em;
+  }
+
+  .md-content pre {
+    background: var(--color-muted);
+    border: 1px solid var(--color-border);
+    padding: 12px 14px;
+    margin: 12px 0;
+    overflow-x: auto;
+    font-size: var(--text-table);
+  }
+
+  .md-content pre code { background: none; padding: 0; }
+
+  /* Tables scroll horizontally inside their own wrapper on narrow screens. */
+  .md-content .md-table { overflow-x: auto; margin: 12px 0; }
+
+  .md-content table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-table);
+    line-height: var(--text-table--line-height);
+  }
+
+  .md-content th,
+  .md-content td {
+    border: 1px solid var(--color-table-border);
+    padding: 8px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .md-content th {
+    background: var(--color-table-head);
+    font-weight: 700;
+  }
+}

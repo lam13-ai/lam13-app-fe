@@ -1,0 +1,38 @@
+@import 'tailwindcss';
+@import './fonts.css';
+@import './tokens.css';
+@import './base.css';
+@import './markdown.css';
+
+/* Hidden scrollbar (message log, sidebar list) — reference §10. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Uppercase monospace eyebrow label — reference §1. */
+@utility eyebrow {
+  font-size: var(--text-2xs);
+  line-height: var(--text-2xs--line-height);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--color-fg-muted);
+}
+
+/*
+ * Expands the pointer/touch hit area to at least 44px without changing the visual size.
+ * The element must be positioned (relative/absolute).
+ */
+@utility hit-area {
+  &::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}
