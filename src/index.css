@@ -1,0 +1,267 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Lam13.ai Design System - New Brand Colors */
+    
+    /* Primary brand: #1A2F4B (dark navy), #C9E2F7 (light blue) */
+    /* Neutrals: #F5F7FA (light), #E4E6EF (muted), #6B7280 (medium gray), #333333 (dark) */
+    
+    /* Core Colors - Black & White + gradient accent */
+    --background: 0 0% 100%; /* White */
+    --foreground: 0 0% 4%; /* Near-black */
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 4%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 4%;
+
+    /* Brand Colors */
+    --primary: 0 0% 4%; /* Black - primary buttons */
+    --primary-foreground: 0 0% 100%; /* White */
+
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 4%;
+
+    --accent: 224 77% 53%; /* #2B5CE6 - Electric cobalt */
+    --accent-foreground: 0 0% 100%;
+
+    --teal: 227 73% 44%; /* #1E3FBF - Deep cobalt */
+
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 38%;
+
+    --destructive: 11 58% 44%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 86%;
+    --input: 0 0% 86%;
+    --ring: 0 0% 4%;
+
+    /* Always-light surface for external brand logos */
+    --logo-surface: 0 0% 100%;
+
+    --radius: 0rem; /* Sharp corners everywhere */
+
+    /* Gradients - electric cobalt accent */
+    --gradient-primary: linear-gradient(135deg, #1E3FBF, #2B5CE6);
+    --gradient-accent: linear-gradient(100deg, #1E3FBF 0%, #2B5CE6 50%, #7AA0FF 100%);
+    --gradient-accent-invert: linear-gradient(100deg, #FFFFFF 0%, #B9CBFF 55%, #6E8FF0 100%);
+    --gradient-subtle: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 96%));
+    --gradient-frame: linear-gradient(135deg, #1E3FBF 0%, #2B5CE6 45%, #7AA0FF 100%);
+
+    /* Shadows */
+    --shadow-card: 0 2px 8px hsl(0 0% 0% / 0.06);
+    --shadow-elevated: 0 8px 24px hsl(0 0% 0% / 0.10);
+
+    /* Typography */
+    --font-display: 'Cousine', ui-monospace, 'Courier New', monospace;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+    /* Transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --sidebar-background: 210 48% 20%; /* Dark navy */
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 210 68% 88%; /* Light blue */
+    --sidebar-primary-foreground: 210 48% 20%;
+    --sidebar-accent: 210 48% 25%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 210 48% 25%;
+    --sidebar-ring: 210 68% 88%;
+  }
+
+  .dark {
+    --background: 210 48% 12%; /* Dark navy background */
+    --foreground: 214 33% 97%; /* Light text */
+
+    --card: 210 48% 15%;
+    --card-foreground: 214 33% 97%;
+
+    --popover: 210 48% 15%;
+    --popover-foreground: 214 33% 97%;
+
+    --primary: 210 68% 88%; /* Light blue in dark mode */
+    --primary-foreground: 210 48% 12%;
+
+    --secondary: 210 48% 20%;
+    --secondary-foreground: 214 33% 97%;
+
+    --accent: 210 68% 80%;
+    --accent-foreground: 210 48% 12%;
+
+    --teal: 210 60% 70%;
+
+    --muted: 210 48% 18%;
+    --muted-foreground: 220 9% 60%;
+
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 48% 22%;
+    --input: 210 48% 22%;
+    --ring: 210 68% 88%;
+
+    /* Always-light surface for external brand logos */
+    --logo-surface: 0 0% 100%;
+    
+    --sidebar-background: 210 48% 10%;
+    --sidebar-foreground: 214 33% 97%;
+    --sidebar-primary: 210 68% 88%;
+    --sidebar-primary-foreground: 210 48% 12%;
+    --sidebar-accent: 210 48% 18%;
+    --sidebar-accent-foreground: 214 33% 97%;
+    --sidebar-border: 210 48% 22%;
+    --sidebar-ring: 210 68% 88%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.12;
+  }
+
+  ::selection {
+    background: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+  }
+}
+
+@layer utilities {
+  .text-gradient-accent {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-accent);
+  }
+
+  /* light-on-dark variant for black surfaces */
+  .text-gradient-accent-invert {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-accent-invert);
+  }
+
+  /* Logo marquee */
+  @keyframes marquee-x {
+    to { transform: translateX(-50%); }
+  }
+
+  .animate-marquee {
+    animation: marquee-x 32s linear infinite;
+  }
+
+  .marquee-paused:hover .animate-marquee,
+  .marquee-paused:focus-within .animate-marquee {
+    animation-play-state: paused;
+  }
+
+  .marquee-mask {
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  }
+
+  @keyframes caret-blink {
+    50% { opacity: 0; }
+  }
+
+  .animate-caret {
+    animation: caret-blink 1s steps(1) infinite;
+  }
+
+  /* hero orb breathing zoom, cubic easing */
+  @keyframes orb-zoom {
+    0%, 100% { transform: scale(0.9); }
+    50% { transform: scale(1.12); }
+  }
+
+  .animate-orb-zoom {
+    animation: orb-zoom 7s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  }
+
+  /* AI-themed animations */
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+  }
+
+  @keyframes glow-pulse {
+    0%, 100% { opacity: 0.5; filter: blur(20px); }
+    50% { opacity: 0.8; filter: blur(30px); }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -1000px 0; }
+    100% { background-position: 1000px 0; }
+  }
+
+  @keyframes grid-flow {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(48px); }
+  }
+
+  @keyframes draw-question {
+    0% { 
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+    }
+    50% { 
+      stroke-dasharray: 1;
+      stroke-dashoffset: 0;
+    }
+    100% { 
+      stroke-dasharray: 1;
+      stroke-dashoffset: -1;
+    }
+  }
+
+  @keyframes typewriter {
+    from {
+      width: 0;
+    }
+    to {
+      width: 100%;
+    }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-glow-pulse {
+    animation: glow-pulse 4s ease-in-out infinite;
+  }
+
+  .animate-shimmer {
+    animation: shimmer 3s linear infinite;
+  }
+
+  .animate-grid-flow {
+    animation: grid-flow 20s linear infinite;
+  }
+
+  .animate-draw-question {
+    animation: draw-question 3s ease-in-out infinite;
+  }
+
+  .animate-typewriter {
+    display: inline;
+    animation: typewriter 3s steps(80) forwards;
+  }
+}
