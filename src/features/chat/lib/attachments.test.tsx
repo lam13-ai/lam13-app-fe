@@ -15,16 +15,16 @@ afterEach(() => vi.restoreAllMocks());
 describe('validateImageFiles', () => {
   it('accepts supported images and rejects wrong types, oversize files and extras beyond the limit, with reasons', () => {
     const big = image('big.png', 'image/png', ATTACHMENT_LIMITS.maxBytes + 1);
-    const { accepted, rejected } = validateImageFiles([image('a.png'), image('doc.pdf', 'application/pdf'), big, image('b.webp', 'image/webp')], 0);
+    const { accepted, rejected } = validateImageFiles([image('a.png'), image('notes.txt', 'text/plain'), big, image('b.webp', 'image/webp')], 0);
     expect(accepted.map((f) => f.name)).toEqual(['a.png', 'b.webp']);
     expect(rejected).toEqual([
-      { name: 'doc.pdf', reason: 'Only PNG, JPEG, WebP and GIF images can be attached.' },
-      { name: 'big.png', reason: 'Images can be up to 10 MB.' },
+      { name: 'notes.txt', reason: 'Only PDF, PNG, JPEG, WebP and GIF files can be attached.' },
+      { name: 'big.png', reason: 'Files can be up to 25 MB.' },
     ]);
 
     const full = validateImageFiles([image('x.png'), image('y.png')], ATTACHMENT_LIMITS.maxFiles - 1);
     expect(full.accepted.map((f) => f.name)).toEqual(['x.png']);
-    expect(full.rejected[0]).toEqual({ name: 'y.png', reason: 'You can attach up to 6 images.' });
+    expect(full.rejected[0]).toEqual({ name: 'y.png', reason: 'You can attach up to 6 files.' });
   });
 });
 

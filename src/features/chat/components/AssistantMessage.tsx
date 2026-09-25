@@ -1,7 +1,8 @@
+import { Download, FileText, Presentation } from 'lucide-react';
 import { Markdown } from '@/components/Markdown';
-import { VisuallyHidden } from '@/components/ui';
+import { Spinner, VisuallyHidden, smallIconProps } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import type { ErrorInfo } from '@/types/api';
+import type { Artifact, ErrorInfo } from '@/types/api';
 import type { MessageView } from '@/types/chat';
 import { MessageActions } from './MessageActions';
 import { MessageNotice } from './MessageNotice';
@@ -39,6 +40,7 @@ export function AssistantMessage({
     >
       <VisuallyHidden>Lam13 replied:</VisuallyHidden>
       {hasContent && <Markdown content={message.content} />}
+      {message.artifacts && message.artifacts.length > 0 && <Artifacts artifacts={message.artifacts} />}
       {message.status === 'complete' && hasContent && (
         <MessageActions createdAt={message.created_at} copyText={message.content} onRegenerate={onRegenerate} />
       )}
@@ -58,5 +60,45 @@ export function AssistantMessage({
         />
       )}
     </article>
+  );
+}
+
+const artifactLabels: Record<Artifact['type'], string> = {
+  report: 'Strategy report',
+  pptx: 'PowerPoint deck',
+  xlsx: 'Excel workbook',
+};
+
+/** Generated deliverables (report PDF, PPTX): building → download link. */
+function Artifacts({ artifacts }: { artifacts: Artifact[] }) {
+  return (
+    <ul aria-label="Generated files" className="mt-3 flex flex-wrap gap-2">
+      {artifacts.map((a) => {
+        const Icon = a.type === 'pptx' ? Presentation : FileText;
+        const label = artifactLabels[a.type];
+        const box = 'inline-flex items-center gap-2 border border-hairline-strong px-3 py-2 text-xs';
+        return (
+          <li key={a.id}>
+            {a.status === 'ready' && a.download ? (
+              <a href={a.download.url} target="_blank" rel="noopener noreferrer" className={cn(box, 'text-fg hover:border-fg/60')}>
+                <Icon {...smallIconProps} />
+                {label}
+                <Download {...smallIconProps} className="text-fg-muted" />
+              </a>
+            ) : a.status === 'error' ? (
+              <span className={cn(box, 'text-danger')}>
+                <Icon {...smallIconProps} />
+                {label} couldn&apos;t be generated
+              </span>
+            ) : (
+              <span role="status" className={cn(box, 'text-fg-muted')}>
+                <Spinner size={14} state="active" />
+                Building {label.toLowerCase()}…
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

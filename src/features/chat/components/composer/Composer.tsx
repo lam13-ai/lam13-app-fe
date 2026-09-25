@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { useVoiceRecorder, VoiceComposer, type SendRecording } from '@/features/voice';
 import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
 import { cn } from '@/lib/cn';
@@ -20,6 +20,8 @@ export interface ComposerProps {
   /** Uploads and sends a recorded voice note. Omit to hide voice recording. */
   onSendVoice?: SendRecording;
   onAttach: () => void;
+  /** Files picked for the next message, shown above the input (keeps the composer open). */
+  attachments?: ReactNode;
 }
 
 /**
@@ -27,7 +29,7 @@ export interface ComposerProps {
  * → streaming (input disabled, Stop) → back to expanded, ready for the next message.
  * Voice: the mic swaps the controls for the recording → preview → sending panel in the same pill.
  */
-export function Composer({ draftKey, streaming, disabled, onSend, onStop, onSendVoice, onAttach }: ComposerProps) {
+export function Composer({ draftKey, streaming, disabled, onSend, onStop, onSendVoice, onAttach, attachments }: ComposerProps) {
   const draft = useComposerStore((s) => s.drafts[draftKey] ?? '');
   const setDraft = useComposerStore((s) => s.setDraft);
   const clearDraft = useComposerStore((s) => s.clearDraft);
@@ -41,7 +43,7 @@ export function Composer({ draftKey, streaming, disabled, onSend, onStop, onSend
   const recorder = useVoiceRecorder();
   const voiceActive = Boolean(onSendVoice) && recorder.state.status !== 'idle' && recorder.state.status !== 'sent';
 
-  const expanded = open || draft.length > 0 || streaming || voiceActive;
+  const expanded = open || draft.length > 0 || streaming || voiceActive || Boolean(attachments);
   const canSend = !streaming && !disabled && draft.trim().length > 0;
   const mode: SendButtonMode = streaming ? 'stop' : draft.trim() || !onSendVoice ? 'send' : 'voice';
 
@@ -140,6 +142,7 @@ export function Composer({ draftKey, streaming, disabled, onSend, onStop, onSend
           <VoiceComposer recorder={recorder} onSend={onSendVoice} />
         ) : expanded ? (
           <>
+            {attachments}
             <div className="relative">
               <label htmlFor={textareaId} className="sr-only">
                 Message Lam13

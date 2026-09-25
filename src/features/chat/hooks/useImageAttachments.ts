@@ -15,12 +15,9 @@ export interface AttachmentDraft {
 }
 
 /**
- * Images picked for the next message: validate → preview → remove → upload → send.
+ * Files (PDFs, images) picked for the next message: validate → remove → upload → send.
  * Uploads go through `api.attachments` only when `upload()` is called (i.e. on send); already
  * uploaded drafts are not re-uploaded on a retry. File contents are never logged.
- *
- * Backend-dependent: the composer keeps its "not available yet" action until the attachments
- * endpoint exists (api-contract.md §4.7); this hook is the integration point for that UI.
  */
 export function useImageAttachments() {
   const api = useApi();
@@ -39,7 +36,7 @@ export function useImageAttachments() {
   // Release every preview when the composer goes away.
   useEffect(() => () => current.current.forEach((d) => URL.revokeObjectURL(d.previewUrl)), []);
 
-  /** Adds valid images; returns the rejected ones (with reasons) for the caller to report. */
+  /** Adds valid files; returns the rejected ones (with reasons) for the caller to report. */
   const add = useCallback(
     (files: readonly File[]): RejectedFile[] => {
       const { accepted, rejected } = validateImageFiles(files, current.current.length);

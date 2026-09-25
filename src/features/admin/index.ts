@@ -1,0 +1,1 @@
+export { useIsAdmin } from './access';

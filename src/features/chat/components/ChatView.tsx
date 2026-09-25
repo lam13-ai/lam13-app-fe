@@ -1,17 +1,21 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { FileText, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { queryKeys } from '@/api';
+import { ATTACHMENT_LIMITS, queryKeys, toErrorInfo } from '@/api';
 import { ErrorState } from '@/components/ErrorState';
-import { useToast } from '@/components/ui';
+import { Spinner, smallIconProps, useToast } from '@/components/ui';
+import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
 import { createId } from '@/lib/id';
+import { useComposerStore } from '@/stores/composerStore';
 import { useStreamStore } from '@/stores/streamStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Conversation } from '@/types/api';
 import type { AgentStatus } from '@/types/chat';
 import { AGENT_NAME, AGENT_TAGLINE } from '../constants';
 import { useChatActions } from '../hooks/useChatActions';
+import { useImageAttachments } from '../hooks/useImageAttachments';
 import { useMessages } from '../hooks/useMessages';
 import { NEW_CONVERSATION_KEY } from '../lib/messageCache';
 import { ChatHeader } from './ChatHeader';
@@ -42,6 +46,8 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
   const toast = useToast();
   const actions = useChatActions();
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
+  const files = useImageAttachments();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const created = useStreamStore((s) => s.created);
   // Identifies this new-chat view so only it follows a lazily created conversation.
@@ -76,7 +82,23 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
       ? active.phase
       : 'thinking';
   const title = conversationId ? conversation?.title : AGENT_NAME;
-  const send = (text: string) => void actions.send(conversationId, text, { origin });
+  const send = (text: string) => {
+    if (files.drafts.length === 0) {
+      void actions.send(conversationId, text, { origin });
+      return;
+    }
+    // Upload first (the backend needs document ids), then send; a failed upload restores the text.
+    void (async () => {
+      try {
+        const attachments = await files.upload(conversationId ?? null);
+        files.clear();
+        await actions.send(conversationId, text, { origin, attachments });
+      } catch (error) {
+        useComposerStore.getState().setDraft(key, text);
+        toast.show(toErrorInfo(error).message);
+      }
+    })();
+  };
   const loadingHistory = Boolean(conversationId) && history.isPending;
 
   let body;
@@ -138,7 +160,49 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
                 ? (recording, signal) => actions.sendVoice(conversationId, recording, { origin, signal })
                 : undefined
             }
-            onAttach={() => toast.show("Image attachments aren't available yet.")}
+            onAttach={() => fileInputRef.current?.click()}
+            attachments={
+              files.drafts.length > 0 && (
+                <ul aria-label="Attached files" className="flex flex-wrap gap-1.5 px-3 pt-3">
+                  {files.drafts.map((d) => (
+                    <li
+                      key={d.id}
+                      title={d.error}
+                      className={cn(
+                        'inline-flex max-w-60 items-center gap-1.5 border px-2 py-1 text-xs',
+                        d.status === 'error' ? 'border-danger text-danger' : 'border-hairline-strong text-fg',
+                      )}
+                    >
+                      {d.status === 'uploading' ? (
+                        <Spinner size={14} state="active" label="Uploading" />
+                      ) : (
+                        <FileText {...smallIconProps} className="shrink-0" />
+                      )}
+                      <span className="truncate">{d.file.name}</span>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${d.file.name}`}
+                        onClick={() => files.remove(d.id)}
+                        className="text-fg-muted hover:text-fg"
+                      >
+                        <X {...smallIconProps} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )
+            }
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            hidden
+            accept={ATTACHMENT_LIMITS.mimeTypes.join(',')}
+            onChange={(e) => {
+              files.add(Array.from(e.target.files ?? [])).forEach((r) => toast.show(`${r.name}: ${r.reason}`));
+              e.target.value = '';
+            }}
           />
         </div>
       </div>

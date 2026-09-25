@@ -70,7 +70,6 @@ export function MessageLog({ messages, failures, older, onRetry, streaming = fal
   }, [older.loading, resetLoadOlder]);
 
   const turns = groupTurns(messages);
-  const last = messages.at(-1);
 
   const renderMessages = (list: MessageView[]) =>
     list.map((message) => {
@@ -95,8 +94,7 @@ export function MessageLog({ messages, failures, older, onRetry, streaming = fal
           message={message}
           failure={failures[key]}
           onRetry={retry}
-          // Regenerate the latest completed server answer (api-contract.md §4.3); never while streaming.
-          onRegenerate={message === last && message.status === 'complete' && !isLocalId(message.id) ? retry : undefined}
+          // ponytail: no Regenerate — the backend has no regenerate endpoint yet.
           animate={animate}
         />
       );

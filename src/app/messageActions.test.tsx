@@ -1,9 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { INSTANT_TIMING, type MockTiming } from '@/api';
+import type { MockTiming } from '@/api';
 import { renderApp } from './testUtils';
-
-const SLOW: MockTiming = { ...INSTANT_TIMING, request: [30, 30], think: [30, 30], token: [4, 4], chunk: [10, 10] };
 
 const log = () => screen.getByRole('log', { name: 'Conversation' });
 const answers = () => within(log()).getAllByRole('article');
@@ -72,28 +70,12 @@ describe('message actions', () => {
     }
   });
 
-  it('offers Regenerate only on the latest completed answer, hides it while streaming, and replaces the answer in place', async () => {
-    await openWaterConversation(SLOW);
-    expect(within(answers().at(-1)!).getByRole('button', { name: 'Regenerate response' })).toBeTruthy();
-
-    fireEvent.click(within(answers().at(-1)!).getByRole('button', { name: 'Regenerate response' }));
-    // Streaming: no actions on the answer being regenerated; the composer offers Stop.
-    await screen.findByRole('button', { name: 'Stop generating' });
-    expect(screen.queryByRole('button', { name: 'Regenerate response' })).toBeNull();
-
-    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy(), { timeout: 12_000 });
-    // Same single answer, updated in place (server-authoritative), with Regenerate back.
-    expect(answers()).toHaveLength(1);
-    expect(answers()[0]!.textContent).toContain('A sharper way to frame this');
-    expect(within(answers()[0]!).getByRole('button', { name: 'Regenerate response' })).toBeTruthy();
-  });
-
-  it('does not offer Regenerate on older answers', async () => {
+  it('does not offer Regenerate (not supported by the backend yet)', async () => {
     renderApp('/c/national-ai-strategy');
     await screen.findByRole('log', { name: 'Conversation' }, { timeout: 8000 });
     const all = answers();
     expect(all.length).toBeGreaterThan(1);
-    for (const older of all.slice(0, -1)) {
+    for (const older of all) {
       expect(within(older).queryByRole('button', { name: 'Regenerate response' })).toBeNull();
       expect(within(older).getByRole('button', { name: 'Copy message' })).toBeTruthy();
     }

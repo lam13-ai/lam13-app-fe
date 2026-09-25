@@ -40,10 +40,10 @@ export interface AudioRef {
   peaks?: number[];
 }
 
-/** An uploaded image attached to a user message (api-contract.md §4.7). [CONFIRM] */
+/** A file attached to a user message: an image preview, or a document shown by name. */
 export interface AttachmentRef {
   id: Id;
-  kind: 'image';
+  kind: 'image' | 'document';
   filename: string;
   mime_type: string;
   size_bytes: number;
@@ -57,7 +57,8 @@ export interface AttachmentRef {
 /** The current user's rating of an assistant message (api-contract.md §4.8). [CONFIRM] */
 export type FeedbackRating = 'up' | 'down';
 
-export type ArtifactType = 'pptx' | 'xlsx';
+/** `report`: the strategy report generated for a conversation. */
+export type ArtifactType = 'pptx' | 'xlsx' | 'report';
 export type ArtifactStatus = 'queued' | 'processing' | 'ready' | 'error';
 
 /**

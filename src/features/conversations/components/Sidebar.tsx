@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { LogOut, PanelLeftClose, PanelLeftOpen, SquarePen, X } from 'lucide-react';
+import { LogOut, PanelLeftClose, PanelLeftOpen, Shield, SquarePen, X } from 'lucide-react';
 import { Wordmark } from '@/components/AgentMark';
 import { LegalLinks } from '@/components/LegalLinks';
 import { ScrollArea } from '@/components/ScrollArea';
 import { Button, IconButton, Tooltip, iconProps } from '@/components/ui';
+import { useIsAdmin } from '@/features/admin';
 import { initials } from '@/lib/initials';
 import { ConversationList } from './ConversationList';
 
@@ -48,6 +49,18 @@ function Avatar({ user }: { user: SidebarUser }) {
   );
 }
 
+/** Shown only to accounts the backend allows into the admin panel. */
+function AdminButton({ align }: { align: 'start' | 'end' }) {
+  const navigate = useNavigate();
+  const { data: isAdmin } = useIsAdmin();
+  if (!isAdmin) return null;
+  return (
+    <Tooltip content="Admin panel" align={align}>
+      <IconButton label="Admin panel" size="md" icon={<Shield {...iconProps} />} onClick={() => navigate('/admin')} />
+    </Tooltip>
+  );
+}
+
 function SignOutButton({ onSignOut, align }: { onSignOut: () => void; align: 'start' | 'end' }) {
   return (
     <Tooltip content="Sign out" align={align}>
@@ -77,6 +90,7 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
           <IconButton label="New chat" size="md" icon={<SquarePen {...iconProps} />} onClick={startNewChat} />
         </Tooltip>
         <div className="mt-auto flex flex-col items-center gap-3 pb-4">
+          <AdminButton align="start" />
           <SignOutButton onSignOut={onSignOut} align="start" />
           <span title={user.name}>
             <Avatar user={user} />
@@ -124,6 +138,7 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
           <p className="truncate text-nav font-bold leading-5">{user.name}</p>
           {user.email && <p className="truncate text-2xs text-fg-muted">{user.email}</p>}
         </div>
+        <AdminButton align="end" />
         <SignOutButton onSignOut={onSignOut} align="end" />
       </div>
       <LegalLinks className="shrink-0 px-4 pb-3 md:-mt-1" />

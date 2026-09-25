@@ -15,15 +15,25 @@ function toStreamEvent(message: SseMessage): StreamEvent | null {
   }
 }
 
-/**
- * Turns an SSE response body (`text/event-stream` bytes) into typed events.
- * The same function serves the real HTTP adapter (fetch `response.body`) and the mock adapter.
- * Aborting `signal` cancels the body and makes iteration throw an AbortError.
- */
+/** Turns an SSE response body (`text/event-stream` bytes) into typed events (mock adapter). */
 export async function* readEventStream(
   body: ReadableStream<Uint8Array>,
   signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
+  for await (const message of readSseMessages(body, signal)) {
+    const event = toStreamEvent(message);
+    if (event) yield event;
+  }
+}
+
+/**
+ * Raw SSE messages from a response body. Aborting `signal` cancels the body and makes iteration
+ * throw an AbortError. The HTTP adapter translates these backend events itself.
+ */
+export async function* readSseMessages(
+  body: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
+): AsyncGenerator<SseMessage> {
   if (signal?.aborted) {
     await body.cancel().catch(() => {});
     throw abortError();
@@ -37,8 +47,7 @@ export async function* readEventStream(
   try {
     for await (const message of parseSSE(reader)) {
       if (signal?.aborted) break;
-      const event = toStreamEvent(message);
-      if (event) yield event;
+      yield message;
     }
     if (signal?.aborted) throw abortError();
     finished = true;

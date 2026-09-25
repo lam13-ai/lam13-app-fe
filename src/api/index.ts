@@ -1,4 +1,4 @@
-import { createMockAdapter } from './mock/mockAdapter';
+import { createHttpAdapter } from './http';
 import type { ApiAdapter } from './services';
 
 export { ApiProvider, useApi } from './context';
@@ -21,13 +21,11 @@ export type {
   SendMessageBody,
   StreamOptions,
 } from './services';
+export { createHttpAdapter, request, requestJson, type RequestOptions } from './http';
 export { readEventStream, type EventStream, type StreamEvent, type StreamEventName } from './stream';
 export { createMockAdapter, INSTANT_TIMING, REALISTIC_TIMING, type MockAdapterOptions, type MockTiming } from './mock/mockAdapter';
 
-/**
- * The adapter the app runs against. Phase 2 has no backend, so this is the in-memory mock.
- * FastAPI integration swaps in an HTTP adapter here (same `ApiAdapter` interface).
- */
+/** The adapter the app runs against: the LAM13 FastAPI backend. Tests pass the mock instead. */
 export function createDefaultAdapter(): ApiAdapter {
-  return createMockAdapter();
+  return createHttpAdapter();
 }

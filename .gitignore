@@ -6,6 +6,7 @@ coverage
 # Local environment files may hold real configuration — never commit them.
 .env
 .env.*
+.env.production
 !.env.example
 
 .playwright-mcp

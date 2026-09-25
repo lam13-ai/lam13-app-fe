@@ -16,20 +16,14 @@ export interface MemoryAuthProviderProps {
   /** The user signed in initially (when authenticated) and by login()/register(). */
   user?: AuthUser;
   accessToken?: string | null;
-  error?: string | null;
 }
 
-/**
- * In-memory auth provider with the same contract as the Kinde provider. Signing in succeeds
- * immediately, without a redirect. Used for local development without a Kinde tenant
- * (`VITE_AUTH_MODE=dev`, development builds only) and for tests.
- */
+/** In-memory auth provider with the same contract as the backend provider; every action succeeds. Tests only. */
 export function MemoryAuthProvider({
   children,
   initialStatus = 'unauthenticated',
   user = LOCAL_DEVELOPER,
   accessToken = null,
-  error = null,
 }: MemoryAuthProviderProps) {
   const [status, setStatus] = useState<AuthStatus>(initialStatus);
 
@@ -40,13 +34,14 @@ export function MemoryAuthProvider({
     () => ({
       status,
       user: status === 'authenticated' ? user : null,
-      error,
-      login: signIn,
-      register: signIn,
+      signIn,
+      signUp: signIn,
+      forgotPassword: async () => 'If an account exists for this email, a reset link has been sent.',
+      resetPassword: async () => {},
       logout: async () => setStatus('unauthenticated'),
       getAccessToken: async () => (status === 'authenticated' ? accessToken : null),
     }),
-    [status, user, error, signIn, accessToken],
+    [status, user, signIn, accessToken],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

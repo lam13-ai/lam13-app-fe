@@ -1,4 +1,5 @@
-import { VisuallyHidden } from '@/components/ui';
+import { FileText } from 'lucide-react';
+import { VisuallyHidden, smallIconProps } from '@/components/ui';
 import { VoicePlayer } from '@/features/voice';
 import { cn } from '@/lib/cn';
 import type { ErrorInfo } from '@/types/api';
@@ -65,10 +66,17 @@ export function UserMessage({
         ) : (
           <>
             {message.attachments && message.attachments.length > 0 && (
-              <ul aria-label="Attached images" className="mb-2 flex flex-wrap justify-end gap-1.5">
-                {message.attachments.map((image) => (
-                  <li key={image.id}>
-                    <img src={image.url} alt={image.filename} loading="lazy" className="size-16 bg-bg/10 object-cover" />
+              <ul aria-label="Attached files" className="mb-2 flex flex-wrap justify-end gap-1.5">
+                {message.attachments.map((file) => (
+                  <li key={file.id}>
+                    {file.kind === 'image' ? (
+                      <img src={file.url} alt={file.filename} loading="lazy" className="size-16 bg-bg/10 object-cover" />
+                    ) : (
+                      <span className="inline-flex max-w-60 items-center gap-1.5 bg-bg/10 px-2 py-1 text-xs">
+                        <FileText {...smallIconProps} className="shrink-0" />
+                        <span className="truncate">{file.filename}</span>
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>

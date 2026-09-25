@@ -1,9 +1,9 @@
 /**
- * Image attachment limits (api-contract.md §4.7), shared by client-side validation and the mock.
- * The real backend enforces its own limits; the client checks only for fast feedback. [CONFIRM]
+ * Attachment limits, shared by client-side validation and the mock. Types match the backend's
+ * `/chat/upload` (PDF + images); the backend enforces its own limits — the client checks only for fast feedback.
  */
 export const ATTACHMENT_LIMITS = {
   maxFiles: 6,
-  maxBytes: 10 * 1024 * 1024,
-  mimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+  maxBytes: 25 * 1024 * 1024,
+  mimeTypes: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/gif'],
 } as const;
