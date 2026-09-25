@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeMessageTime, formatMessageTime } from './format';
+import { describeMessageTime, formatMessageTime, formatRelativeTime } from './format';
 
 // Local-time dates so the assertions hold in any time zone.
 const now = new Date(2026, 8, 25, 16, 0);
@@ -27,5 +27,20 @@ describe('formatMessageTime', () => {
     const full = describeMessageTime(at(2026, 8, 25, 14, 32), 'en-GB');
     expect(full).toMatch(/Friday,? 25 September 2026/);
     expect(full).toContain('14:32');
+  });
+});
+
+describe('formatRelativeTime', () => {
+  const now = new Date(2026, 8, 25, 12, 0);
+  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
+
+  it('steps from minutes to hours to days, then shows the date', () => {
+    expect(formatRelativeTime(ago(20_000), now)).toBe('just now');
+    expect(formatRelativeTime(ago(45 * 60_000), now)).toBe('45m ago');
+    expect(formatRelativeTime(ago(2 * 3_600_000), now)).toBe('2h ago');
+    expect(formatRelativeTime(ago(3 * 86_400_000), now)).toBe('3d ago');
+    expect(formatRelativeTime(at(2026, 7, 1, 9, 0), now, 'en-GB')).toBe('1 Aug');
+    expect(formatRelativeTime(at(2025, 7, 1, 9, 0), now, 'en-GB')).toBe('1 Aug 2025');
+    expect(formatRelativeTime('nope', now)).toBe('');
   });
 });

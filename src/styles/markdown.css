@@ -36,7 +36,7 @@
   .md-content strong { font-weight: 700; }
 
   .md-content a {
-    color: var(--color-accent);
+    color: var(--color-link);
     text-decoration: underline;
     text-underline-offset: 3px;
   }

@@ -16,7 +16,7 @@ export interface ChatHeaderProps {
 /** 70px header row: agent mark, title/subtitle, status, call action (reference §3). */
 export function ChatHeader({ title, subtitle, status, onOpenSidebar }: ChatHeaderProps) {
   return (
-    <header className="flex h-[var(--header-h)] shrink-0 items-center gap-3 border-b border-hairline px-3 md:px-5">
+    <header className="bright-chrome flex h-[var(--header-h)] shrink-0 items-center gap-3 border-b border-hairline px-3 md:px-5">
       <IconButton
         label="Open sidebar"
         size="md"

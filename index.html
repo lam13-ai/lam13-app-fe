@@ -4,7 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#ffffff" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Resolve the theme before first paint (no flash). Mirrors src/stores/themeStore.ts.
+      (function () {
+        var dark = false;
+        try {
+          var preference = localStorage.getItem('lam13:theme');
+          dark = preference === 'dark' || (preference !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        } catch (e) {}
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Lam13</title>
   </head>

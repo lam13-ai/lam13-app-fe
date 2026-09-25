@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/cn';
+import { useThemeStore } from '@/stores/themeStore';
 
 const BAR = 2;
 const GAP = 2;
@@ -81,6 +82,8 @@ export function Waveform(props: WaveformProps) {
   const active = props.mode === 'live' ? props.active : false;
   const peaks = props.mode === 'static' ? props.peaks : null;
   const progress = props.mode === 'static' ? (props.progress ?? 1) : 1;
+  // Bars take the CSS text colour when drawn; redraw when the theme changes it.
+  const theme = useThemeStore((s) => s.resolved);
 
   useEffect(() => {
     if (props.mode === 'live') getLevelRef.current = props.getLevel;
@@ -95,7 +98,7 @@ export function Waveform(props: WaveformProps) {
     const observer = new ResizeObserver(draw);
     observer.observe(canvas);
     return () => observer.disconnect();
-  }, [mode, peaks, progress]);
+  }, [mode, peaks, progress, theme]);
 
   // Live: scrolling level history.
   useEffect(() => {
@@ -126,7 +129,7 @@ export function Waveform(props: WaveformProps) {
     };
     frame = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frame);
-  }, [mode, active]);
+  }, [mode, active, theme]);
 
   return <canvas ref={canvasRef} aria-hidden="true" className={cn('block h-6 w-full', className)} />;
 }

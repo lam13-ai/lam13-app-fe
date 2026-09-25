@@ -8,6 +8,10 @@ import type {
   Message,
   ModelOption,
   Page,
+  Profile,
+  ProfileInput,
+  ProfileSuggestionStatus,
+  ProfileUpdateSuggestion,
 } from '@/types/api';
 import type { EventStream } from './stream';
 
@@ -120,11 +124,54 @@ export interface ModelsService {
   list(): Promise<{ items: ModelOption[] }>;
 }
 
+/** My Contacts (api-contract.md §4.10). Rejects with ApiError (404 / 422 …). [CONFIRM] */
+export interface ProfilesService {
+  /** GET /profiles — sorted by `full_name`. */
+  list(params?: ListParams): Promise<Page<Profile>>;
+  /** GET /profiles/{id} */
+  get(id: string): Promise<Profile>;
+  /** POST /profiles — 422 `validation_error` for a missing name/position/company or a bad email. */
+  create(body: ProfileInput): Promise<Profile>;
+  /** PATCH /profiles/{id} — the user's own edit; sets `updated_at`. */
+  update(id: string, body: Partial<ProfileInput>): Promise<Profile>;
+  /** DELETE /profiles/{id} — also discards the profile's suggestions. */
+  delete(id: string): Promise<void>;
+}
+
+export interface ProfileSuggestionListParams {
+  profile_id?: string;
+  status?: ProfileSuggestionStatus;
+}
+
+/**
+ * Meeting-derived profile suggestions (api-contract.md §4.11). Nothing here changes a profile
+ * except `approve`. 409 `suggestion_not_pending` once decided. [CONFIRM]
+ */
+export interface ProfileSuggestionsService {
+  /** GET /profile-suggestions?profile_id=&status= — oldest first. */
+  list(params?: ProfileSuggestionListParams): Promise<{ items: ProfileUpdateSuggestion[] }>;
+  /** POST /profile-suggestions/{id}/approve — applies the changes; returns both updated records. */
+  approve(id: string): Promise<{ suggestion: ProfileUpdateSuggestion; profile: Profile }>;
+  /** POST /profile-suggestions/{id}/reject — the profile is not modified. */
+  reject(id: string): Promise<ProfileUpdateSuggestion>;
+}
+
+/** What the connected backend supports; the UI hides the rest instead of offering failing actions. */
+export interface ApiCapabilities {
+  /** `messages.regenerate` (Regenerate, and Retry of a server-side answer in place). */
+  regenerate: boolean;
+  /** `audio.upload` + voice messages. */
+  voiceNotes: boolean;
+}
+
 export interface ApiAdapter {
+  capabilities: ApiCapabilities;
   conversations: ConversationsService;
   messages: MessagesService;
   audio: AudioService;
   models: ModelsService;
   attachments: AttachmentsService;
   artifacts: ArtifactsService;
+  profiles: ProfilesService;
+  profileSuggestions: ProfileSuggestionsService;
 }

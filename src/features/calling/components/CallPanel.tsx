@@ -60,7 +60,7 @@ export function CallPanel() {
     <section
       aria-label="Voice call"
       className={cn(
-        'z-40 flex animate-enter flex-col bg-bg',
+        'z-40 flex animate-enter flex-col bg-elevated',
         // Mobile: bottom sheet. Desktop: floating card inside the chat card, under its header.
         'fixed inset-x-0 bottom-0 max-h-[70dvh] rounded-t-card border-t border-hairline-strong shadow-elevated pb-[env(safe-area-inset-bottom)]',
         'md:absolute md:inset-x-auto md:bottom-auto md:right-6 md:top-[calc(var(--header-h)+1.25rem)] md:max-h-[min(70dvh,520px)] md:w-[360px] md:rounded-card md:border md:pb-0 lg:right-8',

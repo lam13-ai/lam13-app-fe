@@ -6,6 +6,7 @@
   }
 
   html {
+    /* Dark sets its own color-scheme with the theme tokens (tokens.css). */
     color-scheme: light;
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
@@ -17,7 +18,7 @@
     font-size: var(--text-base);
     line-height: var(--text-base--line-height);
     color: var(--color-fg);
-    background: var(--color-bg-subtle);
+    background: var(--color-canvas);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -28,7 +29,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid rgb(10 10 10 / 0.4);
+    outline: 2px solid var(--color-focus);
     outline-offset: 2px;
   }
 
@@ -118,4 +119,11 @@
 
 @media (prefers-reduced-motion: reduce) {
   @keyframes chat-body-out { to { opacity: 0; } }
+}
+
+/* Theme switch: colours change at once, never animated (see applyTheme in stores/themeStore.ts). */
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
 }

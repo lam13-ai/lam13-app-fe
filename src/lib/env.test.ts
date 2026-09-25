@@ -4,10 +4,12 @@ import { parseEnv } from './env';
 const base = { BASE_URL: '/', MODE: 'test', DEV: false, PROD: true, SSR: false } as ImportMetaEnv;
 
 describe('parseEnv', () => {
-  it('defaults to same-origin API and disabled voice features', () => {
+  it('defaults to same-origin API, Kinde auth, calling on and voice notes off', () => {
     const env = parseEnv(base);
     expect(env.apiBaseUrl).toBe('');
-    expect(env.features).toEqual({ calling: false, voiceNotes: false });
+    expect(env.authMode).toBe('kinde');
+    expect(env.features).toEqual({ calling: true, voiceNotes: false });
+    expect(env.kinde.clientId).toBeUndefined();
   });
 
   it('normalises the API URL and parses flags', () => {
@@ -30,6 +32,11 @@ describe('parseEnv', () => {
     }
   });
 
+  it('honours VITE_AUTH_MODE=dev only in development builds', () => {
+    expect(parseEnv({ ...base, VITE_AUTH_MODE: 'dev' }).authMode).toBe('kinde');
+    expect(parseEnv({ ...base, DEV: true, PROD: false, VITE_AUTH_MODE: 'dev' }).authMode).toBe('dev');
+    expect(parseEnv({ ...base, DEV: true, VITE_AUTH_MODE: 'anything' }).authMode).toBe('kinde');
+  });
 
   it('returns only named, frozen fields (the raw env object is never exposed)', () => {
     const env = parseEnv({ ...base, VITE_UNRELATED_SETTING: 'x' } as ImportMetaEnv);

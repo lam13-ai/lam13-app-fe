@@ -65,6 +65,13 @@ export function createChatActions({ api, queryClient }: Deps) {
     let key = params.key;
     let draft = params.draft;
     let opened = false;
+    /** The answer is complete: the conversation is free again; later events are trailing updates. */
+    let released = false;
+    // Only this run's entry: after an early release a newer stream may own the key.
+    const release = () => {
+      if (store().active[key]?.controller === controller) store().end(key);
+      released = true;
+    };
 
     store().begin(key, { phase: 'sending', controller, assistantKey });
     store().setFailure(assistantKey, null);
@@ -80,6 +87,17 @@ export function createChatActions({ api, queryClient }: Deps) {
     try {
       const events = await params.open(controller.signal);
       for await (const event of events) {
+        if (released) {
+          // A backend may keep the response open after the answer is final (e.g. post-processing):
+          // it can still send the conversation title, append to the finished answer, or attach files.
+          if (event.event === 'conversation.updated') {
+            patchConversation(queryClient, event.data.id, { title: event.data.title });
+          } else if (event.event === 'delta' || event.event === 'artifact') {
+            draft = { ...applyStreamEvent(draft, event), status: draft.status };
+            writeAssistant();
+          }
+          continue;
+        }
         draft = applyStreamEvent(draft, event);
 
         switch (event.event) {
@@ -140,6 +158,7 @@ export function createChatActions({ api, queryClient }: Deps) {
               { updated_at: new Date().toISOString(), last_message_preview: draft.assistant.content.slice(0, 80) },
               { toTop: true },
             );
+            release();
             break;
           case 'error':
             batcher.cancel();
@@ -154,7 +173,9 @@ export function createChatActions({ api, queryClient }: Deps) {
       }
     } catch (error) {
       batcher.cancel();
-      if (isAbortError(error)) {
+      if (released) {
+        // The answer was already complete; losing the trailing updates doesn't change it.
+      } else if (isAbortError(error)) {
         // Stop: keep whatever was generated.
         draft = { ...draft, status: 'cancelled', assistant: { ...draft.assistant, status: 'cancelled' } };
         writeAssistant();
@@ -178,7 +199,7 @@ export function createChatActions({ api, queryClient }: Deps) {
         fail(toErrorInfo(error));
       }
     } finally {
-      store().end(key);
+      release();
     }
   }
 
@@ -303,6 +324,11 @@ export function createChatActions({ api, queryClient }: Deps) {
     const user = history[index - 1];
     if (isLocalId(message.id)) {
       return user?.role === 'user' ? resend(user, [messageKey(message)]) : Promise.resolve();
+    }
+    // No in-place regenerate on this backend: ask again as a new turn. The server kept the first one,
+    // so it gets a fresh client id (a backend may use it as the message id).
+    if (!api.capabilities.regenerate) {
+      return user?.role === 'user' ? resend({ ...user, client_message_id: createId() }, [messageKey(message)]) : Promise.resolve();
     }
     if (!conversationId) return Promise.resolve();
 

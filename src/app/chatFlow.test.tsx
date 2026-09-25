@@ -150,7 +150,7 @@ describe('chat flow', () => {
     expect(await screen.findByText('Solving…')).toBeTruthy();
     await screen.findByText('Answering…', {}, { timeout: 8000 });
     await waitForIdle();
-  });
+  }, 30_000); // two full streamed answers: slower than the default budget under load
 
   it('shows an error state when history fails to load', async () => {
     const { api } = renderApp('/c/water-security-kpis');

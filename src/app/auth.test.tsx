@@ -26,9 +26,7 @@ describe('auth flow', () => {
 
   it('signing in returns to the intended conversation and shows the user identity', async () => {
     const { router } = renderApp('/c/water-security-kpis', { auth: { initialStatus: 'unauthenticated' } });
-    fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'ada@example.com' } });
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct-horse' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    fireEvent.click(await screen.findByRole('button', { name: /continue to sign in/i }));
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/c/water-security-kpis'));
     expect(await screen.findByRole('log', { name: 'Conversation' })).toBeTruthy();
@@ -40,17 +38,9 @@ describe('auth flow', () => {
 
   it('offers account creation on the same screen', async () => {
     const { router } = renderApp('/login', { auth: { initialStatus: 'unauthenticated' } });
-    fireEvent.click(await screen.findByRole('button', { name: /create an account/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Create an account' }));
     expect(await screen.findByRole('heading', { name: 'Create your account.' })).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Ada Lovelace' } });
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ada@example.com' } });
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct-horse' } });
-    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'different' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
-    expect((await screen.findByRole('alert')).textContent).toBe("Passwords don't match.");
-
-    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'correct-horse' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    fireEvent.click(screen.getByRole('button', { name: /create an account/i }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/'));
   });
 
@@ -64,23 +54,28 @@ describe('auth flow', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/'));
   });
 
-  it('forgot password shows the server confirmation', async () => {
-    renderApp('/login?mode=forgot', { auth: { initialStatus: 'unauthenticated' } });
-    expect(await screen.findByRole('heading', { name: 'Reset your password.' })).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ada@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send reset link' }));
-    expect(await screen.findByText(/reset link has been sent/)).toBeTruthy();
+  it('/callback continues to the saved destination once the session is established', async () => {
+    sessionStorage.setItem('lam13:auth:return-to', '/c/digital-services-roadmap');
+    const { router } = renderApp('/callback');
+    await waitFor(() => expect(router.state.location.pathname).toBe('/c/digital-services-roadmap'));
+    expect(sessionStorage.getItem('lam13:auth:return-to')).toBeNull();
   });
 
-  it('the emailed reset link (/auth?mode=reset&token=…) sets a new password, then offers sign-in', async () => {
-    const { router } = renderApp('/auth?mode=reset&token=reset-token', { auth: { initialStatus: 'unauthenticated' } });
-    expect(await screen.findByRole('heading', { name: 'Choose a new password.' })).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'new-password-1' } });
-    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'new-password-1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Update password' }));
-    expect(await screen.findByRole('heading', { name: 'Sign in to Lam13.' })).toBeTruthy();
-    expect(screen.getByText(/Password updated/)).toBeTruthy();
-    expect(router.state.location.search).toBe('');
+  it('/callback shows progress while loading, errors safely, and sends stray visits to /login', async () => {
+    renderApp('/callback', { auth: { initialStatus: 'loading' } });
+    expect(await screen.findByText('Signing you in…')).toBeTruthy();
+  });
+
+  it('/callback with a failed sign-in shows a safe error and a way back', async () => {
+    const { router } = renderApp('/callback', { auth: { initialStatus: 'unauthenticated', error: 'Sign-in could not be completed. Please try again.' } });
+    expect(await screen.findByRole('heading', { name: "We couldn't sign you in." })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to sign in' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
+  });
+
+  it('/callback opened directly without a sign-in goes to /login', async () => {
+    const { router } = renderApp('/callback', { auth: { initialStatus: 'unauthenticated' } });
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
   });
 
   it('sign out clears session state and returns to /login', async () => {

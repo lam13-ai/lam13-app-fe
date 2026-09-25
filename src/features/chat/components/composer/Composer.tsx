@@ -133,9 +133,9 @@ export function Composer({ draftKey, streaming, disabled, onSend, onStop, onSend
     >
       <div
         className={cn(
-          'relative rounded-composer border border-border bg-bg shadow-xs',
+          'relative rounded-composer border border-border bg-composer shadow-xs',
           'transition-[border-color,box-shadow] duration-150 ease-standard',
-          'hover:not-focus-within:border-fg/25 focus-within:border-accent/45 focus-within:ring-1 focus-within:ring-accent/15',
+          'hover:not-focus-within:border-fg/25 focus-within:border-composer-focus focus-within:ring-1 focus-within:ring-composer-ring',
         )}
       >
         {voiceActive && onSendVoice ? (

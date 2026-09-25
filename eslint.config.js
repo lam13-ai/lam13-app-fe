@@ -15,7 +15,8 @@ const featureDeepImport = {
 };
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'coverage'] },
+  // _legacy-website-import: old marketing-site files kept for reference, not part of this app.
+  { ignores: ['dist', 'node_modules', 'coverage', '_legacy-website-import'] },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

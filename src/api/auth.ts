@@ -1,7 +1,7 @@
 /**
  * Vendor-neutral access-token bridge (frontend-architecture.md §4, §8).
  *
- * The auth feature registers a getter (backend JWT session); API adapters call `getAccessToken()` /
+ * The auth feature registers a getter (Kinde today); API adapters call `getAccessToken()` /
  * `authorizationHeaders()` without knowing which identity provider is in use.
  * Tokens are never logged, cached here, or included in error messages.
  */

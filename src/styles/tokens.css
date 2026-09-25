@@ -2,7 +2,9 @@
  * Design tokens — values come from reference-ui-analysis.md / frontend-architecture.md §9.
  * `@theme` tokens become both CSS variables and Tailwind utilities (bg-fg, rounded-composer, …).
  * Tailwind's default palette/radii/shadows are cleared so only reference tokens exist.
- * Light theme only (v1).
+ *
+ * Theming: these are the light values. The dark theme (`:root[data-theme='dark']`, below) overrides
+ * the same semantic variables, so components never carry theme-specific colours.
  */
 
 @theme {
@@ -30,6 +32,28 @@
   --color-accent-wash: rgb(43 92 230 / 0.1);
   --color-danger: hsl(11 58% 44%);
   --color-ring: #0a0a0a;
+  /* Inverse block (user messages): black with white text in light mode. */
+  --color-inverse: #0a0a0a;
+  --color-on-inverse: #ffffff;
+  /* Text links (Markdown). */
+  --color-link: #2b5ce6;
+  /* Keyboard focus outline. */
+  --color-focus: rgb(10 10 10 / 0.4);
+  /* Modal backdrop (drawer): dims the page. */
+  --color-scrim: rgb(10 10 10 / 0.25);
+  /* Outline button border. */
+  --color-outline: #0a0a0a;
+  /* Page behind the workspace (and the gutter around the chat card), and the sidebar column. */
+  --color-canvas: #f7f8fa;
+  --color-sidebar: #f7f8fa;
+  /* Edge of the workspace card (chat, route panels). */
+  --color-frame: rgb(10 10 10 / 0.2);
+  /* Floating surfaces: popovers, call panel. */
+  --color-elevated: #ffffff;
+  /* Composer surface and its focus treatment. */
+  --color-composer: #ffffff;
+  --color-composer-focus: rgb(43 92 230 / 0.45);
+  --color-composer-ring: rgb(43 92 230 / 0.15);
 
   /* ── Typography ─────────────────────────────────────────── */
   --font-*: initial;
@@ -119,6 +143,56 @@
   @keyframes pulse {
     50% { opacity: 0.45; }
   }
+}
+
+/*
+ * Dark theme — a near-black workspace: black chat area, a barely lighter sidebar, hairline edges,
+ * charcoal surfaces only where interaction needs them (composer, code, popovers, user messages),
+ * and the same blue accent. Contrast on black (WCAG AA for text): fg 18.8:1, fg-muted 8.3:1,
+ * link 8.3:1, danger 7.1:1; accent icons 3.8:1 (non-text).
+ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-bg: #000000;
+  --color-bg-subtle: #0b0b0b;
+  --color-fg: #f2f2f2;
+  --color-fg-muted: #a3a3a3;
+  --color-fg-soft: rgb(242 242 242 / 0.6);
+  --color-muted: #171717;
+  --color-border: #2a2a2a;
+  --color-hairline: rgb(255 255 255 / 0.08);
+  --color-hairline-strong: rgb(255 255 255 / 0.12);
+  --color-table-border: rgb(255 255 255 / 0.12);
+  --color-table-head: rgb(255 255 255 / 0.035);
+  --color-accent-wash: rgb(43 92 230 / 0.16);
+  --color-danger: hsl(9 72% 64%);
+  --color-ring: #f2f2f2;
+  --color-inverse: #1f1f1f;
+  --color-on-inverse: #f2f2f2;
+  --color-link: #7aa0ff;
+  --color-focus: rgb(255 255 255 / 0.55);
+  --color-scrim: rgb(0 0 0 / 0.7);
+  --color-outline: rgb(255 255 255 / 0.2);
+  /* The chat area runs edge to edge in black; only the sidebar sits a shade lighter. */
+  --color-canvas: #000000;
+  --color-sidebar: #0b0b0b;
+  --color-frame: transparent;
+  --color-elevated: #141414;
+  --color-composer: #1a1a1a;
+  --color-composer-focus: rgb(255 255 255 / 0.4); /* ~3:1 against the composer: a visible, neutral focus edge */
+  --color-composer-ring: rgb(43 92 230 / 0.3);
+
+  --shadow-xs: 0 0 #0000;
+  --shadow-card: 0 0 #0000;
+  --shadow-elevated: 0 8px 24px rgb(0 0 0 / 0.6);
+  --shadow-popover: 0 20px 25px -5px rgb(0 0 0 / 0.6), 0 8px 10px -6px rgb(0 0 0 / 0.5);
+}
+
+/* Dark workspace chrome (sidebar, chat header, new-chat empty state): secondary text and icons at full strength. */
+:root[data-theme='dark'] .bright-chrome {
+  --color-fg-muted: var(--color-fg);
+  --color-fg-soft: var(--color-fg);
 }
 
 /* Tokens that are not Tailwind namespaces. */

@@ -8,4 +8,12 @@ export const queryKeys = {
   /** `conversationKey` is a conversation id, or 'new' for an unsaved chat. */
   messages: (conversationKey: string) => ['messages', conversationKey] as const,
   models: () => ['models'] as const,
+  profiles: {
+    all: ['profiles'] as const,
+    list: () => ['profiles', 'list'] as const,
+  },
+  /** Every pending suggestion (all profiles): card badges and the detail view read the same list. */
+  profileSuggestions: {
+    pending: () => ['profileSuggestions', 'pending'] as const,
+  },
 };

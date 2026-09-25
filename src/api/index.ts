@@ -1,4 +1,6 @@
+import { env } from '@/lib/env';
 import { createHttpAdapter } from './http';
+import { createMockAdapter } from './mock/mockAdapter';
 import type { ApiAdapter } from './services';
 
 export { ApiProvider, useApi } from './context';
@@ -8,6 +10,7 @@ export { queryKeys } from './queryKeys';
 export { ATTACHMENT_LIMITS } from './limits';
 export type {
   ApiAdapter,
+  ApiCapabilities,
   ArtifactsService,
   AttachmentsService,
   AttachmentUploadInput,
@@ -18,6 +21,9 @@ export type {
   MessageListParams,
   MessagesService,
   ModelsService,
+  ProfilesService,
+  ProfileSuggestionListParams,
+  ProfileSuggestionsService,
   SendMessageBody,
   StreamOptions,
 } from './services';
@@ -25,7 +31,10 @@ export { createHttpAdapter, request, requestJson, type RequestOptions } from './
 export { readEventStream, type EventStream, type StreamEvent, type StreamEventName } from './stream';
 export { createMockAdapter, INSTANT_TIMING, REALISTIC_TIMING, type MockAdapterOptions, type MockTiming } from './mock/mockAdapter';
 
-/** The adapter the app runs against: the LAM13 FastAPI backend. Tests pass the mock instead. */
+/**
+ * The adapter the app runs against: the LAM13 FastAPI backend, or the in-memory mock with
+ * `VITE_API_MODE=mock` (no backend needed). Tests pass their own adapter.
+ */
 export function createDefaultAdapter(): ApiAdapter {
-  return createHttpAdapter();
+  return env.apiMode === 'mock' ? createMockAdapter() : createHttpAdapter();
 }

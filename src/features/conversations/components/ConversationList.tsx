@@ -76,7 +76,8 @@ function ConversationRow({
         title={c.title}
         className={({ isActive }) =>
           cn(
-            'group relative flex h-11 items-center gap-2.5 pl-3 pr-10 text-nav transition-colors duration-150 ease-standard md:h-10',
+            // Compact desktop rhythm: 36px rows, 4px apart (40px pitch); touch keeps 44px rows.
+            'group relative flex h-11 items-center gap-2.5 pl-3 pr-10 text-nav transition-colors duration-150 ease-standard md:h-9',
             // Touch or narrow screens (drawer): the actions button is always shown and its space reserved.
             // Desktop with a mouse: only while the row is hovered/focused, so titles use the full width.
             'md:pointer-fine:pr-2 md:pointer-fine:group-hover/row:pr-10 md:pointer-fine:group-focus-within/row:pr-10',
@@ -160,7 +161,7 @@ export function ConversationList({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <nav aria-label="Conversations" className="px-3 pb-4 pt-3">
+    <nav aria-label="Conversations" className="px-3 pb-4 pt-2">
       <ul className="flex flex-col gap-1">
         {history.map((c) => (
           <ConversationRow

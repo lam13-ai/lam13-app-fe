@@ -17,7 +17,7 @@ export function RouteError({ standalone = false }: { standalone?: boolean }) {
   if (standalone) {
     return (
       <main className="flex h-dvh bg-bg-subtle p-2 lg:p-3">
-        <ErrorState {...COPY} level={1} className="flex-1 bg-bg md:rounded-card md:border md:border-hairline-strong" />
+        <ErrorState {...COPY} level={1} className="flex-1 bg-bg md:rounded-card md:border md:border-frame" />
       </main>
     );
   }

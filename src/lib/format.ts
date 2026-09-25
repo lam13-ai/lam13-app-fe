@@ -58,3 +58,22 @@ export function describeMessageTime(iso: string, locale?: string): string {
   if (Number.isNaN(date.getTime())) return '';
   return dateFormat(locale, { dateStyle: 'full', timeStyle: 'short' }).format(date);
 }
+
+/**
+ * Short relative time: "just now", "5m ago", "2h ago", "3d ago", then the date ("12 Sep", or
+ * "12 Sep 2025" in another year). Future and invalid times read as "just now" / "".
+ */
+export function formatRelativeTime(iso: string, now: Date = new Date(), locale?: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const minutes = Math.floor((now.getTime() - date.getTime()) / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)}h ago`;
+  if (minutes < 7 * 24 * 60) return `${Math.floor(minutes / (24 * 60))}d ago`;
+  return dateFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    ...(date.getFullYear() !== now.getFullYear() && { year: 'numeric' }),
+  }).format(date);
+}

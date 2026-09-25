@@ -2,6 +2,7 @@ import { env } from '@/lib/env';
 import type { Artifact, AttachmentRef, Conversation, Message } from '@/types/api';
 import { getAccessToken } from './auth';
 import { abortError, ApiError } from './errors';
+import { createMockProfiles } from './mock/profiles';
 import type { ApiAdapter, SendMessageBody } from './services';
 import { readSseMessages, type SseMessage, type StreamEvent } from './stream';
 
@@ -54,14 +55,20 @@ export async function requestJson<T>(path: string, options?: RequestOptions): Pr
   return (response.status === 204 ? undefined : await response.json()) as T;
 }
 
+/** A backend message is shown only when it is a short, single-line sentence (never a traceback or dump). */
+function safeText(value: unknown): string | undefined {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text && text.length <= 200 && !/[\r\n]|Traceback|File "/.test(text) ? text : undefined;
+}
+
 /** FastAPI errors are `{detail: string}` or `{detail: [{msg}]}`; 5xx details are never shown. */
 async function toApiError(response: Response): Promise<ApiError> {
   let message = response.status >= 500 ? 'Something went wrong on our side. Please try again.' : 'Request failed.';
   if (response.status < 500) {
     try {
       const { detail } = (await response.json()) as { detail?: unknown };
-      if (typeof detail === 'string') message = detail;
-      else if (Array.isArray(detail) && typeof detail[0]?.msg === 'string') message = detail[0].msg;
+      const text = safeText(typeof detail === 'string' ? detail : Array.isArray(detail) ? detail[0]?.msg : undefined);
+      if (text) message = text;
     } catch {
       // Not JSON — keep the generic message.
     }
@@ -202,8 +209,15 @@ type Json = Record<string, unknown>;
 const str = (value: unknown) => (typeof value === 'string' ? value : '');
 
 /**
- * Backend SSE (`start, thinking, token, progress, done, error` …, see routers/chat.py) → app events.
- * `loadDetail` fetches the session after `done` so generated files (report / PPTX) arrive as `artifact` events.
+ * Backend SSE (`start, thinking, token, progress, response_completed, done, error` …, see routers/chat.py)
+ * → app events. `loadDetail` fetches the session after `done` so generated files (report / PPTX) arrive as
+ * `artifact` events.
+ *
+ * `response_completed` means the answer text is final, but the backend then post-processes for several
+ * seconds before `done`. The answer is completed there (the UI frees the composer); what follows on the
+ * same response — agent output appended to the answer, the title, generated files — arrives as trailing
+ * `delta` / `conversation.updated` / `artifact` events. A failure after that point is a post-processing
+ * failure: the answer stands.
  */
 export async function* translateStream(
   messages: AsyncIterable<SseMessage>,
@@ -216,6 +230,8 @@ export async function* translateStream(
   let content = '';
   let thinking = false;
   let partial = false;
+  /** `response_completed` was mapped to `done`. */
+  let completed = false;
 
   const assistant = (patch: Partial<Message> = {}): Message => ({
     id: assistantId,
@@ -264,17 +280,27 @@ export async function* translateStream(
       case 'thinking':
       case 'progress':
       case 'postprocess_started':
+        if (completed) break;
         if (!thinking) yield { event: 'status', data: { state: 'thinking', label: str(data.content) } };
         thinking = true;
         break;
       case 'token': {
-        const text = str(data.content);
+        // Agent output is stored as `answer.strip() + "\n\n" + addition.strip()` (append_assistant_message).
+        const raw = str(data.content);
+        const text =
+          data.source === 'chatbot' || !data.source ? raw : raw.trim() && (content.trim() ? '\n\n' : '') + raw.trim();
         if (!text) break;
         content += text;
         thinking = false;
         yield { event: 'delta', data: { message_id: assistantId, text } };
         break;
       }
+      case 'response_completed':
+        if (!assistantId || completed) break;
+        completed = true;
+        yield { event: 'done', data: { message: assistant({ status: 'complete' }) } };
+        break;
+
       case 'done': {
         // A failed turn sends a partial `done` followed by `error`; let the error end the stream.
         if (data.partial) {
@@ -287,6 +313,8 @@ export async function* translateStream(
         const saved = detail?.messages.find((m) => m.id === assistantId);
         const artifacts = saved && detail ? artifactsFor(detail, saved, true) : [];
         for (const a of artifacts) yield { event: 'artifact', data: a };
+        // Already completed at `response_completed`: the above were trailing updates.
+        if (completed) return;
         yield {
           event: 'done',
           data: {
@@ -300,13 +328,15 @@ export async function* translateStream(
         return;
       }
       case 'error':
+        // After `response_completed` this is a post-processing failure; the completed answer stands.
+        if (completed) return;
         yield {
           event: 'error',
           data: {
             code: partial ? 'generation_failed' : 'stream_error',
-            message: str(data.content) || 'We encountered an issue processing your request.',
-            // Regenerating is not supported by the backend; errors after `start` cannot be retried in place.
-            retryable: false,
+            message: safeText(data.content) ?? 'We encountered an issue processing your request.',
+            // Not regenerated in place (no endpoint): Retry asks again as a new turn (see chatStream `retry`).
+            retryable: true,
           },
         };
         return;
@@ -318,8 +348,12 @@ export async function* translateStream(
 
 export function createHttpAdapter(): ApiAdapter {
   const loadDetail = (id: string) => requestJson<SessionDetailDto>(`/chat/sessions/${encodeURIComponent(id)}`);
+  let counter = 0;
 
   return {
+    // No regenerate or /audio endpoint: the UI hides Regenerate and voice notes.
+    capabilities: { regenerate: false, voiceNotes: false },
+
     conversations: {
       async list() {
         const items = await requestJson<SessionSummaryDto[]>('/chat/sessions');
@@ -407,5 +441,12 @@ export function createHttpAdapter(): ApiAdapter {
         return { items: [] };
       },
     },
+
+    // Not part of the chat backend: My Contacts stays in memory until its API exists.
+    ...createMockProfiles({
+      now: Date.now,
+      respond: async () => {},
+      newId: (prefix) => `${prefix}_${Date.now().toString(36)}${(++counter).toString(36)}`,
+    }),
   };
 }

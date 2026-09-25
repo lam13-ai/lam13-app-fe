@@ -13,6 +13,7 @@ import type {
 import { readEventStream, type EventStream } from '../stream';
 import { createSeed, MOCK_MODELS } from './fixtures';
 import { composeReply, deriveTitle } from './responder';
+import { createMockProfiles } from './profiles';
 import { createEventBody, type EventWriter } from './sseEncoder';
 import { mockTranscribe } from './transcripts';
 import { between, clone, sleep, type Range } from './utils';
@@ -58,6 +59,8 @@ export interface MockAdapterOptions {
   failAudioUploads?: boolean;
   /** Makes every feedback request fail with a 503 (to exercise rollback). */
   failFeedback?: boolean;
+  /** Makes every contact/suggestion write fail with a 503 (to exercise rollback). */
+  failProfileWrites?: boolean;
 }
 
 /**
@@ -198,6 +201,7 @@ export function createMockAdapter(options: MockAdapterOptions = {}): ApiAdapter 
   }
 
   return {
+    capabilities: { regenerate: true, voiceNotes: true },
     conversations: {
       async list({ cursor, limit = DEFAULT_PAGE }: ListParams = {}) {
         await respond();
@@ -500,5 +504,7 @@ export function createMockAdapter(options: MockAdapterOptions = {}): ApiAdapter 
         return { items: clone(MOCK_MODELS) };
       },
     },
+
+    ...createMockProfiles({ now, respond: () => respond(), newId, failWrites: options.failProfileWrites }),
   };
 }

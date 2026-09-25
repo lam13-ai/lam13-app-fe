@@ -77,7 +77,7 @@ export function RenameField({
     <div>
       <div
         className={cn(
-          'flex h-11 items-center gap-2 border bg-bg pl-3 pr-2 md:h-10',
+          'flex h-11 items-center gap-2 border bg-bg pl-3 pr-2 md:h-9',
           error ? 'border-danger' : 'border-accent/45 ring-1 ring-accent/15',
         )}
       >

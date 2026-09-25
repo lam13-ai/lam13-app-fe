@@ -30,7 +30,7 @@ export function VoicePlayer({ src, durationMs, peaks, tone = 'default', label = 
   const unavailable = !src || playback.status === 'error';
 
   return (
-    <div className={cn('flex min-w-0 items-center gap-3', tone === 'inverse' ? 'text-bg' : 'text-fg')}>
+    <div className={cn('flex min-w-0 items-center gap-3', tone === 'inverse' ? 'text-on-inverse' : 'text-fg')}>
       <button
         type="button"
         onClick={() => void playback.toggle()}
@@ -40,7 +40,7 @@ export function VoicePlayer({ src, durationMs, peaks, tone = 'default', label = 
           'hit-area relative flex size-8 shrink-0 items-center justify-center rounded-full transition-colors duration-150 ease-standard',
           'disabled:cursor-default disabled:opacity-40',
           tone === 'inverse'
-            ? 'bg-bg text-fg hover:bg-bg/85 focus-visible:outline-bg/70'
+            ? 'bg-on-inverse text-inverse hover:bg-on-inverse/85 focus-visible:outline-on-inverse/70'
             : 'border border-border bg-bg text-fg hover:border-fg/40',
         )}
       >
@@ -55,7 +55,7 @@ export function VoicePlayer({ src, durationMs, peaks, tone = 'default', label = 
         className={cn(
           'relative h-7 min-w-0 flex-1',
           'has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2',
-          tone === 'inverse' ? 'has-[:focus-visible]:outline-bg/70' : 'has-[:focus-visible]:outline-fg/40',
+          tone === 'inverse' ? 'has-[:focus-visible]:outline-on-inverse/70' : 'has-[:focus-visible]:outline-fg/40',
         )}
       >
         <Waveform mode="static" peaks={bars} progress={showPosition ? progress : 1} className="h-full" />
@@ -73,7 +73,7 @@ export function VoicePlayer({ src, durationMs, peaks, tone = 'default', label = 
         />
       </div>
 
-      <span className={cn('shrink-0 text-2xs tabular-nums', tone === 'inverse' ? 'text-bg/75' : 'text-fg-muted')}>
+      <span className={cn('shrink-0 text-2xs tabular-nums', tone === 'inverse' ? 'text-on-inverse/75' : 'text-fg-muted')}>
         {playback.status === 'error' ? 'Unavailable' : formatDuration(showPosition ? playback.positionMs : duration)}
       </span>
     </div>

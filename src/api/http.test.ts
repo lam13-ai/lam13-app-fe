@@ -63,7 +63,8 @@ describe('translateStream (backend SSE → app events)', () => {
     expect((events[9]!.data.message as { content: string; status: string })).toMatchObject({ content: 'Hello world', status: 'complete' });
   });
 
-  it('a failed turn (partial done, then error) ends with a non-retryable error, not done', async () => {
+  // Retryable: with no regenerate endpoint, Retry asks again as a new turn (chatStream `retry`).
+  it('a failed turn (partial done, then error) ends with a retryable error, not done', async () => {
     const events = await collect(
       translateStream(
         sse(
@@ -77,6 +78,6 @@ describe('translateStream (backend SSE → app events)', () => {
       ),
     );
     expect(events.map((e) => e.event)).toEqual(['message.created', 'delta', 'error']);
-    expect(events[2]!.data).toMatchObject({ retryable: false, message: 'We encountered an issue processing your request.' });
+    expect(events[2]!.data).toMatchObject({ retryable: true, message: 'We encountered an issue processing your request.' });
   });
 });

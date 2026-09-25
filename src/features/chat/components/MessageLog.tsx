@@ -1,5 +1,6 @@
 import { ArrowDown } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import { useApi } from '@/api';
 import { ScrollArea } from '@/components/ScrollArea';
 import { Spinner } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -70,6 +71,8 @@ export function MessageLog({ messages, failures, older, onRetry, streaming = fal
   }, [older.loading, resetLoadOlder]);
 
   const turns = groupTurns(messages);
+  const last = messages.at(-1);
+  const canRegenerate = useApi().capabilities.regenerate;
 
   const renderMessages = (list: MessageView[]) =>
     list.map((message) => {
@@ -94,7 +97,10 @@ export function MessageLog({ messages, failures, older, onRetry, streaming = fal
           message={message}
           failure={failures[key]}
           onRetry={retry}
-          // ponytail: no Regenerate — the backend has no regenerate endpoint yet.
+          // Regenerate the latest completed server answer (api-contract.md §4.3) when the backend can; never while streaming.
+          onRegenerate={
+            canRegenerate && message === last && message.status === 'complete' && !isLocalId(message.id) ? retry : undefined
+          }
           animate={animate}
         />
       );

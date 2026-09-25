@@ -31,7 +31,7 @@ export function Wordmark({ className }: { className?: string }) {
     <span className={cn('inline-flex items-center gap-2 text-[17px] font-bold leading-none tracking-tight', className)}>
       <SparkleGlyph size={18} />
       <span>
-        Lam13<span className="text-accent">.ai</span>
+        Lam13<span className="text-link">.ai</span>
       </span>
     </span>
   );

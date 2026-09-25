@@ -21,7 +21,7 @@ export function EmptyState({
   const animate = phase === 'entering';
 
   return (
-    <ScrollArea data-transition={phase} className="flex min-h-0 flex-1 flex-col px-6 py-8 [view-transition-name:chat-body]">
+    <ScrollArea data-transition={phase} className="bright-chrome flex min-h-0 flex-1 flex-col px-6 py-8 [view-transition-name:chat-body]">
       <div className="m-auto flex max-w-xl flex-col items-center gap-5 text-center">
         {/* Entrance lives on a wrapper so the ring's own breathing animation keeps running. */}
         <span className={cn('inline-flex', animate && 'animate-agent-in')}>

@@ -7,7 +7,7 @@ import { useUiStore } from '@/stores/uiStore';
 export function RoutePanel(props: Omit<ErrorStateProps, 'level' | 'children' | 'className'>) {
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   return (
-    <section className="relative flex h-full flex-col bg-bg md:rounded-card md:border md:border-hairline-strong md:shadow-card">
+    <section className="relative flex h-full flex-col bg-bg md:rounded-card md:border md:border-frame md:shadow-card">
       <div className="absolute left-3 top-4 md:hidden">
         <IconButton label="Open sidebar" size="md" icon={<Menu {...iconProps} />} onClick={() => setSidebarOpen(true)} />
       </div>

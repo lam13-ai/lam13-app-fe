@@ -406,6 +406,7 @@ Light only for v1, because the reference defines no dark theme. The tokens are s
 | `/callback` | Kinde redirect handler |
 | `/` | New chat (empty state). The conversation is created lazily on the first send. |
 | `/c/:conversationId` | Conversation |
+| `/contacts` | My Contacts (grid, profile sheet, meeting-derived suggestions) |
 | `*` | Not found |
 
 All routes except `/login` and `/callback` are wrapped in `RequireAuth` and `AppShell`, and are lazy-loaded.

@@ -15,9 +15,9 @@ export interface ButtonProps extends ComponentProps<'button'> {
 const variants: Record<Variant, string> = {
   primary: 'bg-fg text-bg hover:bg-fg/85',
   secondary: 'border border-fg/30 bg-bg/70 text-fg backdrop-blur-sm hover:border-fg/60 hover:bg-bg',
-  outline: 'border border-fg text-fg hover:bg-fg hover:text-bg',
+  outline: 'border border-outline text-fg hover:bg-fg hover:text-bg',
   ghost: 'text-fg-muted hover:bg-fg/5 hover:text-fg',
-  danger: 'bg-danger text-white hover:bg-danger/85',
+  danger: 'bg-danger text-bg hover:bg-danger/85',
 };
 
 // Mobile sizes keep a 44px touch target; desktop tightens to the reference sizes.

@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { FileText, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ATTACHMENT_LIMITS, queryKeys, toErrorInfo } from '@/api';
+import { ATTACHMENT_LIMITS, queryKeys, toErrorInfo, useApi } from '@/api';
 import { ErrorState } from '@/components/ErrorState';
 import { Spinner, smallIconProps, useToast } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -45,6 +45,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
   const queryClient = useQueryClient();
   const toast = useToast();
   const actions = useChatActions();
+  const { capabilities } = useApi();
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const files = useImageAttachments();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -136,7 +137,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
   return (
     <section
       aria-label="Chat"
-      className="flex h-full min-h-0 flex-col overflow-hidden bg-bg md:rounded-card md:border md:border-hairline-strong md:shadow-card"
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-bg md:rounded-card md:border md:border-frame md:shadow-card"
     >
       <ChatHeader
         title={title}
@@ -156,7 +157,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
             onSend={send}
             onStop={() => actions.stop(key)}
             onSendVoice={
-              env.features.voiceNotes
+              env.features.voiceNotes && capabilities.voiceNotes
                 ? (recording, signal) => actions.sendVoice(conversationId, recording, { origin, signal })
                 : undefined
             }

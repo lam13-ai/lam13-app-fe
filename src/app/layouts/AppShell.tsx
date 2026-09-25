@@ -30,12 +30,12 @@ export function AppShell() {
   return (
     // Calls live with the signed-in workspace: signing out unmounts this and ends any call.
     <CallingProvider>
-      <div className="flex h-dvh overflow-hidden bg-bg-subtle">
+      <div className="flex h-dvh overflow-hidden bg-canvas">
         {isDesktop ? (
           <aside
             aria-label="Sidebar"
             className={cn(
-              'shrink-0 overflow-hidden transition-[width] duration-300 ease-standard',
+              'shrink-0 overflow-hidden bg-sidebar transition-[width] duration-300 ease-standard',
               sidebarCollapsed ? 'w-[var(--rail-w)]' : 'w-[var(--sidebar-w)]',
             )}
           >

@@ -1,4 +1,4 @@
-/** Vendor-neutral auth types — the rest of the app never sees the backend's auth shapes. */
+/** Vendor-neutral auth types — the rest of the app never sees Kinde's shapes. */
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -9,15 +9,18 @@ export interface AuthUser {
   avatarUrl: string | null;
 }
 
+export interface AuthRedirectOptions {
+  /** In-app path to return to after sign-in (sanitised). */
+  returnTo?: string;
+}
+
 export interface AuthContextValue {
   status: AuthStatus;
   user: AuthUser | null;
-  /** The actions below reject with ApiError (message is display-safe). */
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName: string) => Promise<void>;
-  /** Resolves with the server's (account-agnostic) confirmation message. */
-  forgotPassword: (email: string) => Promise<string>;
-  resetPassword: (token: string, newPassword: string) => Promise<void>;
+  /** Display-safe error (never raw provider output). */
+  error: string | null;
+  login: (options?: AuthRedirectOptions) => Promise<void>;
+  register: (options?: AuthRedirectOptions) => Promise<void>;
   logout: () => Promise<void>;
-  getAccessToken: (options?: { forceRefresh?: boolean }) => Promise<string | null>;
+  getAccessToken: () => Promise<string | null>;
 }

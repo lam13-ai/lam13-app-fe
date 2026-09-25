@@ -26,7 +26,7 @@ describe('legal navigation', () => {
     await screen.findByRole('heading', { name: 'Sign in to Lam13.' }, { timeout: 8000 });
     expectLegalLinks(screen.getByRole('navigation', { name: 'Legal' }));
     // Sign-in still goes through the app's own auth provider, not an external auth URL.
-    expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Continue to sign in/ })).toBeTruthy();
     expect(document.querySelector('a[href*="/auth"]')).toBeNull();
   });
 });

@@ -1,6 +1,8 @@
 # API Contract — Frontend ↔ FastAPI
 
 **Status:** a proposal written by the frontend for Phase 0.
+
+> **Implemented backend:** the LAM13 FastAPI app exposes a different, smaller chat API (`/chat/upload`, `/chat/sessions`, `/chat/sessions/{sessionId}`, `/chat/stream`, backend-issued HS256 JWTs). `src/api/http/` adapts it to the interfaces below. Its DTOs, the SSE event mapping and the unsupported features are documented in `src/api/http/dto.ts`, `chatEvents.ts` and `httpAdapter.ts`. This document stays the frontend's target contract.
 - Items marked **[CONFIRM]** need a backend decision before the phase that uses them.
 - Everything here maps 1:1 to `src/types/api.ts` and `src/api/endpoints/*`.
 
@@ -86,6 +88,19 @@ AudioRef      { id, url, mime_type, duration_ms, expires_at | null, peaks?: numb
 
 CallSession   { id, conversation_id, vapi: { public_key, assistant_id | null,
                 assistant_overrides | null }, metadata: Record<string,string>, created_at }
+
+Profile       { id, full_name, position, company, description,   // description: plain text, may be ''
+                email | null, phone | null, linkedin | null, created_at, updated_at }   // §4.10 [CONFIRM]
+
+ProfileUpdateSuggestion {                                        // §4.11 [CONFIRM]
+  id, profile_id,
+  source_type: 'meeting', source_id, source_title | null,
+  created_at,
+  status: 'pending' | 'approved' | 'rejected',
+  changes: { field: 'full_name' | 'position' | 'company' | 'description'
+                  | 'email' | 'phone' | 'linkedin',
+             to: string | null }[]                               // null clears an optional field
+}
 ```
 
 ---
@@ -193,6 +208,31 @@ The composer hides its model and effort chips if this endpoint returns `404` or 
 
 - Artifacts are created by the server while it answers and reported on the message stream as `artifact` events (§5). The final message in `done` lists them.
 
+### 4.10 Profiles — My Contacts [CONFIRM]
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/profiles?cursor=&limit=` | – | `Page<Profile>`, sorted by `full_name` |
+| POST | `/profiles` | `{ full_name, position, company, description, email?, phone?, linkedin? }` | `201 Profile` |
+| GET | `/profiles/{id}` | – | `Profile` |
+| PATCH | `/profiles/{id}` | any subset of the create body | `Profile` (sets `updated_at`) |
+| DELETE | `/profiles/{id}` | – | `204` (also deletes the profile's suggestions) |
+
+- A profile is **user-owned canonical data**. Only these endpoints (the user's own edits) and an approved suggestion (§4.11) may change it.
+- The server trims text; empty optional fields are stored as `null`. `422 validation_error` with `details` per field: `full_name`, `position` and `company` are required (`"required"`), and `email` must be a valid address (`"invalid"`).
+- Profiles are scoped to the signed-in user.
+
+### 4.11 Profile update suggestions [CONFIRM]
+| Method | Path | Returns |
+|---|---|---|
+| GET | `/profile-suggestions?profile_id=&status=` | `{ items: ProfileUpdateSuggestion[] }`, oldest first |
+| POST | `/profile-suggestions/{id}/approve` | `{ suggestion, profile }`: applies `changes`, sets `profile.updated_at`, marks the suggestion `approved` |
+| POST | `/profile-suggestions/{id}/reject` | `ProfileUpdateSuggestion`, marked `rejected`; **the profile is not modified** |
+
+- Meeting processing creates suggestions. It must **never** write to a profile directly.
+- One suggestion is one change set: it is approved or rejected as a whole. Unrelated changes should arrive as separate suggestions.
+- `409 suggestion_not_pending` when approving or rejecting a suggestion that was already decided; `404 suggestion_not_found`.
+- The client shows each change against the profile's **current** value, so the user sees exactly what approval would change.
+
 ---
 
 ## 5. Streaming protocol
@@ -265,3 +305,9 @@ data: {"message":{"id":"m_2","status":"complete","content":"## How a National…
 9. Regenerate: does it replace the assistant message in place (as assumed), or keep previous versions?
 10. Attachments (§4.7), feedback (§4.8) and artifacts (§4.9): which are in scope for v1, and are the limits above right?
 11. Will the backend emit a distinct `solving` status, or only `thinking` / `answering`?
+12. My Contacts (§4.10–4.11):
+    - Is a suggestion based on a snapshot of the profile? If the user edits a field after a suggestion was created, should approving return `409` (stale), or apply anyway (the current assumption)?
+    - Are `source_title` and a meeting link available for the "From meeting" label?
+    - Server-side search (`?q=`) and pagination beyond 100 contacts? The client currently loads up to 100 and searches locally.
+    - Field limits: the client caps name/position/company at 120 characters, description at 4,000, email at 254, phone at 40 and LinkedIn at 300.
+    - Should approved or rejected suggestions be kept as history, and for how long?

@@ -131,7 +131,7 @@ export function Popover({
           ref={panelRef}
           id={id}
           className={cn(
-            'absolute z-50 min-w-44 rounded-popover border border-border bg-bg/95 p-1 shadow-popover backdrop-blur-md',
+            'absolute z-50 min-w-44 rounded-popover border border-border bg-elevated/95 p-1 shadow-popover backdrop-blur-md',
             'duration-300 ease-spring',
             placements[placement],
             open

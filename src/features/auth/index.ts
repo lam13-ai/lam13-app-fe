@@ -3,4 +3,5 @@ export { MemoryAuthProvider, LOCAL_DEVELOPER, type MemoryAuthProviderProps } fro
 export { RequireAuth } from './RequireAuth';
 export { useAuth } from './context';
 export { LoginScreen } from './components/LoginScreen';
+export { CallbackScreen } from './components/CallbackScreen';
 export type { AuthContextValue, AuthStatus, AuthUser } from './types';

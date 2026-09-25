@@ -110,6 +110,57 @@ export interface ModelOption {
   default_effort: Effort;
 }
 
+/**
+ * A contact in "My Contacts" (api-contract.md §4.10). User-owned canonical data: only the user's own
+ * edits, or a suggestion the user approves, may change it. [CONFIRM]
+ */
+export interface Profile {
+  id: Id;
+  full_name: string;
+  position: string;
+  company: string;
+  /** Plain text (not Markdown); may be empty. */
+  description: string;
+  email: string | null;
+  phone: string | null;
+  linkedin: string | null;
+  created_at: IsoDateTime;
+  updated_at: IsoDateTime;
+}
+
+/** The user-editable fields of a Profile. */
+export type ProfileField = 'full_name' | 'position' | 'company' | 'description' | 'email' | 'phone' | 'linkedin';
+
+/** Body of create/update: every editable field (optional ones as null when empty). */
+export type ProfileInput = Pick<Profile, ProfileField>;
+
+/** One proposed field change. `to: null` clears an optional field. */
+export interface ProfileFieldChange {
+  field: ProfileField;
+  to: string | null;
+}
+
+export type ProfileSuggestionStatus = 'pending' | 'approved' | 'rejected';
+/** Where a suggestion came from; meetings for now. */
+export type ProfileSuggestionSource = 'meeting';
+
+/**
+ * A proposed profile change derived from a meeting (api-contract.md §4.11). It never changes the
+ * profile by itself: only `approve` applies `changes`; `reject` leaves the profile untouched. [CONFIRM]
+ */
+export interface ProfileUpdateSuggestion {
+  id: Id;
+  profile_id: Id;
+  source_type: ProfileSuggestionSource;
+  source_id: Id;
+  /** Human-readable source, e.g. the meeting title. */
+  source_title: string | null;
+  created_at: IsoDateTime;
+  status: ProfileSuggestionStatus;
+  /** Applied together on approval; unrelated changes arrive as separate suggestions. */
+  changes: ProfileFieldChange[];
+}
+
 export interface CallSession {
   id: Id;
   conversation_id: Id;

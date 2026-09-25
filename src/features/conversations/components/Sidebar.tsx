@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
-import { LogOut, PanelLeftClose, PanelLeftOpen, Shield, SquarePen, X } from 'lucide-react';
+import { Link, NavLink, useNavigate } from 'react-router';
+import { LogOut, PanelLeftClose, PanelLeftOpen, Shield, SquarePen, Users, X } from 'lucide-react';
 import { Wordmark } from '@/components/AgentMark';
 import { LegalLinks } from '@/components/LegalLinks';
 import { ScrollArea } from '@/components/ScrollArea';
+import { ThemeMenu } from '@/components/ThemeMenu';
 import { Button, IconButton, Tooltip, iconProps } from '@/components/ui';
 import { useIsAdmin } from '@/features/admin';
+import { cn } from '@/lib/cn';
 import { initials } from '@/lib/initials';
 import { ConversationList } from './ConversationList';
 
@@ -80,7 +82,7 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
 
   if (collapsed) {
     return (
-      <div className="flex h-full flex-col items-center">
+      <div className="bright-chrome flex h-full flex-col items-center">
         <div className="flex h-[var(--header-h)] items-center">
           <Tooltip content="Expand sidebar" side="bottom" align="start">
             <IconButton label="Expand sidebar" size="md" icon={<PanelLeftOpen {...iconProps} />} onClick={onToggleCollapsed} />
@@ -89,7 +91,24 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
         <Tooltip content="New chat" side="bottom" align="start">
           <IconButton label="New chat" size="md" icon={<SquarePen {...iconProps} />} onClick={startNewChat} />
         </Tooltip>
+        <div className="mt-2">
+          <Tooltip content="My Contacts" side="bottom" align="start">
+            <NavLink
+              to="/contacts"
+              aria-label="My Contacts"
+              className={({ isActive }) =>
+                cn(
+                  'hit-area relative inline-flex size-8 items-center justify-center rounded-full transition-all duration-200 ease-standard',
+                  isActive ? 'bg-accent-wash text-fg' : 'text-fg-soft hover:bg-accent-wash hover:text-fg',
+                )
+              }
+            >
+              <Users {...iconProps} />
+            </NavLink>
+          </Tooltip>
+        </div>
         <div className="mt-auto flex flex-col items-center gap-3 pb-4">
+          <ThemeMenu align="start" />
           <AdminButton align="start" />
           <SignOutButton onSignOut={onSignOut} align="start" />
           <span title={user.name}>
@@ -101,7 +120,7 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="bright-chrome flex h-full min-h-0 flex-col">
       <div className="flex h-[var(--header-h)] shrink-0 items-center justify-between pl-5 pr-3">
         <Link to="/" onClick={onNavigate} aria-label="Lam13 home" className="outline-offset-4">
           <Wordmark />
@@ -126,6 +145,20 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
         >
           New chat
         </Button>
+        {/* Same row language as the history below: tinted when active, lighter tint on hover. */}
+        <NavLink
+          to="/contacts"
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            cn(
+              'mt-2 flex h-11 items-center gap-2.5 px-3 text-nav transition-colors duration-150 ease-standard md:h-9',
+              isActive ? 'bg-accent-wash font-bold text-fg' : 'text-fg-muted hover:bg-fg/[0.045] hover:text-fg',
+            )
+          }
+        >
+          <Users {...iconProps} />
+          My Contacts
+        </NavLink>
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
@@ -138,6 +171,7 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
           <p className="truncate text-nav font-bold leading-5">{user.name}</p>
           {user.email && <p className="truncate text-2xs text-fg-muted">{user.email}</p>}
         </div>
+        <ThemeMenu />
         <AdminButton align="end" />
         <SignOutButton onSignOut={onSignOut} align="end" />
       </div>

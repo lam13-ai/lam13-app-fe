@@ -35,7 +35,7 @@ export function UserMessage({
       <div
         aria-busy={sending || undefined}
         className={cn(
-          'max-w-[85%] whitespace-pre-wrap break-words bg-fg px-4 py-2.5 text-user text-bg md:max-w-[60%]',
+          'max-w-[85%] whitespace-pre-wrap break-words bg-inverse px-4 py-2.5 text-user text-on-inverse md:max-w-[60%]',
           voice && 'w-[320px] py-3',
           failed && 'opacity-60',
         )}
@@ -50,14 +50,14 @@ export function UserMessage({
               tone="inverse"
             />
             {message.content ? (
-              <p className="mt-2.5 border-t border-bg/15 pt-2 text-xs leading-relaxed text-bg/75">
+              <p className="mt-2.5 border-t border-on-inverse/15 pt-2 text-xs leading-relaxed text-on-inverse/75">
                 <VisuallyHidden>Transcript: </VisuallyHidden>
                 {message.content}
               </p>
             ) : (
               !failed &&
               sending && (
-                <p className="mt-2.5 border-t border-bg/15 pt-2 text-xs text-bg/60 motion-safe:animate-pulse">
+                <p className="mt-2.5 border-t border-on-inverse/15 pt-2 text-xs text-on-inverse/60 motion-safe:animate-pulse">
                   Transcribing…
                 </p>
               )
@@ -70,9 +70,9 @@ export function UserMessage({
                 {message.attachments.map((file) => (
                   <li key={file.id}>
                     {file.kind === 'image' ? (
-                      <img src={file.url} alt={file.filename} loading="lazy" className="size-16 bg-bg/10 object-cover" />
+                      <img src={file.url} alt={file.filename} loading="lazy" className="size-16 bg-on-inverse/10 object-cover" />
                     ) : (
-                      <span className="inline-flex max-w-60 items-center gap-1.5 bg-bg/10 px-2 py-1 text-xs">
+                      <span className="inline-flex max-w-60 items-center gap-1.5 bg-on-inverse/10 px-2 py-1 text-xs">
                         <FileText {...smallIconProps} className="shrink-0" />
                         <span className="truncate">{file.filename}</span>
                       </span>

@@ -6,10 +6,17 @@ export interface DrawerProps {
   onClose: () => void;
   label: string;
   children: ReactNode;
+  /** 'left': the mobile sidebar. 'right': a full-height sheet (full width on phones). */
+  side?: 'left' | 'right';
 }
 
-/** Left off-canvas panel (mobile sidebar). Modal while open; inert while closed. */
-export function Drawer({ open, onClose, label, children }: DrawerProps) {
+const sides = {
+  left: { panel: 'left-0 w-[min(86vw,300px)] bg-bg-subtle', closed: '-translate-x-full' },
+  right: { panel: 'right-0 w-full bg-bg sm:w-[min(480px,100%)] sm:border-l sm:border-hairline', closed: 'translate-x-full' },
+};
+
+/** Off-canvas panel. Modal while open; inert while closed. */
+export function Drawer({ open, onClose, label, children, side = 'left' }: DrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -17,7 +24,8 @@ export function Drawer({ open, onClose, label, children }: DrawerProps) {
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    panelRef.current?.focus();
+    // Content may have focused its own first field (autoFocus); otherwise the panel takes focus.
+    if (!panelRef.current?.contains(document.activeElement)) panelRef.current?.focus();
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -53,7 +61,7 @@ export function Drawer({ open, onClose, label, children }: DrawerProps) {
         aria-hidden="true"
         onClick={onClose}
         className={cn(
-          'absolute inset-0 bg-fg/25 transition-opacity duration-300 ease-standard',
+          'absolute inset-0 bg-scrim transition-opacity duration-300 ease-standard',
           open ? 'opacity-100' : 'opacity-0',
         )}
       />
@@ -64,10 +72,11 @@ export function Drawer({ open, onClose, label, children }: DrawerProps) {
         aria-label={label}
         tabIndex={-1}
         className={cn(
-          'absolute inset-y-0 left-0 flex w-[min(86vw,300px)] flex-col bg-bg-subtle shadow-elevated outline-none',
+          'absolute inset-y-0 flex flex-col shadow-elevated outline-none',
+          sides[side].panel,
           'pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]',
           'transition-transform duration-300 ease-standard',
-          open ? 'translate-x-0' : '-translate-x-full',
+          open ? 'translate-x-0' : sides[side].closed,
         )}
       >
         {children}
