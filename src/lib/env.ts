@@ -48,8 +48,9 @@ export function parseEnv(raw: ImportMetaEnv) {
     }),
     features: Object.freeze({
       calling: flag(raw.VITE_FEATURE_CALLING, true),
-      // Off by default: the backend has no /audio endpoint yet.
-      voiceNotes: flag(raw.VITE_FEATURE_VOICE_NOTES, false),
+      // A kill switch: voice notes also need the API adapter's `voiceNotes` capability (the FastAPI
+      // backend has no /audio endpoint yet, so its adapter hides them).
+      voiceNotes: flag(raw.VITE_FEATURE_VOICE_NOTES, true),
     }),
   });
 }

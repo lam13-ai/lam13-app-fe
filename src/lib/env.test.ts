@@ -4,11 +4,11 @@ import { parseEnv } from './env';
 const base = { BASE_URL: '/', MODE: 'test', DEV: false, PROD: true, SSR: false } as ImportMetaEnv;
 
 describe('parseEnv', () => {
-  it('defaults to same-origin API, Kinde auth, calling on and voice notes off', () => {
+  it('defaults to same-origin API, Kinde auth and enabled features', () => {
     const env = parseEnv(base);
     expect(env.apiBaseUrl).toBe('');
     expect(env.authMode).toBe('kinde');
-    expect(env.features).toEqual({ calling: true, voiceNotes: false });
+    expect(env.features).toEqual({ calling: true, voiceNotes: true });
     expect(env.kinde.clientId).toBeUndefined();
   });
 

@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useUiStore } from '@/stores/uiStore';
 import { renderApp } from './testUtils';
 
 /** The contact grid's card names, in order. */
@@ -272,6 +273,97 @@ describe('My Contacts', () => {
       expect(within(sheet).getByRole('button', { name }).className).toMatch(/h-11/);
     }
     expect(within(sheet).getByRole('button', { name: 'Close' }).className).toContain('hit-area');
+  });
+});
+
+describe('My Contacts sheet width', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    useUiStore.setState({ contactSheetWidth: 480, contactSheetRestoreWidth: null });
+  });
+  const desktop = () =>
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) => ({ matches: query === '(min-width: 768px)', addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList,
+    );
+  const expandButton = (sheet: HTMLElement) => within(sheet).getByRole('button', { name: 'Expand contact panel' });
+  const restoreButton = (sheet: HTMLElement) => within(sheet).getByRole('button', { name: 'Restore contact panel' });
+
+  it('Expand goes to the maximum width (960px / 75% of the window) and Restore returns to exactly the previous width', async () => {
+    desktop();
+    renderApp('/contacts');
+    const sheet = await openContact('Daniel Brandt');
+    expect(sheet.style.width).toBe('480px');
+
+    fireEvent.click(expandButton(sheet));
+    // jsdom's window is 1024px wide: 75% (768px) is below the 960px cap.
+    expect(sheet.style.width).toBe('768px');
+    expect(within(sheet).getByRole('separator', { name: 'Resize contact panel' }).getAttribute('aria-valuenow')).toBe('768');
+
+    fireEvent.click(restoreButton(sheet));
+    expect(sheet.style.width).toBe('480px');
+    expect(expandButton(sheet)).toBeTruthy();
+  });
+
+  it('restores a manually chosen width (620 → Expand → Restore → 620)', async () => {
+    desktop();
+    useUiStore.setState({ contactSheetWidth: 620 });
+    renderApp('/contacts');
+    const sheet = await openContact('Daniel Brandt');
+    expect(sheet.style.width).toBe('620px');
+    fireEvent.click(expandButton(sheet));
+    expect(sheet.style.width).toBe('768px');
+    fireEvent.click(restoreButton(sheet));
+    expect(sheet.style.width).toBe('620px');
+  });
+
+  it('a manual resize while expanded leaves the expanded state and becomes the width to restore to', async () => {
+    desktop();
+    renderApp('/contacts');
+    const sheet = await openContact('Daniel Brandt');
+    fireEvent.click(expandButton(sheet));
+    fireEvent.keyDown(within(sheet).getByRole('separator', { name: 'Resize contact panel' }), { key: 'ArrowRight' });
+    expect(sheet.style.width).toBe('752px');
+    expect(expandButton(sheet)).toBeTruthy(); // no longer expanded
+
+    fireEvent.click(expandButton(sheet));
+    expect(sheet.style.width).toBe('768px');
+    fireEvent.click(restoreButton(sheet));
+    expect(sheet.style.width).toBe('752px');
+  });
+
+  it('keeps Escape-to-close and focus restoration while expanded', async () => {
+    desktop();
+    renderApp('/contacts');
+    const sheet = await openContact('Daniel Brandt');
+    const button = expandButton(sheet);
+    button.focus();
+    fireEvent.click(button);
+    expect(document.activeElement).toBe(restoreButton(sheet)); // same button, relabelled; focus stays
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Daniel Brandt' })));
+  });
+
+  it('shows no Expand control on phones (full-screen sheet)', async () => {
+    renderApp('/contacts');
+    const sheet = await openContact('Daniel Brandt');
+    expect(within(sheet).queryByRole('button', { name: /Expand contact panel|Restore contact panel/ })).toBeNull();
+    expect(sheet.style.width).toBe('');
+  });
+
+  it('is resizable on desktop and keeps its width when closed and reopened (session UI preference)', async () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) => ({ matches: query === '(min-width: 768px)', addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList,
+    );
+    renderApp('/contacts');
+    let sheet = await openContact('Daniel Brandt');
+    const handle = within(sheet).getByRole('separator', { name: 'Resize contact panel' });
+    fireEvent.keyDown(handle, { key: 'ArrowLeft', shiftKey: true });
+    expect(sheet.style.width).toBe('544px');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    sheet = await openContact('Hannah Lee');
+    expect(sheet.style.width).toBe('544px');
+    expect(within(sheet).getByRole('separator', { name: 'Resize contact panel' }).getAttribute('aria-valuenow')).toBe('544');
   });
 });
 

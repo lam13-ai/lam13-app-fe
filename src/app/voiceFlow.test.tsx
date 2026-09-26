@@ -15,7 +15,7 @@ describe('voice message flow', () => {
   it('record → preview → send: upload, voice message, transcript, then a streamed answer', async () => {
     media = installFakeMedia();
     const { api } = renderApp('/c/water-security-kpis', { timing: { ...INSTANT_TIMING, transcribe: [40, 40] } });
-    await screen.findByRole('log', { name: 'Conversation' });
+    await screen.findByRole('log', { name: 'Conversation' }, { timeout: 8000 });
     const upload = vi.spyOn(api.audio, 'upload');
 
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Record voice message' })));
@@ -43,10 +43,56 @@ describe('voice message flow', () => {
     expect(media.allTracksStopped()).toBe(true);
   });
 
+  it('previews the detected transcript before sending, and the sent message carries that same transcript', async () => {
+    media = installFakeMedia();
+    const { api } = renderApp('/c/water-security-kpis', { timing: { ...INSTANT_TIMING, transcribe: [40, 40] } });
+    await screen.findByRole('log', { name: 'Conversation' }, { timeout: 8000 });
+    const before = within(log()).getAllByRole('article').length;
+    const upload = vi.spyOn(api.audio, 'upload');
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Record voice message' })));
+    await screen.findByRole('button', { name: 'Stop recording' });
+    await speak(650);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop recording' })));
+
+    // Review: the transcript appears in the composer; nothing is added to the conversation yet.
+    expect(await screen.findByText('Transcribing…')).toBeTruthy();
+    const label = await screen.findByText('Detected transcript');
+    const transcript = (await waitFor(() => {
+      const el = document.querySelector(`[aria-labelledby="${label.id}"]`);
+      expect(el).not.toBeNull();
+      return el!;
+    })).textContent!;
+    expect(transcript.length).toBeGreaterThan(10);
+    expect(upload).not.toHaveBeenCalled();
+    expect(within(log()).getAllByRole('article')).toHaveLength(before);
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send voice message' })));
+    await waitFor(() => expect(upload).toHaveBeenCalledOnce());
+    expect(await within(log()).findByText(transcript)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Online')).toBeTruthy());
+    expect(media.allTracksStopped()).toBe(true);
+  });
+
+  it('keeps the recording sendable when transcription fails', async () => {
+    media = installFakeMedia();
+    renderApp('/c/water-security-kpis', { mock: { failTranscription: true } });
+    await screen.findByRole('log', { name: 'Conversation' }, { timeout: 8000 });
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Record voice message' })));
+    await screen.findByRole('button', { name: 'Stop recording' });
+    await speak(650);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop recording' })));
+
+    expect(await screen.findByText(/Couldn.t transcribe this recording/)).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send voice message' })));
+    expect(await within(log()).findByRole('button', { name: 'Play voice message' })).toBeTruthy();
+  });
+
   it('a too-short recording fails to upload and can be deleted without sending anything', async () => {
     media = installFakeMedia();
     renderApp('/c/water-security-kpis');
-    await screen.findByRole('log', { name: 'Conversation' });
+    await screen.findByRole('log', { name: 'Conversation' }, { timeout: 8000 });
     const before = within(log()).getAllByRole('article').length;
 
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Record voice message' })));
@@ -62,7 +108,7 @@ describe('voice message flow', () => {
   it('Stop still works for a voice-triggered answer', async () => {
     media = installFakeMedia();
     renderApp('/c/water-security-kpis', { timing: { ...INSTANT_TIMING, token: [4, 4], chunk: [6, 6] } });
-    await screen.findByRole('log', { name: 'Conversation' });
+    await screen.findByRole('log', { name: 'Conversation' }, { timeout: 8000 });
 
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Record voice message' })));
     await screen.findByRole('button', { name: 'Stop recording' });

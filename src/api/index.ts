@@ -26,6 +26,7 @@ export type {
   ProfileSuggestionsService,
   SendMessageBody,
   StreamOptions,
+  TranscriptionInput,
 } from './services';
 export { createHttpAdapter, request, requestJson, type RequestOptions } from './http';
 export { readEventStream, type EventStream, type StreamEvent, type StreamEventName } from './stream';

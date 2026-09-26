@@ -9,6 +9,7 @@ import type {
   ListParams,
   SendMessageBody,
   StreamOptions,
+  TranscriptionInput,
 } from '../services';
 import { readEventStream, type EventStream } from '../stream';
 import { createSeed, MOCK_MODELS } from './fixtures';
@@ -59,6 +60,8 @@ export interface MockAdapterOptions {
   failAudioUploads?: boolean;
   /** Makes every feedback request fail with a 503 (to exercise rollback). */
   failFeedback?: boolean;
+  /** Makes every transcription request fail with a 503 (to exercise the transcript error state). */
+  failTranscription?: boolean;
   /** Makes every contact/suggestion write fail with a 503 (to exercise rollback). */
   failProfileWrites?: boolean;
 }
@@ -101,6 +104,12 @@ export function createMockAdapter(options: MockAdapterOptions = {}): ApiAdapter 
   const audioStore = new Map<string, AudioRef>();
   /** MOCK image storage, same approach as audio: local object URLs, nothing leaves the browser. */
   const attachmentStore = new Map<string, AttachmentRef>();
+  /**
+   * MOCK transcripts produced for the pre-send preview, by recording, then by uploaded audio id — so the
+   * transcript shown in the chat after sending is the one the user reviewed.
+   */
+  const transcriptByFile = new WeakMap<Blob, string>();
+  const transcriptByAudio = new Map<string, string>();
   let counter = 0;
   let transcripts = 0;
 
@@ -201,7 +210,7 @@ export function createMockAdapter(options: MockAdapterOptions = {}): ApiAdapter 
   }
 
   return {
-    capabilities: { regenerate: true, voiceNotes: true },
+    capabilities: { regenerate: true, voiceNotes: true, transcription: true },
     conversations: {
       async list({ cursor, limit = DEFAULT_PAGE }: ListParams = {}) {
         await respond();
@@ -347,7 +356,7 @@ export function createMockAdapter(options: MockAdapterOptions = {}): ApiAdapter 
             // MOCK transcription: a canned transcript after a short delay (see transcripts.ts).
             writer.emit({ event: 'status', data: { state: 'thinking', label: 'Transcribing' } });
             await sleep(between(random, timing.transcribe), disconnected);
-            user.content = mockTranscribe(audio.duration_ms, transcripts++);
+            user.content = transcriptByAudio.get(audio.id) ?? mockTranscribe(audio.duration_ms, transcripts++);
             touch(conversation, user.content);
             writer.emit({ event: 'transcript', data: { message_id: user.id, text: user.content } });
           }
@@ -487,7 +496,21 @@ export function createMockAdapter(options: MockAdapterOptions = {}): ApiAdapter 
           peaks: peaks?.slice(0, 200).map((p) => Math.min(1, Math.max(0, p))),
         };
         audioStore.set(ref.id, ref);
+        const reviewed = transcriptByFile.get(file);
+        if (reviewed !== undefined) transcriptByAudio.set(ref.id, reviewed);
         return clone(ref);
+      },
+
+      async transcribe({ file, duration_ms }: TranscriptionInput, { signal }: StreamOptions = {}) {
+        // MOCK transcription (see transcripts.ts): a canned transcript after a short delay.
+        await sleep(between(random, timing.transcribe), signal);
+        if (options.failTranscription) {
+          throw new ApiError(503, 'transcription_failed', "The recording couldn't be transcribed.");
+        }
+        // Too short to contain speech: an empty transcript ("no speech detected").
+        const text = duration_ms < AUDIO_LIMITS.minDurationMs ? '' : mockTranscribe(duration_ms, transcripts++);
+        transcriptByFile.set(file, text);
+        return { text };
       },
 
       async get(id) {

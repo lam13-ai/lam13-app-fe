@@ -1,40 +1,71 @@
-import { Pencil, Trash2, X } from 'lucide-react';
+import { Clock3, Maximize2, Minimize2, Pencil, Sparkles, Trash2, X } from 'lucide-react';
 import { useId, useRef, useState, type ReactNode } from 'react';
 import { ScrollArea } from '@/components/ScrollArea';
-import { Button, IconButton, iconProps, smallIconProps } from '@/components/ui';
+import { Button, IconButton, Tooltip, iconProps, smallIconProps } from '@/components/ui';
 import { describeMessageTime } from '@/lib/format';
 import type { Profile, ProfileUpdateSuggestion } from '@/types/api';
 import { linkedinHref } from '../lib/contacts';
 import { ContactAvatar } from './ContactAvatar';
+import { FieldIcon } from './FieldIcon';
 import { SuggestionCard } from './SuggestionCard';
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, icon, children }: { title: string; icon?: ReactNode; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-3">
-      <h3 className="eyebrow">{title}</h3>
+    <section className="flex flex-col gap-2">
+      <h3 className="flex items-center gap-1.5 text-2xs font-bold uppercase tracking-eyebrow text-fg-muted">
+        {icon}
+        {title}
+      </h3>
       {children}
     </section>
   );
 }
 
 function Timestamp({ iso }: { iso: string }) {
-  return (
-    <time dateTime={iso}>{describeMessageTime(iso)}</time>
-  );
+  return <time dateTime={iso}>{describeMessageTime(iso)}</time>;
 }
 
 const linkClass = 'break-all text-link underline-offset-4 hover:underline';
 
+interface Row {
+  label: string;
+  icon: ReactNode;
+  node: ReactNode;
+}
+
+/** Icon, muted label, value: the value reads strongest. */
+function Rows({ rows }: { rows: Row[] }) {
+  return (
+    <dl className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-baseline gap-x-2.5 gap-y-1.5 text-xs">
+      {rows.map((row) => (
+        <div key={row.label} className="contents">
+          <span aria-hidden="true" className="self-center text-fg-muted">
+            {row.icon}
+          </span>
+          <dt className="text-fg-muted">{row.label}</dt>
+          <dd className="min-w-0">{row.node}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 /** Contact details present on the profile; empty optional fields are left out. */
 function ContactInfo({ profile }: { profile: Profile }) {
   const rows = [
-    profile.email && { label: 'Email', node: <a href={`mailto:${profile.email}`} className={linkClass}>{profile.email}</a> },
+    profile.email && {
+      label: 'Email',
+      icon: <FieldIcon field="email" />,
+      node: <a href={`mailto:${profile.email}`} className={linkClass}>{profile.email}</a>,
+    },
     profile.phone && {
       label: 'Phone',
+      icon: <FieldIcon field="phone" />,
       node: <a href={`tel:${profile.phone.replace(/[^\d+]/g, '')}`} className={linkClass}>{profile.phone}</a>,
     },
     profile.linkedin && {
       label: 'LinkedIn',
+      icon: <FieldIcon field="linkedin" />,
       node: (
         <a href={linkedinHref(profile.linkedin)} target="_blank" rel="noopener noreferrer" className={linkClass}>
           {profile.linkedin.replace(/^https?:\/\/(www\.)?/i, '')}
@@ -45,14 +76,7 @@ function ContactInfo({ profile }: { profile: Profile }) {
   if (rows.length === 0) return null;
   return (
     <Section title="Contact">
-      <dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs">
-        {rows.map((row) => (
-          <div key={row.label} className="contents">
-            <dt className="text-fg-muted">{row.label}</dt>
-            <dd>{row.node}</dd>
-          </div>
-        ))}
-      </dl>
+      <Rows rows={rows} />
     </Section>
   );
 }
@@ -93,10 +117,22 @@ export interface ContactDetailProps {
   onClose: () => void;
   onApprove: (suggestion: ProfileUpdateSuggestion) => void;
   onReject: (suggestion: ProfileUpdateSuggestion) => void;
+  /** Desktop only: expand the sheet to its maximum width, or restore the previous width. */
+  expand?: { expanded: boolean; onToggle: () => void };
 }
 
-/** Expanded profile: pending suggestions first, then contact details, About and timestamps. */
-export function ContactDetail({ profile, suggestions, focusEdit, onEdit, onDelete, onClose, onApprove, onReject }: ContactDetailProps) {
+/** Expanded profile: About, contact details, pending suggestions, then timestamps. */
+export function ContactDetail({
+  profile,
+  suggestions,
+  focusEdit,
+  onEdit,
+  onDelete,
+  onClose,
+  onApprove,
+  onReject,
+  expand,
+}: ContactDetailProps) {
   const [confirming, setConfirming] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const reviewHeadingId = useId();
@@ -109,26 +145,55 @@ export function ContactDetail({ profile, suggestions, focusEdit, onEdit, onDelet
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-start gap-3 border-b border-hairline py-4 pl-5 pr-3">
+      <div className="flex shrink-0 items-start gap-3 border-b border-hairline py-3 pl-4 pr-2 md:pl-5">
         <ContactAvatar name={profile.full_name} size="lg" />
         <div className="min-w-0 flex-1">
           <h2 ref={headingRef} tabIndex={-1} className="break-words text-base font-bold outline-none">
             {profile.full_name}
           </h2>
-          <p className="text-xs text-fg-muted">{profile.position}</p>
-          <p className="text-xs text-fg-muted">{profile.company}</p>
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs">
+            <span className="shrink-0 text-fg-muted"><FieldIcon field="position" /></span>
+            <span className="min-w-0 break-words">{profile.position}</span>
+          </p>
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-fg-muted">
+            <span className="shrink-0"><FieldIcon field="company" /></span>
+            <span className="min-w-0 break-words">{profile.company}</span>
+          </p>
         </div>
-        <IconButton label="Close" size="md" icon={<X {...iconProps} />} onClick={onClose} />
+        <div className="flex shrink-0 items-center gap-1">
+          {expand && (
+            <Tooltip content={expand.expanded ? 'Restore' : 'Expand'} side="bottom" align="end">
+              <IconButton
+                label={expand.expanded ? 'Restore contact panel' : 'Expand contact panel'}
+                size="md"
+                icon={expand.expanded ? <Minimize2 {...iconProps} /> : <Maximize2 {...iconProps} />}
+                onClick={expand.onToggle}
+              />
+            </Tooltip>
+          )}
+          <IconButton label="Close" size="md" icon={<X {...iconProps} />} onClick={onClose} />
+        </div>
       </div>
 
-      <ScrollArea className="flex min-h-0 flex-1 flex-col gap-8 px-5 py-6">
+      <ScrollArea className="flex min-h-0 flex-1 flex-col gap-5 px-4 py-4 md:px-5">
+        <Section title="About" icon={<FieldIcon field="description" />}>
+          {profile.description ? (
+            <p className="whitespace-pre-wrap break-words text-body leading-relaxed">{profile.description}</p>
+          ) : (
+            <p className="text-xs text-fg-muted">No description yet.</p>
+          )}
+        </Section>
+
+        <ContactInfo profile={profile} />
+
         {suggestions.length > 0 && (
-          <section aria-labelledby={reviewHeadingId} className="flex flex-col gap-3">
+          <section aria-labelledby={reviewHeadingId} className="flex flex-col gap-2">
             <div>
-              <h3 id={reviewHeadingId} className="text-xs font-bold">
+              <h3 id={reviewHeadingId} className="flex items-center gap-1.5 text-xs font-bold">
+                <Sparkles {...smallIconProps} className="shrink-0 text-accent" />
                 Review {suggestions.length === 1 ? '1 suggested update' : `${suggestions.length} suggested updates`}
               </h3>
-              <p className="mt-0.5 text-2xs text-fg-muted">From your meetings. Nothing changes until you approve.</p>
+              <p className="text-2xs text-fg-muted">From your meetings. Nothing changes until you approve.</p>
             </div>
             {suggestions.map((s) => (
               <SuggestionCard
@@ -142,31 +207,17 @@ export function ContactDetail({ profile, suggestions, focusEdit, onEdit, onDelet
           </section>
         )}
 
-        <ContactInfo profile={profile} />
-
-        <Section title="About">
-          {profile.description ? (
-            <p className="whitespace-pre-wrap break-words text-body leading-relaxed">{profile.description}</p>
-          ) : (
-            <p className="text-xs text-fg-muted">No description yet.</p>
-          )}
-        </Section>
-
         <Section title="Details">
-          <dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs">
-            <dt className="text-fg-muted">Created</dt>
-            <dd>
-              <Timestamp iso={profile.created_at} />
-            </dd>
-            <dt className="text-fg-muted">Last updated</dt>
-            <dd>
-              <Timestamp iso={profile.updated_at} />
-            </dd>
-          </dl>
+          <Rows
+            rows={[
+              { label: 'Created', icon: <Clock3 {...smallIconProps} />, node: <Timestamp iso={profile.created_at} /> },
+              { label: 'Last updated', icon: <Clock3 {...smallIconProps} />, node: <Timestamp iso={profile.updated_at} /> },
+            ]}
+          />
         </Section>
       </ScrollArea>
 
-      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-hairline px-5 py-3">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-hairline px-4 py-2 md:px-5">
         {confirming ? (
           <DeleteConfirm name={profile.full_name} onCancel={() => setConfirming(false)} onConfirm={onDelete} />
         ) : (

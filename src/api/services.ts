@@ -112,11 +112,22 @@ export interface ArtifactsService {
   download(id: string): Promise<{ url: string; expires_at: string | null }>;
 }
 
+/** Fields of `POST /audio/transcriptions` (multipart/form-data). [CONFIRM] */
+export interface TranscriptionInput {
+  file: Blob;
+  duration_ms: number;
+}
+
 export interface AudioService {
   /** POST /audio — uploads a recorded voice note. Rejects with ApiError (413 / 415 / 422 …). */
   upload(input: AudioUploadInput, options?: StreamOptions): Promise<AudioRef>;
   /** GET /audio/{id} — a fresh playback reference (e.g. when a signed URL expired). */
   get(id: string): Promise<AudioRef>;
+  /**
+   * POST /audio/transcriptions — transcribes a recording so the user can review it before sending.
+   * Stateless: nothing is stored or sent to the conversation. Empty `text` = no speech detected. [CONFIRM]
+   */
+  transcribe(input: TranscriptionInput, options?: StreamOptions): Promise<{ text: string }>;
 }
 
 export interface ModelsService {
@@ -162,6 +173,8 @@ export interface ApiCapabilities {
   regenerate: boolean;
   /** `audio.upload` + voice messages. */
   voiceNotes: boolean;
+  /** `audio.transcribe`: the transcript is shown in the preview before sending. */
+  transcription: boolean;
 }
 
 export interface ApiAdapter {

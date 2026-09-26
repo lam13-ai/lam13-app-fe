@@ -4,7 +4,7 @@ export { Chip, type ChipProps } from './Chip';
 export { Popover, usePopover, type PopoverProps, type PopoverTriggerProps } from './Popover';
 export { Menu, MenuItem, type MenuProps, type MenuItemProps } from './Menu';
 export { Tooltip, type TooltipProps } from './Tooltip';
-export { Drawer, type DrawerProps } from './Drawer';
+export { Drawer, type DrawerProps, type DrawerResize } from './Drawer';
 export { Spinner, type SpinnerProps, type SpinnerState } from './Spinner';
 export { Skeleton } from './Skeleton';
 export { ToastProvider, useToast } from './Toast';

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { toErrorInfo } from '@/api';
 import { Drawer, useToast } from '@/components/ui';
+import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
+import { useUiStore } from '@/stores/uiStore';
 import type { Profile, ProfileUpdateSuggestion } from '@/types/api';
 import {
   useApproveSuggestion,
@@ -12,6 +14,10 @@ import {
 import { toFormValues } from '../lib/contacts';
 import { ContactDetail } from './ContactDetail';
 import { ContactForm } from './ContactForm';
+
+/** Desktop sheet width bounds (px); the drawer also caps it at 75% of the window. */
+const SHEET_MIN_WIDTH = 360;
+const SHEET_MAX_WIDTH = 960;
 
 export interface SheetState {
   open: boolean;
@@ -46,6 +52,13 @@ export function ContactSheet({
   const approve = useApproveSuggestion();
   const reject = useRejectSuggestion();
   const toast = useToast();
+  // Desktop width, kept for the session (UI preference only — no contact data).
+  const width = useUiStore((s) => s.contactSheetWidth);
+  const setWidth = useUiStore((s) => s.setContactSheetWidth);
+  const expanded = useUiStore((s) => s.contactSheetRestoreWidth !== null);
+  const toggleExpanded = useUiStore((s) => s.toggleContactSheetExpanded);
+  // Expand / Restore is a desktop affordance, like resizing; phones keep the full-screen sheet.
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const failed = (what: string) => (error: unknown) =>
     toast.show(`Couldn't ${what}. ${toErrorInfo(error).message}`, { tone: 'danger' });
 
@@ -101,6 +114,7 @@ export function ContactSheet({
         profile={shown}
         suggestions={suggestions}
         focusEdit={state.focusEdit}
+        expand={isDesktop ? { expanded, onToggle: toggleExpanded } : undefined}
         onEdit={() => onChange({ mode: 'edit' })}
         onClose={onClose}
         onDelete={() => {
@@ -124,7 +138,13 @@ export function ContactSheet({
   }
 
   return (
-    <Drawer side="right" open={state.open} onClose={onClose} label={label}>
+    <Drawer
+      side="right"
+      open={state.open}
+      onClose={onClose}
+      label={label}
+      resize={{ width, onWidthChange: setWidth, min: SHEET_MIN_WIDTH, max: SHEET_MAX_WIDTH, label: 'Resize contact panel' }}
+    >
       {content}
     </Drawer>
   );

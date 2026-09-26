@@ -15,8 +15,8 @@ export default defineConfig(() => {
       setupFiles: ['./src/test/polyfills.ts', './src/test/setup.ts'],
       css: false,
       testTimeout: 15_000,
-      // Voice features are off by default in the app; tests keep covering them.
-      env: { VITE_FEATURE_CALLING: 'true', VITE_FEATURE_VOICE_NOTES: 'true' },
+      // Tests never inherit a developer's local env: same-origin API, voice features on.
+      env: { VITE_API_BASE_URL: '', VITE_FEATURE_CALLING: 'true', VITE_FEATURE_VOICE_NOTES: 'true' },
     },
   };
 });

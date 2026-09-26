@@ -124,6 +124,32 @@ describe('KindeAuthProvider', () => {
     expect(await getAccessToken()).toBeNull();
   });
 
+  it('gives the token to API calls started in the same commit Kinde becomes authenticated (reload race)', async () => {
+    // The Kinde SDK creates a new getAccessToken on every auth-state change, and children's effects (data
+    // queries) run before the bridge's. The bridge must never be unregistered in between.
+    const tokens: (string | null)[] = [];
+    function QueryOnSignIn() {
+      const { status } = useAuth();
+      useEffect(() => {
+        // Like request(): the bridge is read synchronously as the query starts.
+        if (status === 'authenticated') void getAccessToken().then((token) => tokens.push(token));
+      }, [status]);
+      return null;
+    }
+    const tree = () => (
+      <KindeAuthProvider config={config}>
+        <QueryOnSignIn />
+      </KindeAuthProvider>
+    );
+
+    kinde.state = base({ isLoading: true, getAccessToken: vi.fn(async () => undefined) });
+    const { rerender } = render(tree());
+    kinde.state = base({ isAuthenticated: true, user: { id: 'kp_1', email: 'a@b.c' }, getAccessToken: vi.fn(async () => 'fresh-token') });
+    await act(async () => rerender(tree()));
+
+    expect(tokens).toEqual(['fresh-token']);
+  });
+
   it('never surfaces raw provider error strings', () => {
     kinde.state = base({ error: 'invalid_grant: code verifier mismatch for client abc123' });
     renderProvider();

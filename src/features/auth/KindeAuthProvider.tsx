@@ -1,5 +1,5 @@
 import { KindeProvider, useKindeAuth } from '@kinde-oss/kinde-auth-react';
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { setAccessTokenGetter } from '@/api';
 import type { KindeConfig } from './config';
 import { AuthContext } from './context';
@@ -14,10 +14,16 @@ export function KindeBridge({ children }: { children: ReactNode }) {
   const kinde = useKindeAuth();
   const { isLoading, isAuthenticated, user, error, login, register, logout, getAccessToken } = kinde;
 
-  useEffect(
-    () => setAccessTokenGetter(async () => (await getAccessToken()) ?? null),
-    [getAccessToken],
-  );
+  // One stable API token getter for the whole session. The Kinde SDK hands out a new getAccessToken on
+  // every auth-state change; re-registering it then left the API bridge empty in exactly the commit where
+  // the signed-in UI's first queries start (children's effects run before this component's), so those
+  // requests went out without a token. The getter reads the latest SDK function from a ref instead, and
+  // layout effects run before any child's data-fetching effect.
+  const getAccessTokenRef = useRef(getAccessToken);
+  useLayoutEffect(() => {
+    getAccessTokenRef.current = getAccessToken;
+  }, [getAccessToken]);
+  useLayoutEffect(() => setAccessTokenGetter(async () => (await getAccessTokenRef.current()) ?? null), []);
 
   const value = useMemo<AuthContextValue>(
     () => ({

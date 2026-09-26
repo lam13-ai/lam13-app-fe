@@ -260,7 +260,8 @@ describe('HTTP adapter — capabilities', () => {
   it('declares what the backend lacks, rejects those calls with 501, and keeps My Contacts in memory', async () => {
     const { fetch } = stubFetch(() => json({}));
     const api = createHttpAdapter();
-    expect(api.capabilities).toEqual({ regenerate: false, voiceNotes: false });
+    expect(api.capabilities).toEqual({ regenerate: false, voiceNotes: false, transcription: false });
+    await expect(api.audio.transcribe({ file: new Blob(), duration_ms: 1000 })).rejects.toMatchObject({ status: 501 });
     await expect(api.messages.regenerate('s', 'm')).rejects.toMatchObject({ status: 501, code: 'not_supported' });
     await expect(api.messages.send('s', { client_message_id: 'c', kind: 'voice', audio_id: 'x' })).rejects.toMatchObject({ status: 501 });
     await expect(api.audio.upload({ file: new Blob(), duration_ms: 1000 })).rejects.toMatchObject({ status: 501 });

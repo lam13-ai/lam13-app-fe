@@ -1,13 +1,15 @@
 import { ArrowUp, Mic, Pause, RotateCcw, Square, Trash2, X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { Waveform } from '@/components/Waveform';
 import { Button, IconButton, Spinner, Tooltip, iconProps } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { describeDuration, formatDuration } from '@/lib/format';
 import { VOICE_CONFIG } from '../config';
 import { useObjectUrl } from '../hooks/useObjectUrl';
+import { useTranscript, type TranscribeRecording } from '../hooks/useTranscript';
 import type { SendRecording, VoiceRecorderApi } from '../hooks/useVoiceRecorder';
 import type { RecorderState } from '../lib/recorderMachine';
+import type { Recording } from '../lib/types';
 import { VoicePlayer } from './VoicePlayer';
 
 /** Black round primary action — same treatment as the composer's send button. */
@@ -124,7 +126,65 @@ function RecordingBar({ recorder, onSend }: { recorder: VoiceRecorderApi; onSend
   );
 }
 
-function PreviewBar({ recorder, onSend }: { recorder: VoiceRecorderApi; onSend: SendRecording }) {
+/**
+ * The detected transcript under the preview, for review before sending. Sending never waits for it:
+ * the recording is the message, the transcript only a preview.
+ */
+function TranscriptPreview({ recording, transcribe }: { recording: Recording; transcribe: TranscribeRecording | undefined }) {
+  const { state, retry } = useTranscript(recording, transcribe);
+  const labelId = useId();
+  if (!state) return null;
+  return (
+    <div className="animate-fade border-t border-hairline px-4 pb-2.5 pt-2">
+      <p id={labelId} className="text-2xs font-bold uppercase tracking-eyebrow text-fg-muted">
+        Detected transcript
+      </p>
+      <div aria-live="polite">
+        {state.status === 'loading' && (
+          <p className="mt-1 flex items-center gap-2 text-xs text-fg-muted">
+            <Spinner size={14} state="active" />
+            Transcribing…
+          </p>
+        )}
+        {state.status === 'ready' &&
+          (state.text ? (
+            <p
+              // Scrollable when long: focusable so keyboard users can scroll it.
+              tabIndex={0}
+              aria-labelledby={labelId}
+              className="mt-1 max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-relaxed text-fg"
+            >
+              {state.text}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-fg-muted">No speech detected.</p>
+          ))}
+        {state.status === 'error' && (
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-danger">
+            Couldn&apos;t transcribe this recording. You can still send it.
+            <button
+              type="button"
+              onClick={retry}
+              className="min-h-11 font-bold text-fg underline-offset-4 hover:underline md:min-h-0"
+            >
+              Try again
+            </button>
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PreviewBar({
+  recorder,
+  onSend,
+  transcribe,
+}: {
+  recorder: VoiceRecorderApi;
+  onSend: SendRecording;
+  transcribe: TranscribeRecording | undefined;
+}) {
   const { state } = recorder;
   const recording = state.status === 'preview' || state.status === 'uploading' ? state.recording : null;
   const uploading = state.status === 'uploading';
@@ -169,6 +229,7 @@ function PreviewBar({ recorder, onSend }: { recorder: VoiceRecorderApi; onSend: 
           Maximum length reached ({formatDuration(recorder.maxDurationMs)}).
         </p>
       )}
+      <TranscriptPreview recording={recording} transcribe={transcribe} />
     </div>
   );
 }
@@ -207,9 +268,19 @@ function ErrorBar({ recorder, onSend }: { recorder: VoiceRecorderApi; onSend: Se
 
 /**
  * The composer's voice mode (reference-styled, inside the same 24px pill):
- * permission prompt → recording bar → preview/send → error. Media access stays in the hook.
+ * permission prompt → recording bar → preview (+ detected transcript when `transcribe` is given) / send →
+ * error. Media access stays in the hook.
  */
-export function VoiceComposer({ recorder, onSend }: { recorder: VoiceRecorderApi; onSend: SendRecording }) {
+export function VoiceComposer({
+  recorder,
+  onSend,
+  transcribe,
+}: {
+  recorder: VoiceRecorderApi;
+  onSend: SendRecording;
+  /** Omitted when the backend can't transcribe: the preview then shows no transcript section. */
+  transcribe?: TranscribeRecording;
+}) {
   const { state } = recorder;
   return (
     <div className="animate-fade">
@@ -226,7 +297,9 @@ export function VoiceComposer({ recorder, onSend }: { recorder: VoiceRecorderApi
       {(state.status === 'recording' || state.status === 'paused' || state.status === 'stopping') && (
         <RecordingBar recorder={recorder} onSend={onSend} />
       )}
-      {(state.status === 'preview' || state.status === 'uploading') && <PreviewBar recorder={recorder} onSend={onSend} />}
+      {(state.status === 'preview' || state.status === 'uploading') && (
+        <PreviewBar recorder={recorder} onSend={onSend} transcribe={transcribe} />
+      )}
       {state.status === 'error' && <ErrorBar recorder={recorder} onSend={onSend} />}
     </div>
   );

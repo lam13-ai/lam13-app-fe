@@ -352,7 +352,7 @@ export function createHttpAdapter(): ApiAdapter {
 
   return {
     // No regenerate or /audio endpoint: the UI hides Regenerate and voice notes.
-    capabilities: { regenerate: false, voiceNotes: false },
+    capabilities: { regenerate: false, voiceNotes: false, transcription: false },
 
     conversations: {
       async list() {
@@ -432,6 +432,9 @@ export function createHttpAdapter(): ApiAdapter {
       },
       async get() {
         throw notSupported('Voice notes');
+      },
+      async transcribe() {
+        throw notSupported('Transcription');
       },
     },
 

@@ -45,7 +45,8 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
   const queryClient = useQueryClient();
   const toast = useToast();
   const actions = useChatActions();
-  const { capabilities } = useApi();
+  const api = useApi();
+  const { capabilities } = api;
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const files = useImageAttachments();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -159,6 +160,14 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
             onSendVoice={
               env.features.voiceNotes && capabilities.voiceNotes
                 ? (recording, signal) => actions.sendVoice(conversationId, recording, { origin, signal })
+                : undefined
+            }
+            onTranscribeVoice={
+              capabilities.transcription
+                ? (recording, signal) =>
+                    api.audio
+                      .transcribe({ file: recording.blob, duration_ms: recording.durationMs }, { signal })
+                      .then((result) => result.text)
                 : undefined
             }
             onAttach={() => fileInputRef.current?.click()}
