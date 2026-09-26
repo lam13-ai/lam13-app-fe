@@ -10,8 +10,9 @@ import { MessageNotice } from './MessageNotice';
 
 /**
  * Full-width document-style answer: no bubble, no avatar (reference §4).
- * While streaming the text grows in place. Before the first token a quiet, rotating status box stands in
- * for it (ActivityStatus); it never shows the model's reasoning.
+ * While the answer is generating only a quiet, rotating status box is shown (ActivityStatus) — no partial
+ * text, never the model's reasoning; the complete answer replaces it at once. A stopped or failed answer
+ * shows what arrived.
  */
 export function AssistantMessage({
   message,
@@ -43,8 +44,9 @@ export function AssistantMessage({
       className={cn('group/message w-full self-start py-1', animate && 'animate-fade')}
     >
       <VisuallyHidden>Lam13 replied:</VisuallyHidden>
-      {hasContent && <Markdown content={message.content} />}
-      {streaming && !hasContent && <ActivityStatus label={activity ?? 'Generating response…'} />}
+      {/* Never a partial answer while generating: the status stands in until the whole answer is there. */}
+      {hasContent && !streaming && <Markdown content={message.content} />}
+      {streaming && <ActivityStatus label={activity ?? 'Putting the answer together…'} />}
       {message.artifacts && message.artifacts.length > 0 && <Artifacts artifacts={message.artifacts} />}
       {message.status === 'complete' && hasContent && (
         <MessageActions createdAt={message.created_at} copyText={message.content} onRegenerate={onRegenerate} />

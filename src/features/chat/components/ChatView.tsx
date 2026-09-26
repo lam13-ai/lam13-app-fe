@@ -25,14 +25,14 @@ import { MessageLog } from './MessageLog';
 import { MessagesSkeleton } from './MessagesSkeleton';
 
 /** What the answer's status box starts from (real stream events); it rotates on between them. */
-const ACTIVITY_LABELS: Record<StreamPhase, string | undefined> = {
+const ACTIVITY_LABELS: Record<StreamPhase, string> = {
   sending: 'Thinking…',
   thinking: 'Thinking…',
   preparing: 'Thinking…', // start
   transcribing: 'Transcribing…',
   solving: 'Solving…',
   generating: 'Generating response…', // response_started
-  answering: undefined,
+  answering: 'Putting the answer together…', // tokens arriving (buffered, not shown)
 };
 
 export interface ChatViewProps {
@@ -89,9 +89,11 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
     else navigate(`/c/${created.id}`, { replace: true, state: { viewKey } });
   }, [created, origin, conversationId, navigate, viewKey]);
 
+  // The answer is buffered until it is complete, so the header never reads "Answering…": it stays on the
+  // working state until the whole answer is revealed (Online).
   const status: AgentStatus = !active
     ? 'online'
-    : active.phase === 'answering' || active.phase === 'transcribing' || active.phase === 'solving'
+    : active.phase === 'transcribing' || active.phase === 'solving'
       ? active.phase
       : 'thinking';
   const activity = active && ACTIVITY_LABELS[active.phase];

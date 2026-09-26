@@ -71,7 +71,7 @@ afterEach(() => {
 });
 
 describe('real backend SSE → visible assistant message', () => {
-  it('thinking → preparing → generating → answering; tokens appear as they arrive; thinking text never; done adds nothing', async () => {
+  it('thinking → preparing → generating → answering; tokens are buffered (never written mid-stream), thinking text never; done reveals the whole answer once', async () => {
     const h = harness();
     const sent = h.actions.send('s1', 'Explain X');
 
@@ -87,27 +87,34 @@ describe('real backend SSE → visible assistant message', () => {
     expect(h.phase()).toBe('generating'); // reasoning never moves it back to Thinking
     expect(h.assistant()).toMatchObject({ id: 'a1', content: '', status: 'streaming' });
 
+    // Tokens arrive and are processed (phase answering) but the shown message stays empty.
+    const shown = new Set<string>();
+    const unsubscribe = h.queryClient.getQueryCache().subscribe(() => shown.add(h.assistant()?.content ?? ''));
     h.push(...token('Great q'));
-    await waitFor(() => expect(h.assistant()?.content).toBe('Great q'));
-    expect(h.phase()).toBe('answering');
-
+    await waitFor(() => expect(h.phase()).toBe('answering'));
     h.push(...token('uestion, Aash'));
     h.push(...thinking('SECRET more reasoning')); // interleaved: status only
     h.push(...token('ir! Here is:\n\n**'));
     h.push(...token('Bold** and\n\n- a list'));
-    await waitFor(() => expect(h.assistant()?.content).toBe('Great question, Aashir! Here is:\n\n**Bold** and\n\n- a list'));
-    expect(h.phase()).toBe('answering');
-
     h.push('mystery_event', { content: 'ignored' });
     h.raw('event: token\ndata: {not json\n\n'); // malformed: skipped
+    await tick(150); // past any frame / fallback flush
+    expect(h.assistant()).toMatchObject({ content: '', status: 'streaming' });
+    expect(h.phase()).toBe('answering');
+
     h.push('response_completed', { content: 'Response completed.' });
     await waitFor(() => expect(h.assistant()?.status).toBe('complete'));
+    const answer = 'Great question, Aashir! Here is:\n\n**Bold** and\n\n- a list';
+    expect(h.assistant()?.content).toBe(answer); // every token, in order, in one write
     h.push('postprocess_started', { content: 'Running post-processing...' });
     h.push('postprocess_completed', { content: 'Post-processing complete.' });
     h.push('done', { content: '', session_id: 's1', assistantMessageId: 'a1', title: 'Explaining X' });
     await sent;
+    unsubscribe();
 
-    expect(h.assistant()).toMatchObject({ content: 'Great question, Aashir! Here is:\n\n**Bold** and\n\n- a list', status: 'complete' });
+    // Only ever empty or the whole answer: no partial text in between, and done added nothing.
+    expect([...shown].filter((c) => c !== '' && c !== answer)).toEqual([]);
+    expect(h.assistant()).toMatchObject({ content: answer, status: 'complete' });
     expect(JSON.stringify(h.messages('s1'))).not.toContain('SECRET');
     expect(h.messages('s1').map((m) => m.role)).toEqual(['user', 'assistant']);
   });
@@ -157,7 +164,7 @@ describe('real backend SSE → visible assistant message', () => {
     expect(h.messages(sessionId).map((m) => m.role)).toEqual(['user', 'assistant']);
   });
 
-  it('a hidden tab neither aborts nor stalls the stream (no animation frames); returning shows the full answer', async () => {
+  it('a hidden tab (no animation frames) neither aborts nor loses the buffered answer; completion shows it whole', async () => {
     vi.stubGlobal('requestAnimationFrame', () => 1); // background tab: frames never come
     vi.stubGlobal('cancelAnimationFrame', () => {});
     const h = harness();
@@ -165,16 +172,14 @@ describe('real backend SSE → visible assistant message', () => {
     await waitFor(() => expect(h.posts).toHaveLength(1));
     h.push('start', start());
     h.push(...token('Before '));
-    await waitFor(() => expect(h.assistant()?.content).toBe('Before '));
+    await waitFor(() => expect(h.phase()).toBe('answering'));
 
     setVisibility('hidden');
     h.push(...token('while '));
     h.push(...token('hidden'));
-    // Written to the cache without a frame (timer fallback), and still the live stream.
-    await waitFor(() => expect(h.assistant()?.content).toBe('Before while hidden'));
+    await tick(150);
     expect(h.posts[0]!.signal.aborted).toBe(false);
-    expect(h.phase()).toBe('answering');
-    expect(h.assistant()?.status).toBe('streaming');
+    expect(h.assistant()).toMatchObject({ content: '', status: 'streaming' });
 
     setVisibility('visible');
     h.push(...token('.'));
@@ -189,14 +194,16 @@ describe('real backend SSE → visible assistant message', () => {
     expect(h.assistant()?.content).toBe('Before while hidden.');
   });
 
-  it('only an explicit Stop cancels: the partial answer stays', async () => {
+  it('only an explicit Stop cancels, and it reveals the partial answer', async () => {
     const h = harness();
     const sent = h.actions.send('s1', 'Explain X');
     await waitFor(() => expect(h.posts).toHaveLength(1));
     h.push('start', start());
     h.push(...token('Partial '));
     h.push(...token('answer'));
-    await waitFor(() => expect(h.assistant()?.content).toBe('Partial answer'));
+    await waitFor(() => expect(h.phase()).toBe('answering'));
+    await tick();
+    expect(h.assistant()?.content).toBe(''); // buffered
     setVisibility('hidden');
     setVisibility('visible');
     expect(h.posts[0]!.signal.aborted).toBe(false);
@@ -207,13 +214,14 @@ describe('real backend SSE → visible assistant message', () => {
     expect(h.assistant()).toMatchObject({ content: 'Partial answer', status: 'cancelled' });
   });
 
-  it('a dropped connection keeps the partial answer, then catches up with the server copy — never with less', async () => {
+  it('a dropped connection reveals the partial answer with the error, then catches up with the server copy — never with less', async () => {
     const h = harness();
     const sent = h.actions.send('s1', 'Explain X');
     await waitFor(() => expect(h.posts).toHaveLength(1));
     h.push('start', start());
     h.push(...token('Partial answer'));
-    await waitFor(() => expect(h.assistant()?.content).toBe('Partial answer'));
+    await waitFor(() => expect(h.phase()).toBe('answering'));
+    expect(h.assistant()?.content).toBe(''); // buffered
 
     // The backend saves in chunks: its copy is still shorter than what was shown.
     h.server.messages = [

@@ -34,9 +34,11 @@ describe('chat flow', () => {
     expect(activity(lastAnswer())).toBe('Thinking…');
     expect(screen.getByRole('button', { name: 'Stop generating' })).toBeTruthy();
 
-    // Streaming: the answer grows while the header reads Answering.
-    await screen.findByText('Answering…', {}, { timeout: 8000 });
-    await waitFor(() => expect(lastAnswer().textContent?.length).toBeGreaterThan(20));
+    // Streaming: the answer is buffered — only the status box shows, and the header stays on Thinking.
+    await waitFor(() => expect(activity(lastAnswer())).toBe('Putting the answer together…'), { timeout: 8000 }); // tokens arriving (hidden)
+    expect(within(header()).getByText('Thinking…')).toBeTruthy(); // never "Answering…" while buffered
+    expect(activity(lastAnswer())).toBe('Putting the answer together…');
+    expect(lastAnswer().querySelector('.md-content')).toBeNull();
     expect(lastAnswer().getAttribute('aria-busy')).toBe('true');
 
     await waitForIdle();
@@ -51,7 +53,11 @@ describe('chat flow', () => {
     await screen.findByRole('log', { name: 'Conversation' }, { timeout: 8000 });
 
     await sendMessage('Outline a strategy for coastal resilience');
-    await waitFor(() => expect(lastAnswer().textContent).toContain('Strategic Response'), { timeout: 3000 });
+    // Tokens are buffered (not shown); Stop then reveals what arrived.
+    await waitFor(() => expect(activity(lastAnswer())).toBe('Putting the answer together…'), { timeout: 8000 }); // tokens arriving (hidden)
+    expect(within(header()).getByText('Thinking…')).toBeTruthy(); // never "Answering…" while buffered
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(lastAnswer().querySelector('.md-content')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Stop generating' }));
 
     expect(await screen.findByText('Response stopped.')).toBeTruthy();
@@ -61,7 +67,8 @@ describe('chat flow', () => {
     expect(screen.getByText('Online')).toBeTruthy();
 
     fireEvent.click(within(lastAnswer()).getByRole('button', { name: 'Retry' }));
-    await screen.findByText('Answering…', {}, { timeout: 8000 });
+    await waitFor(() => expect(activity(lastAnswer())).toBe('Putting the answer together…'), { timeout: 8000 }); // tokens arriving (hidden)
+    expect(within(header()).getByText('Thinking…')).toBeTruthy(); // never "Answering…" while buffered
     await waitForIdle();
     expect(screen.queryByText('Response stopped.')).toBeNull();
     // Regenerated answers use a different framing.
@@ -152,7 +159,8 @@ describe('chat flow', () => {
     };
     await sendMessage('Stress-test a growth plan');
     expect(await within(header()).findByText('Solving…')).toBeTruthy();
-    await screen.findByText('Answering…', {}, { timeout: 8000 });
+    await waitFor(() => expect(activity(lastAnswer())).toBe('Putting the answer together…'), { timeout: 8000 }); // tokens arriving (hidden)
+    expect(within(header()).getByText('Thinking…')).toBeTruthy(); // never "Answering…" while buffered
     await waitForIdle();
   }, 30_000); // two full streamed answers: slower than the default budget under load
 

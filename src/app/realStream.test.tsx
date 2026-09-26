@@ -67,7 +67,7 @@ const activity = (el: HTMLElement) => el.querySelector('[data-activity] .animate
 afterEach(() => vi.unstubAllGlobals());
 
 describe('real backend stream (HTTP adapter)', () => {
-  it('Thinking → incremental Answering → complete at response_completed, then trailing title/agent updates', async () => {
+  it('Thinking (header) while the answer is buffered → whole answer and Online at response_completed, then trailing title/agent updates', async () => {
     const backend = fakeBackend();
     const { router } = renderApp('/', { api: backend.api });
 
@@ -88,25 +88,41 @@ describe('real backend stream (HTTP adapter)', () => {
     await waitFor(() => expect(activity(answer())).toBe('Generating response…'));
     expect(document.body.textContent).not.toContain('Consider the');
 
-    // First answer token: Answering, text visible; more tokens grow it.
+    // Answer tokens: received and buffered — only the status box shows, never a partial answer.
+    const flashes: string[] = [];
+    const headerStates = new Set<string>();
+    const observer = new MutationObserver(() => {
+      const text = answerText();
+      if (text && text !== 'Start with a national water audit.') flashes.push(text);
+      headerStates.add(/Thinking…|Answering…|Online/.exec(header().textContent ?? '')?.[0] ?? '');
+    });
+    observer.observe(document.body, { subtree: true, childList: true, characterData: true });
     await backend.push(frame('token', { content: 'Start with', source: 'chatbot' }));
-    await screen.findByText('Answering…');
-    await waitFor(() => expect(answerText()).toBe('Start with'));
-    expect(answer().querySelector('[data-activity]')).toBeNull(); // the status box gave way to the answer
-    expect(answer().getAttribute('aria-busy')).toBe('true');
+    await waitFor(() => expect(activity(answer())).toBe('Putting the answer together…')); // tokens arriving (hidden)
+    expect(within(header()).getByText('Thinking…')).toBeTruthy(); // never "Answering…" while buffered
+    await waitFor(() => expect(activity(answer())).toBe('Putting the answer together…'));
     await backend.push(frame('token', { content: ' a national', source: 'chatbot' }));
     await backend.push(frame('token', { content: ' water audit.', source: 'chatbot' }));
-    await waitFor(() => expect(answerText()).toBe('Start with a national water audit.'));
-    expect(screen.getByText('Answering…')).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(answerText()).toBe('');
+    expect(document.body.textContent).not.toContain('Start with');
+    expect(answer().getAttribute('aria-busy')).toBe('true');
 
     // response_completed: the answer is final — composer idle, actions shown — while the backend post-processes.
     await backend.push(frame('response_completed', { content: 'Response completed.' }));
     await backend.push(frame('postprocess_started', { content: 'Running post-processing...' }));
     await screen.findByText('Online');
+    observer.disconnect();
+    // The whole answer at once, in place of the status box; no partial text was ever rendered.
+    expect(answerText()).toBe('Start with a national water audit.');
+    expect(flashes).toEqual([]);
+    // The header went straight from Thinking… to Online as the answer appeared — never Answering….
+    expect([...headerStates].filter(Boolean).sort()).toEqual(['Online', 'Thinking…']);
+    expect(within(header()).getByText('Online')).toBeTruthy();
+    expect(answer().querySelector('[data-activity]')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Stop generating' })).toBeNull();
     expect(answer().getAttribute('aria-busy')).toBe('false');
     expect(within(answer()).getByRole('button', { name: /copy/i })).toBeTruthy();
-    expect(answerText()).toContain('Start with a national water audit.');
 
     // Trailing updates on the same response: agent output appended, then the generated title.
     await backend.push(frame('progress', { content: 'Reviewing', source: 'eshmun' }));
@@ -129,7 +145,9 @@ describe('real backend stream (HTTP adapter)', () => {
     await send('Outline a water strategy');
 
     await backend.push(START + frame('token', { content: 'Partial answer', source: 'chatbot' }));
-    await waitFor(() => expect(answerText()).toContain('Partial answer'));
+    await waitFor(() => expect(activity(answer())).toBe('Putting the answer together…')); // tokens arriving (hidden)
+    expect(within(header()).getByText('Thinking…')).toBeTruthy(); // never "Answering…" while buffered
+    expect(answerText()).toBe(''); // buffered until the stream ends
     await backend.push(frame('done', { session_id: 'sess-1', assistantMessageId: 'a-1', title: 'T', partial: true, recoveredContent: 'Partial answer' }));
     await backend.push(frame('error', { content: 'We encountered an issue processing your request.' }));
     await backend.close();
@@ -147,9 +165,11 @@ describe('real backend stream (HTTP adapter)', () => {
 
     await backend.push(START + ': keep-alive\n\n' + frame('brand_new_event', { anything: true }));
     await backend.push(frame('token', { content: 'Still streaming', source: 'chatbot' }));
-    await waitFor(() => expect(answerText()).toBe('Still streaming'));
+    await waitFor(() => expect(activity(answer())).toBe('Putting the answer together…')); // tokens arriving (hidden)
+    expect(within(header()).getByText('Thinking…')).toBeTruthy(); // never "Answering…" while buffered
     await backend.push(frame('response_completed', { content: 'Response completed.' }));
     await screen.findByText('Online');
+    expect(answerText()).toBe('Still streaming');
     await backend.close();
   });
 
