@@ -17,6 +17,8 @@ async function sendMessage(text: string) {
 const log = () => screen.getByRole('log', { name: 'Conversation' });
 const lastAnswer = () => within(log()).getAllByRole('article').at(-1)!;
 const header = () => document.querySelector('header')!;
+/** The visible label in an answer's status box (null once the answer has words). */
+const activity = (el: HTMLElement) => el.querySelector('[data-activity] .animate-fade')?.textContent ?? null;
 const waitForIdle = () =>
   waitFor(() => expect(screen.getByText('Online')).toBeTruthy(), { timeout: 12_000 });
 
@@ -29,7 +31,7 @@ describe('chat flow', () => {
     // Optimistic: visible before the server responds; header and the answer's place both show Thinking.
     expect(within(log()).getByText('Draft KPIs for digital identity')).toBeTruthy();
     expect(within(header()).getByText('Thinking…')).toBeTruthy();
-    expect(within(lastAnswer()).getByRole('status').textContent).toBe('Thinking…');
+    expect(activity(lastAnswer())).toBe('Thinking…');
     expect(screen.getByRole('button', { name: 'Stop generating' })).toBeTruthy();
 
     // Streaming: the answer grows while the header reads Answering.

@@ -24,14 +24,14 @@ import { EmptyState } from './EmptyState';
 import { MessageLog } from './MessageLog';
 import { MessagesSkeleton } from './MessagesSkeleton';
 
-/** Shown in the answer's place until its first words (never the model's reasoning). */
+/** What the answer's status box starts from (real stream events); it rotates on between them. */
 const ACTIVITY_LABELS: Record<StreamPhase, string | undefined> = {
   sending: 'Thinking…',
   thinking: 'Thinking…',
+  preparing: 'Thinking…', // start
   transcribing: 'Transcribing…',
-  preparing: 'Preparing your answer…',
   solving: 'Solving…',
-  generating: 'Generating response…',
+  generating: 'Generating response…', // response_started
   answering: undefined,
 };
 

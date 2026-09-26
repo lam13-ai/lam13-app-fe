@@ -61,6 +61,8 @@ const answer = () => within(log()).getAllByRole('article').at(-1)!;
 /** The answer's rendered Markdown only (not its status box or actions). */
 const answerText = () => answer().querySelector('.md-content')?.textContent ?? '';
 const header = () => document.querySelector('header')!;
+/** The visible label in an answer's status box (null once the answer has words). */
+const activity = (el: HTMLElement) => el.querySelector('[data-activity] .animate-fade')?.textContent ?? null;
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -73,7 +75,7 @@ describe('real backend stream (HTTP adapter)', () => {
     // Optimistic user message + Thinking (header and the answer's place) before any byte arrives.
     expect(within(log()).getByText('Outline a water strategy')).toBeTruthy();
     expect(within(header()).getByText('Thinking…')).toBeTruthy();
-    expect(within(answer()).getByRole('status').textContent).toBe('Thinking…');
+    expect(activity(answer())).toBe('Thinking…');
     expect(screen.getByRole('button', { name: 'Stop generating' })).toBeTruthy();
 
     // `start` creates the session (URL follows); the model's reasoning keeps Thinking, text hidden.
@@ -83,13 +85,14 @@ describe('real backend stream (HTTP adapter)', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/c/sess-1'));
     expect(within(header()).getByText('Thinking…')).toBeTruthy();
     // Generation started: a high-level status in the answer's place; the reasoning text never appears.
-    await waitFor(() => expect(within(answer()).getByRole('status').textContent).toBe('Generating response…'));
+    await waitFor(() => expect(activity(answer())).toBe('Generating response…'));
     expect(document.body.textContent).not.toContain('Consider the');
 
     // First answer token: Answering, text visible; more tokens grow it.
     await backend.push(frame('token', { content: 'Start with', source: 'chatbot' }));
     await screen.findByText('Answering…');
     await waitFor(() => expect(answerText()).toBe('Start with'));
+    expect(answer().querySelector('[data-activity]')).toBeNull(); // the status box gave way to the answer
     expect(answer().getAttribute('aria-busy')).toBe('true');
     await backend.push(frame('token', { content: ' a national', source: 'chatbot' }));
     await backend.push(frame('token', { content: ' water audit.', source: 'chatbot' }));

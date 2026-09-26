@@ -4,13 +4,14 @@ import { Spinner, VisuallyHidden, smallIconProps } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import type { Artifact, ErrorInfo } from '@/types/api';
 import type { MessageView } from '@/types/chat';
+import { ActivityStatus } from './ActivityStatus';
 import { MessageActions } from './MessageActions';
 import { MessageNotice } from './MessageNotice';
 
 /**
  * Full-width document-style answer: no bubble, no avatar (reference §4).
- * While streaming the text grows in place. Before the first token a quiet status box stands in for it
- * ("Generating response…", as in the reference); it never shows the model's reasoning.
+ * While streaming the text grows in place. Before the first token a quiet, rotating status box stands in
+ * for it (ActivityStatus); it never shows the model's reasoning.
  */
 export function AssistantMessage({
   message,
@@ -43,12 +44,7 @@ export function AssistantMessage({
     >
       <VisuallyHidden>Lam13 replied:</VisuallyHidden>
       {hasContent && <Markdown content={message.content} />}
-      {streaming && !hasContent && (
-        <p role="status" className="inline-flex items-center gap-2 border border-hairline-strong px-3 py-2 text-xs text-fg-muted">
-          <Spinner size={14} state="active" />
-          {activity ?? 'Generating response…'}
-        </p>
-      )}
+      {streaming && !hasContent && <ActivityStatus label={activity ?? 'Generating response…'} />}
       {message.artifacts && message.artifacts.length > 0 && <Artifacts artifacts={message.artifacts} />}
       {message.status === 'complete' && hasContent && (
         <MessageActions createdAt={message.created_at} copyText={message.content} onRegenerate={onRegenerate} />
