@@ -9,8 +9,8 @@ import { MessageNotice } from './MessageNotice';
 
 /**
  * Full-width document-style answer: no bubble, no avatar (reference §4).
- * While streaming the text grows in place; before the first token nothing is shown here —
- * the header status carries "Thinking…", as in the reference.
+ * While streaming the text grows in place. Before the first token a quiet status box stands in for it
+ * ("Generating response…", as in the reference); it never shows the model's reasoning.
  */
 export function AssistantMessage({
   message,
@@ -19,6 +19,7 @@ export function AssistantMessage({
   onRetry,
   onRegenerate,
   animate,
+  activity,
 }: {
   message: MessageView;
   anchorKey: string;
@@ -28,6 +29,8 @@ export function AssistantMessage({
   /** Regenerate a completed answer (only the latest one, and never while streaming). */
   onRegenerate?: () => void;
   animate?: boolean;
+  /** High-level status while this answer has no text yet. */
+  activity?: string;
 }) {
   const streaming = message.status === 'streaming';
   const hasContent = message.content.length > 0;
@@ -40,6 +43,12 @@ export function AssistantMessage({
     >
       <VisuallyHidden>Lam13 replied:</VisuallyHidden>
       {hasContent && <Markdown content={message.content} />}
+      {streaming && !hasContent && (
+        <p role="status" className="inline-flex items-center gap-2 border border-hairline-strong px-3 py-2 text-xs text-fg-muted">
+          <Spinner size={14} state="active" />
+          {activity ?? 'Generating response…'}
+        </p>
+      )}
       {message.artifacts && message.artifacts.length > 0 && <Artifacts artifacts={message.artifacts} />}
       {message.status === 'complete' && hasContent && (
         <MessageActions createdAt={message.created_at} copyText={message.content} onRegenerate={onRegenerate} />

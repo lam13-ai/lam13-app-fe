@@ -7,9 +7,10 @@ export type StreamEvent =
   | { event: 'transcript'; data: { message_id: string; text: string } }
   /**
    * Processing state for the header. `solving` is only shown when the server emits it — the client
-   * never simulates phases. Unknown states are treated as `thinking` (forward compatible).
+   * never simulates phases. `generating`: the server started writing the answer (no text yet).
+   * Unknown states are treated as `thinking` (forward compatible).
    */
-  | { event: 'status'; data: { state: 'thinking' | 'solving' | 'answering' | 'tool'; label?: string } }
+  | { event: 'status'; data: { state: 'thinking' | 'generating' | 'solving' | 'answering' | 'tool'; label?: string } }
   | { event: 'delta'; data: { message_id: string; text: string } }
   | { event: 'conversation.updated'; data: { id: string; title: string } }
   /** A generated deliverable was created or changed (progress, ready, error): the full artifact, upserted by id. */

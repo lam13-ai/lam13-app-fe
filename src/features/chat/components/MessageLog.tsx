@@ -28,6 +28,8 @@ export interface MessageLogProps {
   onRetry?: (message: MessageView) => void;
   /** A response is streaming for the latest turn. */
   streaming?: boolean;
+  /** What the streaming response is doing before its first words ("Generating response…"). */
+  activity?: string;
 }
 
 interface Turn {
@@ -51,7 +53,7 @@ function groupTurns(messages: MessageView[]): Turn[] {
   return turns;
 }
 
-export function MessageLog({ messages, failures, older, onRetry, streaming = false }: MessageLogProps) {
+export function MessageLog({ messages, failures, older, onRetry, streaming = false, activity }: MessageLogProps) {
   const logRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -102,6 +104,7 @@ export function MessageLog({ messages, failures, older, onRetry, streaming = fal
             canRegenerate && message === last && message.status === 'complete' && !isLocalId(message.id) ? retry : undefined
           }
           animate={animate}
+          activity={message === last ? activity : undefined}
         />
       );
     });

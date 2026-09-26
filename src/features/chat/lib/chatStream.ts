@@ -19,6 +19,10 @@ import {
   type MessagesData,
 } from './messageCache';
 
+/** After a dropped stream: how often / how long to re-read the conversation for the server's answer. */
+const RECONCILE_INTERVAL_MS = 3_000;
+const RECONCILE_ATTEMPTS = 40;
+
 interface Deps {
   api: ApiAdapter;
   queryClient: QueryClient;
@@ -78,6 +82,31 @@ export function createChatActions({ api, queryClient }: Deps) {
 
     const writeAssistant = () => updateMessages(key, (d) => upsertMessage(d, assistantKey, draft.assistant));
     const batcher = createFrameBatcher(writeAssistant);
+    /**
+     * Lost the stream after the server accepted the message: the server may still be generating (the
+     * FastAPI backend keeps going without a reader). Re-read the conversation until the saved answer has
+     * caught up with what was shown (it is saved in chunks), then show the server's copy; a still-generating
+     * answer is then polled to completion by useMessages. The partial answer is never replaced by less.
+     */
+    const reconcile = () => {
+      if (!opened || isLocalId(draft.assistant.id)) return;
+      const shown = draft.assistant;
+      void (async () => {
+        for (let attempt = 0; attempt < RECONCILE_ATTEMPTS; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 0 : RECONCILE_INTERVAL_MS));
+          const page = await api.messages.list(key).catch(() => null);
+          const saved = page?.items.find((m) => m.id === shown.id);
+          if (!page) continue;
+          if (!saved) return;
+          const finished = saved.status !== 'streaming';
+          if (finished || saved.content.length >= shown.content.length) {
+            updateMessages(key, (d) => upsertMessage(d, assistantKey, { ...saved, local_key: shown.local_key }));
+            if (saved.status !== 'error') store().setFailure(assistantKey, null);
+            return;
+          }
+        }
+      })();
+    };
     const fail = (info: ReturnType<typeof toErrorInfo>) => {
       draft = { ...draft, status: 'error', error: info, assistant: { ...draft.assistant, status: 'error' } };
       writeAssistant();
@@ -115,6 +144,8 @@ export function createChatActions({ api, queryClient }: Deps) {
           }
           case 'message.created': {
             opened = true;
+            // The server accepted the message and is setting up the answer.
+            if (draft.status === 'sending' || draft.status === 'thinking') store().setPhase(key, 'preparing');
             const user = draft.user;
             if (user) updateMessages(key, (d) => upsertMessage(d, messageKey(user), user));
             batcher.cancel();
@@ -123,14 +154,18 @@ export function createChatActions({ api, queryClient }: Deps) {
           }
           case 'status': {
             const transcribing = /^transcrib/i.test(event.data.label ?? '');
+            const current = store().active[key]?.phase;
+            // Never backwards: once generating/answering (or preparing), a late `thinking` changes nothing.
             const phase =
-              draft.status === 'answering'
-                ? 'answering'
+              draft.status === 'answering' || draft.status === 'generating'
+                ? draft.status
                 : transcribing
                   ? 'transcribing'
                   : event.data.state === 'solving'
                     ? 'solving'
-                    : 'thinking';
+                    : current === 'preparing' || current === 'solving'
+                      ? current
+                      : 'thinking';
             store().setPhase(key, phase);
             break;
           }
@@ -170,6 +205,7 @@ export function createChatActions({ api, queryClient }: Deps) {
       if (!isTerminal(draft.status)) {
         batcher.cancel();
         fail({ code: 'stream_interrupted', message: 'The response ended unexpectedly.', retryable: true });
+        reconcile();
       }
     } catch (error) {
       batcher.cancel();
@@ -197,6 +233,7 @@ export function createChatActions({ api, queryClient }: Deps) {
       } else {
         // Connection dropped mid-stream (or a regenerate request failed): keep the partial answer.
         fail(toErrorInfo(error));
+        reconcile();
       }
     } finally {
       release();

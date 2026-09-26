@@ -58,7 +58,9 @@ async function send(text: string) {
 
 const log = () => screen.getByRole('log', { name: 'Conversation' });
 const answer = () => within(log()).getAllByRole('article').at(-1)!;
-const answerText = () => answer().textContent?.replace('Lam13 replied:', '') ?? '';
+/** The answer's rendered Markdown only (not its status box or actions). */
+const answerText = () => answer().querySelector('.md-content')?.textContent ?? '';
+const header = () => document.querySelector('header')!;
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -68,9 +70,10 @@ describe('real backend stream (HTTP adapter)', () => {
     const { router } = renderApp('/', { api: backend.api });
 
     await send('Outline a water strategy');
-    // Optimistic user message + Thinking before any byte arrives.
+    // Optimistic user message + Thinking (header and the answer's place) before any byte arrives.
     expect(within(log()).getByText('Outline a water strategy')).toBeTruthy();
-    expect(screen.getByText('Thinking…')).toBeTruthy();
+    expect(within(header()).getByText('Thinking…')).toBeTruthy();
+    expect(within(answer()).getByRole('status').textContent).toBe('Thinking…');
     expect(screen.getByRole('button', { name: 'Stop generating' })).toBeTruthy();
 
     // `start` creates the session (URL follows); the model's reasoning keeps Thinking, text hidden.
@@ -78,8 +81,10 @@ describe('real backend stream (HTTP adapter)', () => {
     await backend.push('event: thin'); // a frame split across network chunks
     await backend.push('king\ndata: {"content":"Consider the","source":"chatbot","mode":"token"}\n\n');
     await waitFor(() => expect(router.state.location.pathname).toBe('/c/sess-1'));
-    expect(screen.getByText('Thinking…')).toBeTruthy();
-    expect(answerText()).toBe('');
+    expect(within(header()).getByText('Thinking…')).toBeTruthy();
+    // Generation started: a high-level status in the answer's place; the reasoning text never appears.
+    await waitFor(() => expect(within(answer()).getByRole('status').textContent).toBe('Generating response…'));
+    expect(document.body.textContent).not.toContain('Consider the');
 
     // First answer token: Answering, text visible; more tokens grow it.
     await backend.push(frame('token', { content: 'Start with', source: 'chatbot' }));

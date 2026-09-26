@@ -16,6 +16,7 @@ async function sendMessage(text: string) {
 
 const log = () => screen.getByRole('log', { name: 'Conversation' });
 const lastAnswer = () => within(log()).getAllByRole('article').at(-1)!;
+const header = () => document.querySelector('header')!;
 const waitForIdle = () =>
   waitFor(() => expect(screen.getByText('Online')).toBeTruthy(), { timeout: 12_000 });
 
@@ -25,9 +26,10 @@ describe('chat flow', () => {
     await screen.findByRole('log', { name: 'Conversation' }, { timeout: 8000 });
 
     await sendMessage('Draft KPIs for digital identity');
-    // Optimistic: visible before the server responds; header shows Thinking.
+    // Optimistic: visible before the server responds; header and the answer's place both show Thinking.
     expect(within(log()).getByText('Draft KPIs for digital identity')).toBeTruthy();
-    expect(screen.getByText('Thinking…')).toBeTruthy();
+    expect(within(header()).getByText('Thinking…')).toBeTruthy();
+    expect(within(lastAnswer()).getByRole('status').textContent).toBe('Thinking…');
     expect(screen.getByRole('button', { name: 'Stop generating' })).toBeTruthy();
 
     // Streaming: the answer grows while the header reads Answering.
@@ -47,7 +49,7 @@ describe('chat flow', () => {
     await screen.findByRole('log', { name: 'Conversation' }, { timeout: 8000 });
 
     await sendMessage('Outline a strategy for coastal resilience');
-    await waitFor(() => expect(lastAnswer().textContent?.length).toBeGreaterThan(30), { timeout: 3000 });
+    await waitFor(() => expect(lastAnswer().textContent).toContain('Strategic Response'), { timeout: 3000 });
     fireEvent.click(screen.getByRole('button', { name: 'Stop generating' }));
 
     expect(await screen.findByText('Response stopped.')).toBeTruthy();
@@ -147,7 +149,7 @@ describe('chat flow', () => {
       })();
     };
     await sendMessage('Stress-test a growth plan');
-    expect(await screen.findByText('Solving…')).toBeTruthy();
+    expect(await within(header()).findByText('Solving…')).toBeTruthy();
     await screen.findByText('Answering…', {}, { timeout: 8000 });
     await waitForIdle();
   }, 30_000); // two full streamed answers: slower than the default budget under load

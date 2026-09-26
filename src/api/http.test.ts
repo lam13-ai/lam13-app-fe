@@ -44,7 +44,8 @@ describe('translateStream (backend SSE → app events)', () => {
     expect(events.map((e) => e.event)).toEqual([
       'conversation.created',
       'message.created',
-      'status', // thinking tokens collapse into one status
+      'status', // response_started: generating
+      'status', // thinking tokens collapse into one status (no label: the reasoning text is dropped)
       'delta',
       'delta',
       'status', // post-processing after the answer
@@ -54,13 +55,16 @@ describe('translateStream (backend SSE → app events)', () => {
       'done',
     ]);
     expect(events[0]!.data.id).toBe('s1');
+    expect(events[2]!.data).toEqual({ state: 'generating' });
+    expect(events[3]!.data).toEqual({ state: 'thinking' });
+    expect(JSON.stringify(events)).not.toContain('hmm');
     const created = events[1]!.data as { user_message: { id: string; client_message_id: string }; assistant_message: { id: string } };
     expect(created.user_message).toMatchObject({ id: 'c1', client_message_id: 'c1' });
     expect(created.assistant_message.id).toBe('a1');
-    expect(events[6]!.data).toEqual({ id: 's1', title: 'Growth plan' });
-    expect(events[7]!.data).toMatchObject({ type: 'pptx', status: 'ready', download: { url: 'https://blob/deck.pptx' } });
-    expect(events[8]!.data).toMatchObject({ type: 'report', status: 'processing', download: null });
-    expect((events[9]!.data.message as { content: string; status: string })).toMatchObject({ content: 'Hello world', status: 'complete' });
+    expect(events[7]!.data).toEqual({ id: 's1', title: 'Growth plan' });
+    expect(events[8]!.data).toMatchObject({ type: 'pptx', status: 'ready', download: { url: 'https://blob/deck.pptx' } });
+    expect(events[9]!.data).toMatchObject({ type: 'report', status: 'processing', download: null });
+    expect((events[10]!.data.message as { content: string; status: string })).toMatchObject({ content: 'Hello world', status: 'complete' });
   });
 
   // Retryable: with no regenerate endpoint, Retry asks again as a new turn (chatStream `retry`).

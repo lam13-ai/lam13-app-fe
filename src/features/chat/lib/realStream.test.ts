@@ -1,62 +1,90 @@
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, type InfiniteData } from '@tanstack/react-query';
 import { waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
-import { createMockAdapter, INSTANT_TIMING, queryKeys, type ApiAdapter } from '@/api';
-import { translateStream } from '@/api/http';
-import { readSseMessages } from '@/api/stream';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { queryKeys } from '@/api';
+import { createHttpAdapter } from '@/api/http';
 import { initialStreamState, useStreamStore } from '@/stores/streamStore';
+import type { Conversation, Page } from '@/types/api';
 import { createChatActions } from './chatStream';
-import { toChronological, type MessagesData } from './messageCache';
+import { NEW_CONVERSATION_KEY, toChronological, type MessagesData } from './messageCache';
 
 /**
- * The real FastAPI `/chat/stream` vocabulary, pushed frame by frame through the real SSE parser, the
- * HTTP adapter's translation, the reducer and the rAF-batched cache writes.
+ * The real FastAPI `/chat/stream` vocabulary, pushed frame by frame through the real HTTP adapter (fetch
+ * stubbed), SSE parser, translation, reducer and batched cache writes. `server` is what the backend's
+ * `GET /chat/sessions/{id}` returns.
  */
+type ConversationListData = InfiniteData<Page<Conversation>, string | null>;
+
 function harness() {
-  let push!: (event: string, data: object) => void;
-  let raw!: (frame: string) => void;
-  let fail!: () => void;
-  const body = new ReadableStream<Uint8Array>({
-    start(controller) {
-      const encoder = new TextEncoder();
-      raw = (frame) => controller.enqueue(encoder.encode(frame));
-      push = (event, data) => raw(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-      fail = () => controller.error(new TypeError('network error'));
-    },
+  const encoder = new TextEncoder();
+  const posts: { body: Record<string, unknown>; signal: AbortSignal }[] = [];
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const server: { messages: { id: string; role: string; content: string; status: string }[] } = { messages: [] };
+
+  vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+    if (init.method === 'POST' && url === '/chat/stream') {
+      posts.push({ body: JSON.parse(init.body as string), signal: init.signal! });
+      const body = new ReadableStream<Uint8Array>({ start: (c) => void (controller = c) });
+      return new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    }
+    const session = /^\/chat\/sessions\/(.+)$/.exec(url)?.[1];
+    if (session) return Response.json({ sessionId: session, title: null, messages: server.messages });
+    return new Response('{}', { status: 404 });
   });
-  const mock = createMockAdapter({ timing: INSTANT_TIMING });
-  const api: ApiAdapter = {
-    ...mock,
-    messages: {
-      ...mock.messages,
-      send: async (conversationId, request, options) => {
-        if (request.kind !== 'text') throw new Error('text only');
-        return translateStream(readSseMessages(body, options?.signal), { conversationId, body: request }, async () => null);
-      },
-    },
-  };
+
   const queryClient = new QueryClient();
-  const actions = createChatActions({ api, queryClient });
-  const assistant = () => toChronological(queryClient.getQueryData<MessagesData>(queryKeys.messages('s1'))).find((m) => m.role === 'assistant');
-  const phase = () => useStreamStore.getState().active.s1?.phase;
-  return { push, raw, fail: () => fail(), actions, assistant, phase, queryClient };
+  // The sidebar's list is loaded (empty) before the first send.
+  queryClient.setQueryData<ConversationListData>(queryKeys.conversations.list(), { pages: [{ items: [], next_cursor: null }], pageParams: [null] });
+  const actions = createChatActions({ api: createHttpAdapter(), queryClient });
+  const push = (event: string, data: object) => controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+  const messages = (key: string) => toChronological(queryClient.getQueryData<MessagesData>(queryKeys.messages(key)));
+  return {
+    posts,
+    server,
+    actions,
+    queryClient,
+    push,
+    raw: (frame: string) => controller.enqueue(encoder.encode(frame)),
+    fail: () => controller.error(new TypeError('network error')),
+    messages,
+    assistant: (key = 's1') => messages(key).find((m) => m.role === 'assistant'),
+    phase: (key = 's1') => useStreamStore.getState().active[key]?.phase,
+    sidebar: () => queryClient.getQueryData<ConversationListData>(queryKeys.conversations.list())?.pages.flatMap((p) => p.items) ?? [],
+  };
 }
 
-const start = { content: '', session_id: 's1', message_id: 'c1', assistantMessageId: 'a1' };
+const start = (session = 's1') => ({ content: '', session_id: session, message_id: 'c1', assistantMessageId: 'a1' });
 const token = (content: string) => ['token', { content, source: 'chatbot' }] as const;
 const thinking = (content: string) => ['thinking', { content, source: 'chatbot', mode: 'token' }] as const;
+const tick = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
 
-afterEach(() => useStreamStore.setState(initialStreamState));
+function setVisibility(state: 'hidden' | 'visible') {
+  Object.defineProperty(document, 'visibilityState', { value: state, configurable: true });
+  Object.defineProperty(document, 'hidden', { value: state === 'hidden', configurable: true });
+  document.dispatchEvent(new Event('visibilitychange'));
+}
+
+afterEach(() => {
+  useStreamStore.setState(initialStreamState);
+  vi.unstubAllGlobals();
+  setVisibility('visible');
+});
 
 describe('real backend SSE → visible assistant message', () => {
-  it('shows tokens as they arrive, never shows thinking text, and finalizes at done without duplicating', async () => {
+  it('thinking → preparing → generating → answering; tokens appear as they arrive; thinking text never; done adds nothing', async () => {
     const h = harness();
     const sent = h.actions.send('s1', 'Explain X');
 
-    h.push('start', start);
+    expect(h.phase()).toBe('sending'); // "Thinking…"
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    h.push('start', start());
+    await waitFor(() => expect(h.phase()).toBe('preparing'));
     h.push('response_started', { content: 'Generating response...' });
+    await waitFor(() => expect(h.phase()).toBe('generating'));
     h.push(...thinking('SECRET plan the answer'));
-    await waitFor(() => expect(h.phase()).toBe('thinking'));
+    h.push(...thinking(' more'));
+    await tick();
+    expect(h.phase()).toBe('generating'); // reasoning never moves it back to Thinking
     expect(h.assistant()).toMatchObject({ id: 'a1', content: '', status: 'streaming' });
 
     h.push(...token('Great q'));
@@ -79,36 +107,130 @@ describe('real backend SSE → visible assistant message', () => {
     h.push('done', { content: '', session_id: 's1', assistantMessageId: 'a1', title: 'Explaining X' });
     await sent;
 
-    const final = h.assistant();
-    expect(final).toMatchObject({ content: 'Great question, Aashir! Here is:\n\n**Bold** and\n\n- a list', status: 'complete' });
-    expect(final?.content).not.toContain('SECRET');
-    const all = toChronological(h.queryClient.getQueryData<MessagesData>(queryKeys.messages('s1')));
-    expect(all.map((m) => m.role)).toEqual(['user', 'assistant']);
+    expect(h.assistant()).toMatchObject({ content: 'Great question, Aashir! Here is:\n\n**Bold** and\n\n- a list', status: 'complete' });
+    expect(JSON.stringify(h.messages('s1'))).not.toContain('SECRET');
+    expect(h.messages('s1').map((m) => m.role)).toEqual(['user', 'assistant']);
   });
 
-  it('Stop after partial tokens keeps the partial answer', async () => {
+  it('new chat: one send = one session, one conversation row, one user + one assistant message, stable id', async () => {
+    const h = harness();
+    const sent = h.actions.send(undefined, 'Explain X', { origin: 'view-1' });
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    // The client names the session: the same id the backend echoes in `start`.
+    const sessionId = h.posts[0]!.body.session_id as string;
+    expect(sessionId).toBe(h.posts[0]!.body.message_id);
+
+    h.push('start', start(sessionId));
+    await waitFor(() => expect(useStreamStore.getState().created).toEqual({ id: sessionId, origin: 'view-1' }));
+    h.push(...token('Hello'));
+    h.push('response_completed', {});
+    h.push('done', { session_id: sessionId, assistantMessageId: 'a1', title: 'Greeting' });
+    await sent;
+
+    expect(h.posts).toHaveLength(1);
+    expect(h.sidebar()).toEqual([expect.objectContaining({ id: sessionId, title: 'Greeting' })]);
+    expect(h.messages(sessionId).map((m) => [m.role, m.conversation_id, m.content])).toEqual([
+      ['user', sessionId, 'Explain X'],
+      ['assistant', sessionId, 'Hello'],
+    ]);
+  });
+
+  it('new chat: Retry after the stream dropped before `start` resends to the SAME session (no second conversation)', async () => {
+    const h = harness();
+    const sent = h.actions.send(undefined, 'Explain X', { origin: 'view-1' });
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    h.fail(); // the backend may already be generating; the client never learned the session
+    await sent;
+    const user = h.messages(NEW_CONVERSATION_KEY).find((m) => m.role === 'user')!;
+    expect(user.status).toBe('error');
+
+    const retried = h.actions.retry(NEW_CONVERSATION_KEY, user, h.messages(NEW_CONVERSATION_KEY), { origin: 'view-1' });
+    await waitFor(() => expect(h.posts).toHaveLength(2));
+    expect(h.posts[1]!.body.session_id).toBe(h.posts[0]!.body.session_id);
+    const sessionId = h.posts[1]!.body.session_id as string;
+    h.push('start', start(sessionId));
+    h.push(...token('Hello'));
+    h.push('response_completed', {});
+    h.push('done', { session_id: sessionId, assistantMessageId: 'a1' });
+    await retried;
+    expect(h.sidebar().map((c) => c.id)).toEqual([sessionId]);
+    expect(h.messages(sessionId).map((m) => m.role)).toEqual(['user', 'assistant']);
+  });
+
+  it('a hidden tab neither aborts nor stalls the stream (no animation frames); returning shows the full answer', async () => {
+    vi.stubGlobal('requestAnimationFrame', () => 1); // background tab: frames never come
+    vi.stubGlobal('cancelAnimationFrame', () => {});
     const h = harness();
     const sent = h.actions.send('s1', 'Explain X');
-    h.push('start', start);
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    h.push('start', start());
+    h.push(...token('Before '));
+    await waitFor(() => expect(h.assistant()?.content).toBe('Before '));
+
+    setVisibility('hidden');
+    h.push(...token('while '));
+    h.push(...token('hidden'));
+    // Written to the cache without a frame (timer fallback), and still the live stream.
+    await waitFor(() => expect(h.assistant()?.content).toBe('Before while hidden'));
+    expect(h.posts[0]!.signal.aborted).toBe(false);
+    expect(h.phase()).toBe('answering');
+    expect(h.assistant()?.status).toBe('streaming');
+
+    setVisibility('visible');
+    h.push(...token('.'));
+    h.push('response_completed', {});
+    h.push('done', { session_id: 's1', assistantMessageId: 'a1' });
+    await sent;
+    expect(h.posts[0]!.signal.aborted).toBe(false);
+    expect(h.messages('s1').map((m) => [m.role, m.status])).toEqual([
+      ['user', 'complete'],
+      ['assistant', 'complete'],
+    ]);
+    expect(h.assistant()?.content).toBe('Before while hidden.');
+  });
+
+  it('only an explicit Stop cancels: the partial answer stays', async () => {
+    const h = harness();
+    const sent = h.actions.send('s1', 'Explain X');
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    h.push('start', start());
     h.push(...token('Partial '));
     h.push(...token('answer'));
     await waitFor(() => expect(h.assistant()?.content).toBe('Partial answer'));
+    setVisibility('hidden');
+    setVisibility('visible');
+    expect(h.posts[0]!.signal.aborted).toBe(false);
 
     h.actions.stop('s1');
     await sent;
+    expect(h.posts[0]!.signal.aborted).toBe(true);
     expect(h.assistant()).toMatchObject({ content: 'Partial answer', status: 'cancelled' });
   });
 
-  it('a dropped connection after partial tokens keeps the partial answer with a retryable error', async () => {
+  it('a dropped connection keeps the partial answer, then catches up with the server copy — never with less', async () => {
     const h = harness();
     const sent = h.actions.send('s1', 'Explain X');
-    h.push('start', start);
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    h.push('start', start());
     h.push(...token('Partial answer'));
     await waitFor(() => expect(h.assistant()?.content).toBe('Partial answer'));
 
+    // The backend saves in chunks: its copy is still shorter than what was shown.
+    h.server.messages = [
+      { id: 'c1', role: 'user', content: 'Explain X', status: 'completed' },
+      { id: 'a1', role: 'assistant', content: 'Partial', status: 'generating' },
+    ];
     h.fail();
     await sent;
     expect(h.assistant()).toMatchObject({ content: 'Partial answer', status: 'error' });
     expect(Object.values(useStreamStore.getState().failures)).toEqual([expect.objectContaining({ retryable: true })]);
+    await tick(50);
+    expect(h.assistant()).toMatchObject({ content: 'Partial answer', status: 'error' }); // not replaced by less
+
+    // The server kept generating and finished: its answer replaces the partial one, in place.
+    h.server.messages[1] = { id: 'a1', role: 'assistant', content: 'Partial answer, completed.', status: 'completed' };
+    await waitFor(() => expect(h.assistant()).toMatchObject({ content: 'Partial answer, completed.', status: 'complete' }), { timeout: 5000 });
+    expect(h.messages('s1').map((m) => m.role)).toEqual(['user', 'assistant']);
+    expect(useStreamStore.getState().failures).toEqual({});
   });
 });

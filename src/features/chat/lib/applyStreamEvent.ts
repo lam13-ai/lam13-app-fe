@@ -2,7 +2,10 @@ import type { StreamEvent } from '@/api';
 import type { ErrorInfo } from '@/types/api';
 import type { MessageView } from '@/types/chat';
 
-export type DraftStatus = 'sending' | 'thinking' | 'answering' | 'done' | 'error' | 'cancelled';
+export type DraftStatus = 'sending' | 'thinking' | 'generating' | 'answering' | 'done' | 'error' | 'cancelled';
+
+/** Progress only moves forward: a late `thinking` never sends a generating/answering response back. */
+const PROGRESS: Partial<Record<DraftStatus, number>> = { sending: 0, thinking: 1, generating: 2, answering: 3 };
 
 /** Client-side state of one streamed exchange. */
 export interface StreamDraft {
@@ -41,9 +44,13 @@ export function applyStreamEvent(draft: StreamDraft, event: StreamEvent): Stream
       if (!draft.user || event.data.message_id !== draft.user.id) return draft;
       return { ...draft, user: { ...draft.user, content: event.data.text } };
 
-    case 'status':
-      // Once the answer is visible, a later status (e.g. interleaved reasoning) doesn't send the header back to Thinking.
-      return { ...draft, status: event.data.state === 'answering' || draft.status === 'answering' ? 'answering' : 'thinking' };
+    case 'status': {
+      const next: DraftStatus =
+        event.data.state === 'answering' ? 'answering' : event.data.state === 'generating' ? 'generating' : 'thinking';
+      const current = PROGRESS[draft.status];
+      if (current === undefined) return draft; // already terminal
+      return (PROGRESS[next] ?? 0) > current ? { ...draft, status: next } : draft;
+    }
 
     case 'delta':
       if (event.data.message_id !== draft.assistant.id) return draft;

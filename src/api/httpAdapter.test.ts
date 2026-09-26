@@ -173,7 +173,7 @@ describe('HTTP adapter — upload', () => {
 });
 
 describe('HTTP adapter — POST /chat/stream (real backend SSE)', () => {
-  it('new chat: sends no session_id, completes at response_completed, then applies trailing updates', async () => {
+  it('new chat: sends its own session_id (the message client id), completes at response_completed, then applies trailing updates', async () => {
     const { calls } = streamBackend([
       start(),
       frame('response_started', { content: 'Generating response...' }),
@@ -191,12 +191,14 @@ describe('HTTP adapter — POST /chat/stream (real backend SSE)', () => {
     const events = await collect(await createHttpAdapter().messages.send(null, sendBody('Hi there')));
 
     expect(calls[0]).toMatchObject({ url: '/chat/stream', method: 'POST' });
-    expect(JSON.parse(calls[0]!.body as string)).toEqual({ message_id: 'client-1', user_message: 'Hi there' });
+    // Chosen client-side so a resend of the same message reaches the same session (no duplicate chat).
+    expect(JSON.parse(calls[0]!.body as string)).toEqual({ session_id: 'client-1', message_id: 'client-1', user_message: 'Hi there' });
     expect(calls[0]!.headers.Authorization).toBe(`Bearer ${TOKEN}`);
     expect(events.map((e) => e.event)).toEqual([
       'conversation.created',
       'message.created',
-      'status',
+      'status', // response_started: generating
+      'status', // thinking (its text is never forwarded)
       'delta',
       'delta',
       'done', // response_completed: the answer is final
@@ -204,9 +206,10 @@ describe('HTTP adapter — POST /chat/stream (real backend SSE)', () => {
       'conversation.updated', // trailing: the generated title
     ]);
     expect(events[0]).toMatchObject({ data: { id: 'sess-1', title: 'New conversation' } });
-    expect(events[5]).toMatchObject({ data: { message: { id: 'a-1', status: 'complete', content: 'Hello world' } } });
-    expect(events[6]).toEqual({ event: 'delta', data: { message_id: 'a-1', text: '\n\nAgent report' } });
-    expect(events[7]).toEqual({ event: 'conversation.updated', data: { id: 'sess-1', title: 'Greeting' } });
+    expect(events[6]).toMatchObject({ data: { message: { id: 'a-1', status: 'complete', content: 'Hello world' } } });
+    expect(JSON.stringify(events)).not.toContain('Let me think');
+    expect(events[7]).toEqual({ event: 'delta', data: { message_id: 'a-1', text: '\n\nAgent report' } });
+    expect(events[8]).toEqual({ event: 'conversation.updated', data: { id: 'sess-1', title: 'Greeting' } });
   });
 
   it('continues an existing session with document ids, across fragmented CRLF frames', async () => {

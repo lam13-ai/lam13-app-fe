@@ -9,7 +9,7 @@ import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
 import { createId } from '@/lib/id';
 import { useComposerStore } from '@/stores/composerStore';
-import { useStreamStore } from '@/stores/streamStore';
+import { useStreamStore, type StreamPhase } from '@/stores/streamStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Conversation } from '@/types/api';
 import type { AgentStatus } from '@/types/chat';
@@ -23,6 +23,17 @@ import { Composer } from './composer/Composer';
 import { EmptyState } from './EmptyState';
 import { MessageLog } from './MessageLog';
 import { MessagesSkeleton } from './MessagesSkeleton';
+
+/** Shown in the answer's place until its first words (never the model's reasoning). */
+const ACTIVITY_LABELS: Record<StreamPhase, string | undefined> = {
+  sending: 'Thinking…',
+  thinking: 'Thinking…',
+  transcribing: 'Transcribing…',
+  preparing: 'Preparing your answer…',
+  solving: 'Solving…',
+  generating: 'Generating response…',
+  answering: undefined,
+};
 
 export interface ChatViewProps {
   /** Undefined for a new, unsaved chat (`/`). */
@@ -83,6 +94,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
     : active.phase === 'answering' || active.phase === 'transcribing' || active.phase === 'solving'
       ? active.phase
       : 'thinking';
+  const activity = active && ACTIVITY_LABELS[active.phase];
   const title = conversationId ? conversation?.title : AGENT_NAME;
   const send = (text: string) => {
     if (files.drafts.length === 0) {
@@ -131,6 +143,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
         }}
         onRetry={active ? undefined : (message) => void actions.retry(key, message, history.messages, { origin })}
         streaming={Boolean(active)}
+        activity={activity}
       />
     );
   }

@@ -33,6 +33,8 @@ export function useMessages(conversationId: string | undefined) {
     getNextPageParam: (last) => last.next_cursor,
     // Never while this client streams: a refetch would overwrite the live draft.
     refetchInterval: (query) => (!streaming && hasPendingWork(query.state.data) ? POLL_MS : false),
+    // Back on the tab: catch up at once on work the server finished meanwhile (polling pauses while hidden).
+    refetchOnWindowFocus: (query) => !streaming && hasPendingWork(query.state.data),
   });
   const messages = useMemo(() => toChronological(query.data), [query.data]);
   return { ...query, messages };

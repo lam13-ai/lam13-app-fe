@@ -277,11 +277,15 @@ export async function* translateStream(
         yield { event: 'message.created', data: { user_message: user, assistant_message: assistant() } };
         break;
       }
+      case 'response_started':
+        if (!completed && !content) yield { event: 'status', data: { state: 'generating' } };
+        break;
       case 'thinking':
       case 'progress':
       case 'postprocess_started':
+        // A status only, never a label: `thinking` carries the model's reasoning, which is not shown.
         if (completed) break;
-        if (!thinking) yield { event: 'status', data: { state: 'thinking', label: str(data.content) } };
+        if (!thinking) yield { event: 'status', data: { state: 'thinking' } };
         thinking = true;
         break;
       case 'token': {
@@ -387,7 +391,10 @@ export function createHttpAdapter(): ApiAdapter {
           method: 'POST',
           signal: options?.signal,
           body: {
-            session_id: conversationId ?? undefined,
+            // A new chat's session id is chosen here (the backend gets-or-creates by it), derived from the
+            // message's client id: resending the same message (Retry after a drop or an early Stop) reaches
+            // the same session instead of creating a second conversation.
+            session_id: conversationId ?? body.client_message_id,
             message_id: body.client_message_id,
             user_message: body.content,
             ...(body.attachment_ids?.length && { users_document_ids: body.attachment_ids }),
