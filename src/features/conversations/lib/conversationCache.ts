@@ -70,3 +70,46 @@ export function patchConversation(
     toTop ? moveToTop(data, next) : patchInList(data, id, patch),
   );
 }
+
+/** Sidebar length of a title derived from a message (the row itself still truncates with an ellipsis). */
+const DERIVED_TITLE_MAX = 40;
+
+/**
+ * A readable provisional title from the user's first message: whitespace collapsed, cut at a word
+ * boundary near DERIVED_TITLE_MAX with an ellipsis.
+ */
+export function titleFromMessage(text: string): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  if (clean.length <= DERIVED_TITLE_MAX) return clean;
+  const cut = clean.slice(0, DERIVED_TITLE_MAX + 1);
+  const space = cut.lastIndexOf(' ');
+  const head = space >= DERIVED_TITLE_MAX * 0.6 ? cut.slice(0, space) : clean.slice(0, DERIVED_TITLE_MAX);
+  return `${head.replace(/[\s.,;:!?-]+$/, '')}…`;
+}
+
+/**
+ * Swaps the conversation `fromId` (an optimistic row) for `conversation` in place — same position, one
+ * row — and drops any other copy of it. Absent `fromId`: added at the top.
+ */
+export function replaceConversation(queryClient: QueryClient, fromId: string, conversation: Conversation) {
+  queryClient.setQueryData(queryKeys.conversations.detail(conversation.id), conversation);
+  queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(fromId), exact: true });
+  queryClient.setQueryData<ConversationListData>(queryKeys.conversations.list(), (data) => {
+    if (!data || !flattenConversations(data).some((c) => c.id === fromId)) return moveToTop(data, conversation);
+    return {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        items: page.items
+          .filter((c) => c.id !== conversation.id)
+          .map((c) => (c.id === fromId ? conversation : c)),
+      })),
+    };
+  });
+}
+
+/** Drops a conversation from both caches (e.g. an optimistic row whose send never reached the server). */
+export function dropConversation(queryClient: QueryClient, id: string) {
+  queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(id), exact: true });
+  queryClient.setQueryData<ConversationListData>(queryKeys.conversations.list(), (data) => removeFromList(data, id));
+}

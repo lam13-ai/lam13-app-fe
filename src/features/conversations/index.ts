@@ -5,4 +5,10 @@ export {
   useDeleteConversation,
   useRenameConversation,
 } from './hooks/useConversations';
-export { patchConversation, upsertConversation } from './lib/conversationCache';
+export {
+  dropConversation,
+  patchConversation,
+  replaceConversation,
+  titleFromMessage,
+  upsertConversation,
+} from './lib/conversationCache';

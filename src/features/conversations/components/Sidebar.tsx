@@ -3,7 +3,6 @@ import { Link, NavLink, useNavigate } from 'react-router';
 import { LogOut, PanelLeftClose, PanelLeftOpen, Shield, SquarePen, Users, X } from 'lucide-react';
 import { Wordmark } from '@/components/AgentMark';
 import { LegalLinks } from '@/components/LegalLinks';
-import { ScrollArea } from '@/components/ScrollArea';
 import { ThemeMenu } from '@/components/ThemeMenu';
 import { Button, IconButton, Tooltip, iconProps } from '@/components/ui';
 import { useIsAdmin } from '@/features/admin';
@@ -161,9 +160,10 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
         </NavLink>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1">
+      {/* The only scrolling part of the sidebar; a thin visible bar shows there's more history. */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-subtle">
         <ConversationList onNavigate={onNavigate} />
-      </ScrollArea>
+      </div>
 
       <div className="flex shrink-0 items-center gap-3 border-t border-hairline py-3 pl-4 pr-3">
         <Avatar user={user} />

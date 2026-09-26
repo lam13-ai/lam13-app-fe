@@ -1,6 +1,7 @@
+import { QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createHttpAdapter } from '@/api';
+import { createHttpAdapter, queryKeys } from '@/api';
 import { renderApp } from './testUtils';
 
 /**
@@ -17,6 +18,7 @@ interface Post {
   assistantId: string;
   push: (text: string) => Promise<void>;
   close: () => Promise<void>;
+  fail: () => void;
 }
 
 function fakeBackend() {
@@ -35,6 +37,7 @@ function fakeBackend() {
         text: body.user_message,
         assistantId,
         push: (text) => act(async () => controller.enqueue(encoder.encode(text))),
+        fail: () => controller.error(new TypeError('network error')),
         close: () =>
           act(async () => {
             try {
@@ -93,6 +96,22 @@ const sidebarRows = () =>
     .queryAllByRole('link')
     .map((a) => a.getAttribute('href'));
 const newChat = () => fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
+/** Every sidebar row, links and the not-yet-created optimistic row alike. */
+const sidebar = () => {
+  const nav = screen.queryByRole('navigation', { name: 'Conversations' });
+  if (!nav) return []; // "No conversations yet."
+  return within(nav)
+    .queryAllByRole('listitem')
+    .map((li) => {
+      const link = li.querySelector('a');
+      return {
+        title: (link ?? li.querySelector('[aria-current]'))?.getAttribute('title') ?? '',
+        href: link?.getAttribute('href') ?? null,
+        current: Boolean(li.querySelector('[aria-current="page"]')),
+      };
+    });
+};
+const pause = (ms: number) => act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
 /** A fresh, empty new chat: suggestions shown, no messages, no activity, composer free. */
 async function expectEmptyNewChat(router: { state: { location: { pathname: string } } }) {
@@ -194,5 +213,143 @@ describe('New chat isolation', () => {
     await send('Question B');
     await waitFor(() => expect(backend.posts).toHaveLength(2));
     expect(backend.posts[1]!.sessionId).not.toBe(a.sessionId);
+  });
+});
+
+describe('New chat: optimistic sidebar row', () => {
+  it('appears at once titled from the message and stays one row through a delayed start, tokens, completion and the backend title', async () => {
+    const backend = fakeBackend();
+    const { router } = renderApp('/', { api: backend.api });
+    await screen.findByText('No conversations yet.');
+
+    await send('  Explain   artificial intelligence and its impact on fintech  ');
+    // A/B: at once, before the backend has sent anything: one current row with a clean title.
+    const optimistic = { title: 'Explain artificial intelligence and its…', href: null, current: true };
+    await waitFor(() => expect(sidebar()).toEqual([optimistic]));
+    expect(router.state.location.pathname).toBe('/');
+
+    // A realistic delay before `start`: still exactly that one row.
+    await waitFor(() => expect(backend.posts).toHaveLength(1));
+    await pause(300);
+    expect(sidebar()).toEqual([optimistic]);
+
+    // C/D: `start` turns the row into the real conversation in place (same title, now a link, current).
+    const post = backend.posts[0]!;
+    await backend.answer(post, 'AI changes fintech.', { finish: false });
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/c/${post.sessionId}`));
+    expect(sidebar()).toEqual([{ title: 'Explain artificial intelligence and its…', href: `/c/${post.sessionId}`, current: true }]);
+
+    // Delayed tokens while the answer is buffered: the sidebar doesn't change.
+    await pause(200);
+    await post.push(frame('token', { content: ' More.', source: 'chatbot' }));
+    await pause(200);
+    expect(statusBoxes()).toBe(1);
+    expect(sidebar()).toHaveLength(1);
+
+    // E/I: completion with the backend's own title: the same single row, retitled.
+    await backend.finishTurn(post, 'AI changes fintech. More.');
+    await waitFor(() =>
+      expect(sidebar()).toEqual([{ title: `About ${post.text.trim()}`, href: `/c/${post.sessionId}`, current: true }]),
+    );
+  });
+
+  it('H: a sidebar refetch, before or after the server has the conversation, never duplicates it', async () => {
+    const mount = vi.spyOn(QueryClient.prototype, 'mount');
+    const backend = fakeBackend();
+    renderApp('/', { api: backend.api });
+    const queryClient = mount.mock.contexts[0] as QueryClient;
+    await screen.findByText('No conversations yet.');
+
+    await send('Question A');
+    await waitFor(() => expect(sidebar()).toHaveLength(1));
+    await waitFor(() => expect(backend.posts).toHaveLength(1));
+    const post = backend.posts[0]!;
+    // Refetch before `start`: the server doesn't list it yet; the row comes back, once, at `start`.
+    await act(() => queryClient.refetchQueries({ queryKey: queryKeys.conversations.list() }));
+    await backend.answer(post, 'Answer A');
+    await waitFor(() => expect(sidebar()).toEqual([{ title: 'About Question A', href: `/c/${post.sessionId}`, current: true }]));
+    // Refetch after the server has it.
+    await act(() => queryClient.refetchQueries({ queryKey: queryKeys.conversations.list() }));
+    expect(sidebar()).toEqual([{ title: 'About Question A', href: `/c/${post.sessionId}`, current: true }]);
+    mount.mockRestore();
+  });
+
+  it('F: New chat before `start` keeps A as one row, B gets its own, and A lands on its real id', async () => {
+    const backend = fakeBackend();
+    const { router } = renderApp('/', { api: backend.api });
+    await screen.findByText('No conversations yet.');
+
+    await send('Question A');
+    await waitFor(() => expect(backend.posts).toHaveLength(1));
+    const a = backend.posts[0]!;
+    newChat();
+    await expectEmptyNewChat(router);
+    expect(sidebar().map((r) => r.title)).toEqual(['Question A']);
+
+    await backend.answer(a, 'Answer A');
+    await waitFor(() => expect(sidebar()).toEqual([expect.objectContaining({ title: 'About Question A', href: `/c/${a.sessionId}` })]));
+
+    await send('Question B');
+    await waitFor(() => expect(sidebar().map((r) => r.title)).toEqual(['Question B', 'About Question A']));
+    await waitFor(() => expect(backend.posts).toHaveLength(2));
+    const b = backend.posts[1]!;
+    await backend.answer(b, 'Answer B');
+    await waitFor(() => expect(sidebar().map((r) => r.href)).toEqual([`/c/${b.sessionId}`, `/c/${a.sessionId}`]));
+  });
+
+  it('G: Chat A streaming in the background does not touch Chat B’s optimistic row', async () => {
+    const backend = fakeBackend();
+    const { router } = renderApp('/', { api: backend.api });
+    await screen.findByText('No conversations yet.');
+
+    await send('Question A');
+    await waitFor(() => expect(backend.posts).toHaveLength(1));
+    const a = backend.posts[0]!;
+    await backend.answer(a, 'Answer A', { finish: false });
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/c/${a.sessionId}`));
+
+    newChat();
+    await expectEmptyNewChat(router);
+    await send('Question B');
+    await waitFor(() =>
+      expect(sidebar()).toEqual([
+        { title: 'Question B', href: null, current: true },
+        { title: 'Question A', href: `/c/${a.sessionId}`, current: false },
+      ]),
+    );
+
+    // A finishes (retitled, and moved up as the most recently active) in the background: B's row is
+    // untouched and A is still one row.
+    await backend.finishTurn(a, 'Answer A');
+    await waitFor(() =>
+      expect(sidebar()).toEqual([
+        { title: 'About Question A', href: `/c/${a.sessionId}`, current: false },
+        { title: 'Question B', href: null, current: true },
+      ]),
+    );
+    await waitFor(() => expect(backend.posts).toHaveLength(2));
+    const b = backend.posts[1]!;
+    await backend.answer(b, 'Answer B');
+    await waitFor(() => expect(sidebar().map((r) => r.href).sort()).toEqual([`/c/${a.sessionId}`, `/c/${b.sessionId}`].sort()));
+    expect(sidebar().filter((r) => r.current)).toEqual([expect.objectContaining({ href: `/c/${b.sessionId}` })]);
+  });
+
+  it('a send that fails before the conversation exists leaves no dead row, and Retry brings back exactly one', async () => {
+    const backend = fakeBackend();
+    renderApp('/', { api: backend.api });
+    await screen.findByText('No conversations yet.');
+
+    await send('Question A');
+    await waitFor(() => expect(backend.posts).toHaveLength(1));
+    await act(async () => backend.posts[0]!.fail());
+    await screen.findByText('No conversations yet.');
+    expect(sidebar()).toEqual([]);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(sidebar().map((r) => r.title)).toEqual(['Question A']));
+    await waitFor(() => expect(backend.posts).toHaveLength(2));
+    expect(backend.posts[1]!.sessionId).toBe(backend.posts[0]!.sessionId);
+    await backend.answer(backend.posts[1]!, 'Answer A');
+    await waitFor(() => expect(sidebar()).toEqual([expect.objectContaining({ title: 'About Question A' })]));
   });
 });

@@ -67,6 +67,23 @@ function ConversationRow({
     );
   }
 
+  // A new chat's optimistic row (the view is still on `/` until the server creates the conversation):
+  // shown as the current chat, not yet a link — there is no conversation to open, rename or delete.
+  if (c.id.startsWith('local:')) {
+    return (
+      <li>
+        <span
+          aria-current="page"
+          title={c.title}
+          className="flex h-11 items-center gap-2.5 bg-accent-wash pl-3 pr-2 text-nav text-fg md:h-9"
+        >
+          <span aria-hidden="true" className="size-1.5 shrink-0 bg-accent" />
+          <span className="min-w-0 flex-1 truncate font-bold">{c.title}</span>
+        </span>
+      </li>
+    );
+  }
+
   return (
     <li className="group/row relative">
       <NavLink

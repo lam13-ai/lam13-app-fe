@@ -1,10 +1,10 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { ApiError, isAbortError, isApiError, queryKeys, toErrorInfo, type ApiAdapter, type EventStream } from '@/api';
-import { patchConversation, upsertConversation } from '@/features/conversations';
+import { dropConversation, patchConversation, replaceConversation, titleFromMessage, upsertConversation } from '@/features/conversations';
 import { createId } from '@/lib/id';
 import { useStreamStore } from '@/stores/streamStore';
 import { useUiStore } from '@/stores/uiStore';
-import type { AttachmentRef, AudioRef } from '@/types/api';
+import type { AttachmentRef, AudioRef, Conversation } from '@/types/api';
 import type { MessageView } from '@/types/chat';
 import { applyStreamEvent, isTerminal, type StreamDraft } from './applyStreamEvent';
 import { createFrameBatcher } from './frameBatcher';
@@ -65,12 +65,15 @@ export function createChatActions({ api, queryClient }: Deps) {
     draft: StreamDraft;
     origin?: string;
     open: (signal: AbortSignal) => Promise<EventStream>;
+    /** A new chat's optimistic sidebar row, swapped for the real conversation when it is created. */
+    pending?: Conversation;
   }) {
     const controller = new AbortController();
     const assistantKey = messageKey(params.draft.assistant);
     let key = params.key;
     let draft = params.draft;
     let opened = false;
+    let createdConversation = false;
     /** The answer is complete: the conversation is free again; later events are trailing updates. */
     let released = false;
     // Only this run's entry: after an early release a newer stream may own the key.
@@ -139,7 +142,14 @@ export function createChatActions({ api, queryClient }: Deps) {
             // later new chat must start empty). The view follows `created` to the new key at once.
             if (data) queryClient.setQueryData(queryKeys.messages(id), withConversationId(data, id));
             queryClient.removeQueries({ queryKey: queryKeys.messages(key), exact: true });
-            upsertConversation(queryClient, event.data);
+            if (params.pending) {
+              // One row throughout: the optimistic row becomes the real conversation in place, keeping its
+              // title from the message (the backend's own title follows as conversation.updated).
+              replaceConversation(queryClient, params.pending.id, { ...event.data, title: params.pending.title });
+              createdConversation = true;
+            } else {
+              upsertConversation(queryClient, event.data);
+            }
             store().rekey(key, id);
             key = id;
             if (params.origin) store().setCreated({ id, origin: params.origin });
@@ -240,6 +250,8 @@ export function createChatActions({ api, queryClient }: Deps) {
         reconcile();
       }
     } finally {
+      // Never reached the server as a conversation (failed / stopped before it was created): no dead row.
+      if (params.pending && !createdConversation) dropConversation(queryClient, params.pending.id);
       release();
     }
   }
@@ -283,10 +295,18 @@ export function createChatActions({ api, queryClient }: Deps) {
 
     store().setFailure(clientId, null);
     updateMessages(key, (d) => appendMessages(d, [user, assistant]));
+    // A fresh new chat shows in the sidebar at once, titled from the message; it becomes the real
+    // conversation (same row) when the server creates it.
+    const pending: Conversation | undefined =
+      !conversationId && input.kind === 'text'
+        ? { id: `local:c:${clientId}`, title: titleFromMessage(content), created_at: createdAt, updated_at: createdAt, last_message_preview: null }
+        : undefined;
+    if (pending) upsertConversation(queryClient, pending);
 
     return run({
       key,
       origin: options.origin,
+      pending,
       draft: { conversationId: conversationId ?? null, user, assistant, status: 'sending', error: null, title: null },
       open: (signal) =>
         api.messages.send(
