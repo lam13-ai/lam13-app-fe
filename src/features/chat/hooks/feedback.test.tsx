@@ -11,7 +11,7 @@ import { useMessages } from './useMessages';
 const CONVERSATION = 'water-security-kpis';
 
 function Harness() {
-  const { messages } = useMessages(CONVERSATION);
+  const { messages } = useMessages(CONVERSATION, CONVERSATION);
   const { rate, isPending } = useMessageFeedback(CONVERSATION);
   const answer = messages.findLast((m) => m.role === 'assistant');
   if (!answer) return null;

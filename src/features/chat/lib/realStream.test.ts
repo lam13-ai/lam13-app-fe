@@ -6,7 +6,7 @@ import { createHttpAdapter } from '@/api/http';
 import { initialStreamState, useStreamStore } from '@/stores/streamStore';
 import type { Conversation, Page } from '@/types/api';
 import { createChatActions } from './chatStream';
-import { NEW_CONVERSATION_KEY, toChronological, type MessagesData } from './messageCache';
+import { newChatKey, toChronological, type MessagesData } from './messageCache';
 
 /**
  * The real FastAPI `/chat/stream` vocabulary, pushed frame by frame through the real HTTP adapter (fetch
@@ -148,10 +148,10 @@ describe('real backend SSE → visible assistant message', () => {
     await waitFor(() => expect(h.posts).toHaveLength(1));
     h.fail(); // the backend may already be generating; the client never learned the session
     await sent;
-    const user = h.messages(NEW_CONVERSATION_KEY).find((m) => m.role === 'user')!;
+    const user = h.messages(newChatKey('view-1')).find((m) => m.role === 'user')!;
     expect(user.status).toBe('error');
 
-    const retried = h.actions.retry(NEW_CONVERSATION_KEY, user, h.messages(NEW_CONVERSATION_KEY), { origin: 'view-1' });
+    const retried = h.actions.retry(newChatKey('view-1'), user, h.messages(newChatKey('view-1')), { origin: 'view-1' });
     await waitFor(() => expect(h.posts).toHaveLength(2));
     expect(h.posts[1]!.body.session_id).toBe(h.posts[0]!.body.session_id);
     const sessionId = h.posts[1]!.body.session_id as string;

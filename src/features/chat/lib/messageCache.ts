@@ -10,6 +10,18 @@ export type MessagesData = InfiniteData<Page<MessageView>, string | null>;
 
 export const NEW_CONVERSATION_KEY = 'new';
 
+/**
+ * Cache / stream key of one unsaved new-chat view. Each "New chat" gets its own, so nothing (messages, an
+ * in-flight stream) can leak from one new chat into the next. Without a view (`origin`) the shared key.
+ */
+export function newChatKey(origin?: string): string {
+  return origin ? `${NEW_CONVERSATION_KEY}:${origin}` : NEW_CONVERSATION_KEY;
+}
+
+export function isNewChatKey(key: string): boolean {
+  return key === NEW_CONVERSATION_KEY || key.startsWith(`${NEW_CONVERSATION_KEY}:`);
+}
+
 /** Stable identity across optimistic → server reconciliation. */
 export function messageKey(message: MessageView): string {
   return message.local_key ?? message.client_message_id ?? message.id;

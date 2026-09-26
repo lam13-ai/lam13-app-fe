@@ -11,8 +11,9 @@ import { createFrameBatcher } from './frameBatcher';
 import {
   appendMessages,
   isLocalId,
+  isNewChatKey,
   messageKey,
-  NEW_CONVERSATION_KEY,
+  newChatKey,
   removeMessages,
   upsertMessage,
   withConversationId,
@@ -134,9 +135,10 @@ export function createChatActions({ api, queryClient }: Deps) {
           case 'conversation.created': {
             const id = event.data.id;
             const data = queryClient.getQueryData<MessagesData>(queryKeys.messages(key));
-            // Copy (not move): the `/` view keeps showing the exchange until navigation completes;
-            // a fresh `/` clears the stale 'new' cache on mount.
+            // Move the exchange to the conversation: nothing may stay behind under the new-chat key (a
+            // later new chat must start empty). The view follows `created` to the new key at once.
             if (data) queryClient.setQueryData(queryKeys.messages(id), withConversationId(data, id));
+            queryClient.removeQueries({ queryKey: queryKeys.messages(key), exact: true });
             upsertConversation(queryClient, event.data);
             store().rekey(key, id);
             key = id;
@@ -244,7 +246,7 @@ export function createChatActions({ api, queryClient }: Deps) {
 
   /** Optimistic user message → stream the answer (text, or an already-uploaded voice note). */
   function sendMessage(conversationId: string | undefined, input: MessageInput, options: SendOptions = {}) {
-    const key = conversationId ?? NEW_CONVERSATION_KEY;
+    const key = conversationId ?? newChatKey(options.origin);
     const content = input.kind === 'text' ? input.content.trim() : '';
     if ((input.kind === 'text' && !content) || store().active[key]) return Promise.resolve();
 
@@ -323,7 +325,7 @@ export function createChatActions({ api, queryClient }: Deps) {
     recording: VoiceUpload,
     options: SendOptions & { signal?: AbortSignal } = {},
   ) {
-    const key = conversationId ?? NEW_CONVERSATION_KEY;
+    const key = conversationId ?? newChatKey(options.origin);
     if (store().active[key]) throw new ApiError(409, 'busy', 'Wait for the current response to finish.');
     const audio = await api.audio.upload(
       {
@@ -344,7 +346,7 @@ export function createChatActions({ api, queryClient }: Deps) {
    */
   function retry(conversationKey: string, message: MessageView, history: MessageView[], options: SendOptions = {}) {
     if (store().active[conversationKey]) return Promise.resolve();
-    const conversationId = conversationKey === NEW_CONVERSATION_KEY ? undefined : conversationKey;
+    const conversationId = isNewChatKey(conversationKey) ? undefined : conversationKey;
     const index = history.findIndex((m) => messageKey(m) === messageKey(message));
 
     const resend = (user: MessageView, extraKeys: string[] = []) => {

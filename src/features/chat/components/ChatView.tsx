@@ -1,8 +1,7 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { FileText, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ATTACHMENT_LIMITS, queryKeys, toErrorInfo, useApi } from '@/api';
+import { ATTACHMENT_LIMITS, toErrorInfo, useApi } from '@/api';
 import { ErrorState } from '@/components/ErrorState';
 import { Spinner, smallIconProps, useToast } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -17,7 +16,7 @@ import { AGENT_NAME, AGENT_TAGLINE } from '../constants';
 import { useChatActions } from '../hooks/useChatActions';
 import { useImageAttachments } from '../hooks/useImageAttachments';
 import { useMessages } from '../hooks/useMessages';
-import { NEW_CONVERSATION_KEY } from '../lib/messageCache';
+import { NEW_CONVERSATION_KEY, newChatKey } from '../lib/messageCache';
 import { ChatHeader } from './ChatHeader';
 import { Composer } from './composer/Composer';
 import { EmptyState } from './EmptyState';
@@ -53,7 +52,6 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
   const location = useLocation();
   // Arrived via New Chat: the empty state plays its entrance transition.
   const enteringNewChat = !conversationId && (location.state as { newChat?: boolean } | null)?.newChat === true;
-  const queryClient = useQueryClient();
   const toast = useToast();
   const actions = useChatActions();
   const api = useApi();
@@ -68,18 +66,14 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
   // The stream and its messages move to the created conversation's id at once; follow them there
   // while the URL catches up, so the view never briefly reads the abandoned 'new' state.
   const effectiveId = conversationId ?? (created?.origin === origin ? created.id : undefined);
-  const key = effectiveId ?? NEW_CONVERSATION_KEY;
+  // An unsaved chat has its own key per view: another new chat's messages or stream can never show here.
+  const key = effectiveId ?? newChatKey(origin);
+  // Unsent composer text keeps its shared new-chat slot (unchanged behaviour).
+  const draftKey = effectiveId ?? NEW_CONVERSATION_KEY;
 
-  const history = useMessages(effectiveId);
+  const history = useMessages(key, effectiveId);
   const active = useStreamStore((s) => s.active[key]);
   const failures = useStreamStore((s) => s.failures);
-
-  // A fresh `/` starts empty unless its previous stream is still running.
-  useEffect(() => {
-    if (!conversationId && !useStreamStore.getState().active[NEW_CONVERSATION_KEY]) {
-      queryClient.removeQueries({ queryKey: queryKeys.messages(NEW_CONVERSATION_KEY), exact: true });
-    }
-  }, [conversationId, queryClient]);
 
   // Lazy creation: the first send from `/` creates the conversation — move to its URL.
   // The hand-off is cleared only once the URL has caught up.
@@ -110,7 +104,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
         files.clear();
         await actions.send(conversationId, text, { origin, attachments });
       } catch (error) {
-        useComposerStore.getState().setDraft(key, text);
+        useComposerStore.getState().setDraft(draftKey, text);
         toast.show(toErrorInfo(error).message);
       }
     })();
@@ -167,7 +161,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
       <div className="shrink-0 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 md:px-5">
         <div className="mx-auto w-full max-w-[var(--chat-max-w)]">
           <Composer
-            draftKey={key}
+            draftKey={draftKey}
             streaming={Boolean(active)}
             disabled={loadingHistory || (history.isError && history.messages.length === 0)}
             onSend={send}

@@ -4,7 +4,7 @@ import { queryKeys, useApi } from '@/api';
 import { useStreamStore } from '@/stores/streamStore';
 import type { Page } from '@/types/api';
 import type { MessageView } from '@/types/chat';
-import { NEW_CONVERSATION_KEY, toChronological, type MessagesData } from '../lib/messageCache';
+import { toChronological, type MessagesData } from '../lib/messageCache';
 
 const PAGE_SIZE = 20;
 /** How often to re-read a conversation while the server is still producing something. */
@@ -18,15 +18,15 @@ function hasPendingWork(data: MessagesData | undefined): boolean {
 }
 
 /**
- * Message history (newest-first pages, rendered oldest → newest).
- * An unsaved chat ('new') is never fetched; its cache is written by the stream controller.
+ * Message history (newest-first pages, rendered oldest → newest) under `key`: the conversation id, or an
+ * unsaved chat's own new-chat key (never fetched; its cache is written by the stream controller).
  */
-export function useMessages(conversationId: string | undefined) {
+export function useMessages(key: string, conversationId: string | undefined) {
   const api = useApi();
   // Subscribed (not read once) so polling re-evaluates when this client's stream ends.
   const streaming = useStreamStore((s) => Boolean(conversationId && s.active[conversationId]));
   const query = useInfiniteQuery<Page<MessageView>, Error, MessagesData, QueryKey, string | null>({
-    queryKey: queryKeys.messages(conversationId ?? NEW_CONVERSATION_KEY),
+    queryKey: queryKeys.messages(key),
     queryFn: ({ pageParam }) => api.messages.list(conversationId!, { before: pageParam, limit: PAGE_SIZE }),
     enabled: Boolean(conversationId),
     initialPageParam: null,
