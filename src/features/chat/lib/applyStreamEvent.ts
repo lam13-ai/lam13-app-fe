@@ -22,23 +22,9 @@ export function isTerminal(status: DraftStatus): boolean {
   return status === 'done' || status === 'error' || status === 'cancelled';
 }
 
-/** Closes a reasoning block still open (the answer started, or the response ended). */
-function endReasoning(reasoning: MessageView['reasoning']): MessageView['reasoning'] {
-  return reasoning && !reasoning.endedAt ? { ...reasoning, endedAt: Date.now() } : reasoning;
-}
-
-/**
- * Server messages keep the client's local_key so React keys / scroll anchors stay stable, and the
- * client-only live fields (reasoning, progress), which the server never sends.
- */
+/** Server messages keep the client's local_key so React keys / scroll anchors stay stable. */
 function reconcile(server: MessageView, local: MessageView | null): MessageView {
-  if (!local) return server;
-  return {
-    ...server,
-    ...(local.local_key && { local_key: local.local_key }),
-    ...(local.reasoning && { reasoning: endReasoning(local.reasoning) }),
-    ...(local.progress && { progress: local.progress }),
-  };
+  return local?.local_key ? { ...server, local_key: local.local_key } : server;
 }
 
 /** Pure reducer: applies one stream event to the draft (api-contract.md §5). */
@@ -71,26 +57,8 @@ export function applyStreamEvent(draft: StreamDraft, event: StreamEvent): Stream
       return {
         ...draft,
         status: 'answering',
-        assistant: {
-          ...draft.assistant,
-          content: draft.assistant.content + event.data.text,
-          // The first words of the answer end the thinking.
-          reasoning: endReasoning(draft.assistant.reasoning),
-        },
+        assistant: { ...draft.assistant, content: draft.assistant.content + event.data.text },
       };
-
-    case 'reasoning': {
-      if (event.data.message_id !== draft.assistant.id) return draft;
-      const current = draft.assistant.reasoning;
-      const reasoning = current
-        ? { ...current, text: current.text + event.data.text }
-        : { text: event.data.text, startedAt: Date.now() };
-      return { ...draft, assistant: { ...draft.assistant, reasoning } };
-    }
-
-    case 'progress':
-      if (event.data.message_id !== draft.assistant.id) return draft;
-      return { ...draft, assistant: { ...draft.assistant, progress: event.data.text } };
 
     case 'conversation.updated':
       return { ...draft, title: event.data.title };

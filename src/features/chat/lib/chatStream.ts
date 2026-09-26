@@ -50,8 +50,8 @@ export interface SendOptions {
 
 /**
  * Stream lifecycle for one exchange:
- * optimistic user message → assistant draft → typed events (reasoning, answer text and progress rAF-batched
- * into the cache as they stream) → done / error / cancelled (what arrived so far is kept).
+ * optimistic user message → assistant draft → typed events (answer text buffered in the draft; other updates
+ * rAF-batched into the cache) → done (the whole answer at once) / error / cancelled (what arrived so far).
  * Runs outside React so a stream survives route changes (e.g. `/` → `/c/:id` after lazy creation).
  */
 export function createChatActions({ api, queryClient }: Deps) {
@@ -122,11 +122,11 @@ export function createChatActions({ api, queryClient }: Deps) {
       const events = await params.open(controller.signal);
       for await (const event of events) {
         if (released) {
-          // A backend may keep the response open after the answer is final (e.g. post-processing): it can
-          // still send the conversation title, append to the finished answer, report progress, or attach files.
+          // A backend may keep the response open after the answer is complete: it can still send the
+          // conversation title, or the files it generated.
           if (event.event === 'conversation.updated') {
             patchConversation(queryClient, event.data.id, { title: event.data.title });
-          } else if (event.event === 'delta' || event.event === 'artifact' || event.event === 'progress') {
+          } else if (event.event === 'delta' || event.event === 'artifact') {
             draft = { ...applyStreamEvent(draft, event), status: draft.status };
             writeAssistant();
           }
@@ -183,8 +183,6 @@ export function createChatActions({ api, queryClient }: Deps) {
             break;
           }
           case 'artifact':
-          case 'reasoning':
-          case 'progress':
             batcher.schedule();
             break;
           case 'transcript': {
@@ -193,9 +191,9 @@ export function createChatActions({ api, queryClient }: Deps) {
             break;
           }
           case 'delta':
-            // The answer streams in as it arrives (Markdown renders progressively).
+            // Buffered: the text accumulates in `draft` only. The answer is written (and shown) whole at
+            // `done`; Stop or a failure writes what arrived so far.
             store().setPhase(key, 'answering');
-            batcher.schedule();
             break;
           case 'conversation.updated':
             patchConversation(queryClient, event.data.id, { title: event.data.title });
@@ -252,12 +250,6 @@ export function createChatActions({ api, queryClient }: Deps) {
         reconcile();
       }
     } finally {
-      // The response is closed: no more server work to report.
-      if (draft.assistant.progress) {
-        batcher.cancel();
-        draft = { ...draft, assistant: { ...draft.assistant, progress: null } };
-        writeAssistant();
-      }
       // Never reached the server as a conversation (failed / stopped before it was created): no dead row.
       if (params.pending && !createdConversation) dropConversation(queryClient, params.pending.id);
       release();

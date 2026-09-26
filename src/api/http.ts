@@ -209,15 +209,12 @@ type Json = Record<string, unknown>;
 const str = (value: unknown) => (typeof value === 'string' ? value : '');
 
 /**
- * Backend SSE (`start, thinking, token, progress, response_completed, done, error` …, see routers/chat.py)
- * → app events. `loadDetail` fetches the session after `done` so generated files (report / PPTX) arrive as
- * `artifact` events.
- *
- * `response_completed` means the answer text is final, but the backend then post-processes for several
- * seconds before `done`. The answer is completed there (the UI frees the composer); what follows on the
- * same response — agent output appended to the answer, the title, generated files — arrives as trailing
- * `delta` / `conversation.updated` / `artifact` events. A failure after that point is a post-processing
- * failure: the answer stands.
+ * Backend SSE (`start, response_started, thinking, token, response_completed, postprocess_*, done, error`, see
+ * routers/chat.py) → app events. Only `token` text becomes the answer; `thinking` (the model's reasoning) and
+ * `progress` only ever produce a status. The answer is complete at the backend's `done`, after post-processing
+ * (which may append agent output as more `token`s); `response_completed` only marks the text final, so a
+ * later post-processing failure — or the stream closing before `done` — still completes it. `loadDetail`
+ * fetches the saved session afterwards so generated files (report / PPTX) arrive as trailing `artifact` events.
  */
 export async function* translateStream(
   messages: AsyncIterable<SseMessage>,
@@ -230,8 +227,16 @@ export async function* translateStream(
   let content = '';
   let thinking = false;
   let partial = false;
-  /** `response_completed` was mapped to `done`. */
+  /** `response_completed` arrived: the answer is final even if post-processing then fails. */
   let completed = false;
+
+  /** The whole answer (`done`), then the files the saved session lists (trailing `artifact` events). */
+  async function* finish(): AsyncGenerator<StreamEvent> {
+    yield { event: 'done', data: { message: assistant({ status: 'complete' }) } };
+    const detail = await loadDetail(sessionId).catch(() => null);
+    const saved = detail?.messages.find((m) => m.id === assistantId);
+    if (saved && detail) for (const a of artifactsFor(detail, saved, true)) yield { event: 'artifact', data: a };
+  }
 
   const assistant = (patch: Partial<Message> = {}): Message => ({
     id: assistantId,
@@ -278,24 +283,16 @@ export async function* translateStream(
         break;
       }
       case 'response_started':
-        if (!completed && !content) yield { event: 'status', data: { state: 'generating' } };
+        if (!content) yield { event: 'status', data: { state: 'generating' } };
         break;
       case 'thinking':
       case 'progress':
-      case 'postprocess_started': {
-        if (!completed && !thinking) yield { event: 'status', data: { state: 'thinking' } };
-        if (!completed) thinking = true;
-        // Reasoning chunks are word fragments: keep their spacing. Progress is one step per event and keeps
-        // arriving after the answer (post-processing, e.g. building the strategy document).
-        const text = message.event === 'thinking' ? str(data.content) : str(data.content).trim();
-        if (!text || !assistantId) break;
-        if (message.event === 'thinking') {
-          if (!completed) yield { event: 'reasoning', data: { message_id: assistantId, text } };
-        } else {
-          yield { event: 'progress', data: { message_id: assistantId, text } };
-        }
+      case 'postprocess_started':
+      case 'postprocess_completed':
+        // Status only, never text: `thinking` is the model's reasoning and `progress` internal steps.
+        if (!thinking) yield { event: 'status', data: { state: 'thinking' } };
+        thinking = true;
         break;
-      }
       case 'token': {
         // Agent output is stored as `answer.strip() + "\n\n" + addition.strip()` (append_assistant_message).
         const raw = str(data.content);
@@ -303,45 +300,31 @@ export async function* translateStream(
           data.source === 'chatbot' || !data.source ? raw : raw.trim() && (content.trim() ? '\n\n' : '') + raw.trim();
         if (!text) break;
         content += text;
-        thinking = false;
         yield { event: 'delta', data: { message_id: assistantId, text } };
         break;
       }
       case 'response_completed':
-        if (!assistantId || completed) break;
-        completed = true;
-        yield { event: 'done', data: { message: assistant({ status: 'complete' }) } };
+        // The chatbot's text is final, but post-processing may still append agent output: keep going to `done`.
+        completed = Boolean(assistantId);
         break;
 
       case 'done': {
-        // A failed turn sends a partial `done` followed by `error`; let the error end the stream.
-        if (data.partial) {
+        // A turn that failed before its answer was final sends a partial `done`, then `error`.
+        if (data.partial && !completed) {
           partial = true;
           break;
         }
         const title = str(data.title);
         if (title) yield { event: 'conversation.updated', data: { id: sessionId, title } };
-        const detail = await loadDetail(sessionId).catch(() => null);
-        const saved = detail?.messages.find((m) => m.id === assistantId);
-        const artifacts = saved && detail ? artifactsFor(detail, saved, true) : [];
-        for (const a of artifacts) yield { event: 'artifact', data: a };
-        // Already completed at `response_completed`: the above were trailing updates.
-        if (completed) return;
-        yield {
-          event: 'done',
-          data: {
-            message: assistant({
-              content: saved?.content || content,
-              status: 'complete',
-              ...(artifacts.length && { artifacts }),
-            }),
-          },
-        };
+        yield* finish();
         return;
       }
       case 'error':
-        // After `response_completed` this is a post-processing failure; the completed answer stands.
-        if (completed) return;
+        // After `response_completed` this is a post-processing failure: the answer stands.
+        if (completed) {
+          yield* finish();
+          return;
+        }
         yield {
           event: 'error',
           data: {
@@ -354,6 +337,8 @@ export async function* translateStream(
         return;
     }
   }
+  // Closed after the answer was final but before `done`: still reveal it.
+  if (completed) yield* finish();
 }
 
 // ── Adapter ──────────────────────────────────────────────────────────────────
