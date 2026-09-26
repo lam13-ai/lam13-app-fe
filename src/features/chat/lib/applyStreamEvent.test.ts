@@ -46,6 +46,8 @@ describe('applyStreamEvent', () => {
       { event: 'delta', data: { message_id: 'm2', text: '## Ti' } },
       { event: 'delta', data: { message_id: 'other', text: 'IGNORED' } },
       { event: 'delta', data: { message_id: 'm2', text: 'tle' } },
+      // Reasoning interleaved with the answer (real backend `thinking` after `token`): stays answering.
+      { event: 'status', data: { state: 'thinking' } },
     ]);
     expect(draft.status).toBe('answering');
     expect(draft.assistant.content).toBe('## Title');

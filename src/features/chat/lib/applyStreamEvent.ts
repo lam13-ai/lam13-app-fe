@@ -42,7 +42,8 @@ export function applyStreamEvent(draft: StreamDraft, event: StreamEvent): Stream
       return { ...draft, user: { ...draft.user, content: event.data.text } };
 
     case 'status':
-      return { ...draft, status: event.data.state === 'answering' ? 'answering' : 'thinking' };
+      // Once the answer is visible, a later status (e.g. interleaved reasoning) doesn't send the header back to Thinking.
+      return { ...draft, status: event.data.state === 'answering' || draft.status === 'answering' ? 'answering' : 'thinking' };
 
     case 'delta':
       if (event.data.message_id !== draft.assistant.id) return draft;
