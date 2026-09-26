@@ -7,12 +7,14 @@ import type { MessageView } from '@/types/chat';
 import { ActivityStatus } from './ActivityStatus';
 import { MessageActions } from './MessageActions';
 import { MessageNotice } from './MessageNotice';
+import { Reasoning } from './Reasoning';
 
 /**
  * Full-width document-style answer: no bubble, no avatar (reference §4).
- * While the answer is generating only a quiet, rotating status box is shown (ActivityStatus) — no partial
- * text, never the model's reasoning; the complete answer replaces it at once. A stopped or failed answer
- * shows what arrived.
+ * While generating: the model's reasoning streams in a collapsible block, then the answer streams in as
+ * progressive Markdown (reference §5). Before either arrives, a quiet rotating status box stands in
+ * (ActivityStatus). Server work that continues after the answer (e.g. building the strategy document)
+ * shows its latest step in the same box until the response closes.
  */
 export function AssistantMessage({
   message,
@@ -44,10 +46,17 @@ export function AssistantMessage({
       className={cn('group/message w-full self-start py-1', animate && 'animate-fade')}
     >
       <VisuallyHidden>Lam13 replied:</VisuallyHidden>
-      {/* Never a partial answer while generating: the status stands in until the whole answer is there. */}
-      {hasContent && !streaming && <Markdown content={message.content} />}
-      {streaming && <ActivityStatus label={activity ?? 'Putting the answer together…'} />}
+      {message.reasoning?.text && <Reasoning reasoning={message.reasoning} streaming={streaming} />}
+      {hasContent && <Markdown content={message.content} />}
+      {streaming && !hasContent && !message.reasoning?.text && (
+        <ActivityStatus label={activity ?? 'Putting the answer together…'} />
+      )}
       {message.artifacts && message.artifacts.length > 0 && <Artifacts artifacts={message.artifacts} />}
+      {message.progress && (
+        <div className="mt-3">
+          <ActivityStatus label={message.progress} />
+        </div>
+      )}
       {message.status === 'complete' && hasContent && (
         <MessageActions createdAt={message.created_at} copyText={message.content} onRegenerate={onRegenerate} />
       )}

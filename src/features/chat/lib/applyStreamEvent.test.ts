@@ -119,4 +119,35 @@ describe('applyStreamEvent', () => {
     ]);
     expect(draft.assistant.artifacts?.[0]?.download?.url).toBe('https://files.example/deck');
   });
+
+  it('accumulates live reasoning, closes it at the first answer word, tracks progress, and keeps both through done', () => {
+    const created = run([{ event: 'message.created', data: { user_message: serverUser, assistant_message: serverAssistant } }]);
+    const thinking = run(
+      [
+        { event: 'reasoning', data: { message_id: 'm2', text: 'Weigh ' } },
+        { event: 'reasoning', data: { message_id: 'm2', text: 'options' } },
+        { event: 'reasoning', data: { message_id: 'other', text: 'ignored' } },
+      ],
+      created,
+    );
+    expect(thinking.assistant.reasoning).toEqual({ text: 'Weigh options', startedAt: expect.any(Number) });
+
+    const answering = run([{ event: 'delta', data: { message_id: 'm2', text: 'Answer' } }], thinking);
+    expect(answering.assistant.reasoning?.endedAt).toEqual(expect.any(Number));
+
+    const done = run(
+      [
+        { event: 'progress', data: { message_id: 'm2', text: 'Building framework pillars' } },
+        { event: 'done', data: { message: message({ id: 'm2', content: 'Answer', status: 'complete' }) as Message } },
+      ],
+      answering,
+    );
+    expect(done.assistant).toMatchObject({
+      content: 'Answer',
+      status: 'complete',
+      local_key: 'local:a:u',
+      progress: 'Building framework pillars',
+      reasoning: { text: 'Weigh options', endedAt: expect.any(Number) },
+    });
+  });
 });

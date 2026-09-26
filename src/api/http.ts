@@ -282,12 +282,20 @@ export async function* translateStream(
         break;
       case 'thinking':
       case 'progress':
-      case 'postprocess_started':
-        // A status only, never a label: `thinking` carries the model's reasoning, which is not shown.
-        if (completed) break;
-        if (!thinking) yield { event: 'status', data: { state: 'thinking' } };
-        thinking = true;
+      case 'postprocess_started': {
+        if (!completed && !thinking) yield { event: 'status', data: { state: 'thinking' } };
+        if (!completed) thinking = true;
+        // Reasoning chunks are word fragments: keep their spacing. Progress is one step per event and keeps
+        // arriving after the answer (post-processing, e.g. building the strategy document).
+        const text = message.event === 'thinking' ? str(data.content) : str(data.content).trim();
+        if (!text || !assistantId) break;
+        if (message.event === 'thinking') {
+          if (!completed) yield { event: 'reasoning', data: { message_id: assistantId, text } };
+        } else {
+          yield { event: 'progress', data: { message_id: assistantId, text } };
+        }
         break;
+      }
       case 'token': {
         // Agent output is stored as `answer.strip() + "\n\n" + addition.strip()` (append_assistant_message).
         const raw = str(data.content);

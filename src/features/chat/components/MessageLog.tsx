@@ -1,7 +1,6 @@
 import { ArrowDown } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useApi } from '@/api';
-import { ScrollArea } from '@/components/ScrollArea';
 import { Spinner } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import type { ErrorInfo } from '@/types/api';
@@ -111,7 +110,8 @@ export function MessageLog({ messages, failures, older, onRetry, streaming = fal
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col [view-transition-name:chat-body]">
-      <ScrollArea
+      {/* Visible thin scrollbar (same as the sidebar history), unlike the shared hidden-scrollbar ScrollArea. */}
+      <div
         ref={logRef}
         role="log"
         aria-live="polite"
@@ -119,7 +119,7 @@ export function MessageLog({ messages, failures, older, onRetry, streaming = fal
         // Keyboard users can focus the history to scroll it with arrow/page keys.
         tabIndex={0}
         onScroll={onScroll}
-        className="relative min-h-0 flex-1 px-4 py-5 [container-type:size] [overflow-anchor:none] focus-visible:outline-offset-[-2px] md:px-5"
+        className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-subtle px-4 py-5 [container-type:size] [overflow-anchor:none] focus-visible:outline-offset-[-2px] md:px-5"
       >
         <div ref={contentRef} className="mx-auto flex w-full max-w-[var(--chat-max-w)] flex-col gap-2.5">
           {older.loading && (
@@ -146,7 +146,7 @@ export function MessageLog({ messages, failures, older, onRetry, streaming = fal
             </div>
           ))}
         </div>
-      </ScrollArea>
+      </div>
 
       <button
         type="button"

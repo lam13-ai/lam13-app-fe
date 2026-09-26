@@ -31,7 +31,7 @@ const ACTIVITY_LABELS: Record<StreamPhase, string> = {
   transcribing: 'Transcribing…',
   solving: 'Solving…',
   generating: 'Generating response…', // response_started
-  answering: 'Putting the answer together…', // tokens arriving (buffered, not shown)
+  answering: 'Putting the answer together…', // tokens arriving
 };
 
 export interface ChatViewProps {
@@ -83,11 +83,9 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
     else navigate(`/c/${created.id}`, { replace: true, state: { viewKey } });
   }, [created, origin, conversationId, navigate, viewKey]);
 
-  // The answer is buffered until it is complete, so the header never reads "Answering…": it stays on the
-  // working state until the whole answer is revealed (Online).
   const status: AgentStatus = !active
     ? 'online'
-    : active.phase === 'transcribing' || active.phase === 'solving'
+    : active.phase === 'answering' || active.phase === 'transcribing' || active.phase === 'solving'
       ? active.phase
       : 'thinking';
   const activity = active && ACTIVITY_LABELS[active.phase];

@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '@/components/ui';
 import type { MessageView } from '@/types/chat';
@@ -107,15 +107,40 @@ describe('AssistantMessage status box', () => {
     </ToastProvider>
   );
 
-  it('tokens arriving (content buffered) keep the box and show no partial text', () => {
+  it('the first streamed words replace the box and stop its timer', () => {
     const { rerender, container } = render(renderMessage({}));
     advance(ACTIVITY_STEP_MS);
     expect(label()).toBe('Preparing your answer…');
-    // Even if a streaming message carries text (e.g. a server copy while it generates), none of it shows.
     rerender(renderMessage({ content: 'Great q' }));
-    expect(container.querySelector('[data-activity]')).not.toBeNull();
-    expect(container.textContent).not.toContain('Great q');
-    expect(vi.getTimerCount()).toBe(1);
+    expect(container.querySelector('[data-activity]')).toBeNull();
+    expect(container.textContent).toContain('Great q');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('reasoning streams live ("Thinking · Ns"), then collapses to an expandable "Thought for Ns" once the answer starts', () => {
+    const startedAt = Date.now();
+    const { rerender, container } = render(renderMessage({ reasoning: { text: 'Weighing the options', startedAt } }));
+    // The reasoning block stands in for the generic box.
+    expect(container.querySelector('[data-activity]')).toBeNull();
+    expect(screen.getByText(/Thinking · 1s/)).toBeTruthy();
+    expect(container.textContent).toContain('Weighing the options');
+    advance(3000);
+    expect(screen.getByText(/Thinking · 3s/)).toBeTruthy();
+
+    rerender(renderMessage({ content: 'The answer', reasoning: { text: 'Weighing the options', startedAt, endedAt: startedAt + 4000 } }));
+    const toggle = screen.getByRole('button', { name: /Thought for 4s/ });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(container.textContent).not.toContain('Weighing the options');
+    expect(vi.getTimerCount()).toBe(0);
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(container.textContent).toContain('Weighing the options');
+  });
+
+  it('shows the latest server step after the answer while the response is still open', () => {
+    const { container } = render(renderMessage({ status: 'complete', content: 'Done.', progress: 'Building framework pillars' }));
+    expect(container.textContent).toContain('Done.');
+    expect(label()).toBe('Building framework pillars');
   });
 
   it.each([
@@ -129,7 +154,7 @@ describe('AssistantMessage status box', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('completion replaces the box with the whole answer in one render and stops the timer', () => {
+  it('completion replaces the box with the answer and stops the timer', () => {
     const { rerender, container } = render(renderMessage({}));
     advance(ACTIVITY_STEP_MS * 2);
     rerender(renderMessage({ status: 'complete', content: '## Plan\n\nThe whole answer.' }));
@@ -139,7 +164,7 @@ describe('AssistantMessage status box', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('Stop reveals the partial answer with the stopped notice', () => {
+  it('Stop keeps the partial answer with the stopped notice', () => {
     const { rerender, container } = render(renderMessage({}));
     rerender(renderMessage({ status: 'cancelled', content: 'Partial answer' }));
     expect(container.querySelector('[data-activity]')).toBeNull();
