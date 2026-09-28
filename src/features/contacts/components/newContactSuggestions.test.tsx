@@ -54,7 +54,13 @@ function backend({ testEndpoint }: { testEndpoint?: (body: unknown) => Response 
     if (url === '/contacts/suggestions') return Response.json(suggestions);
     if (url === '/contacts/test-adding-suggestions' && method === 'POST') {
       if (testEndpoint) return testEndpoint(body);
-      const created = suggestionDto(`new${suggestions.length}`, { suggested: body.fields, reason: body.reason, source: body.source });
+      // Like the server: stamped now (later than anything seeded).
+      const created = suggestionDto(`new${suggestions.length}`, {
+        suggested: body.fields,
+        reason: body.reason,
+        source: body.source,
+        created_at: `2026-09-28T12:00:${String(suggestions.length).padStart(2, '0')}`,
+      });
       suggestions = [created, ...suggestions];
       return Response.json(created, { status: 201 });
     }
@@ -130,6 +136,36 @@ describe('Test suggestion (temporary demo control)', () => {
     });
     expect(within(list).getByRole('heading', { name: (posts[0]!.body as { fields: { full_name: string } }).fields.full_name })).toBeTruthy();
     expect((await testButton() as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('sends the demo person after the one on screen — taken from the fetched suggestions, so it survives a reload', async () => {
+    // A fresh render = a page reload: nothing in memory, only what the server returns (Leila pending).
+    const server = backend();
+    server.add(suggestionDto('leila', { suggested: { full_name: 'Leila Haddad', position: 'Director', company: 'Civic Futures Office' }, created_at: '2026-09-28T10:00:00' }));
+    renderApp('/contacts', { api: server.api });
+    const shownName = async () => within(await findProposals()).getByRole('heading').textContent;
+    await waitFor(async () => expect(await shownName()).toBe('Leila Haddad'));
+
+    const posted = () => server.calls.filter((c) => c.url === '/contacts/test-adding-suggestions').map((c) => (c.body as { fields: { full_name: string } }).fields.full_name);
+    fireEvent.click(await testButton());
+    await waitFor(async () => expect(await shownName()).toBe('Tomás Reyes'));
+    fireEvent.click(await testButton());
+    await waitFor(async () => expect(await shownName()).toBe('Omar Siddiqui'));
+    fireEvent.click(await testButton());
+    await waitFor(async () => expect(await shownName()).toBe('Leila Haddad'));
+    expect(posted()).toEqual(['Tomás Reyes', 'Omar Siddiqui', 'Leila Haddad']);
+  });
+
+  it('with no new-contact suggestion on screen, starts with Omar; approval is not needed for the next one', async () => {
+    const server = backend();
+    renderApp('/contacts', { api: server.api });
+    await screen.findByRole('list', { name: 'Contacts' }, { timeout: 8000 });
+    fireEvent.click(await testButton());
+    const first = within(await findProposals());
+    expect(first.getByRole('heading').textContent).toBe('Omar Siddiqui');
+    // No approve / reject in between: the next click still makes (and shows) a new one.
+    fireEvent.click(await testButton());
+    await waitFor(async () => expect(within(await findProposals()).getByRole('heading').textContent).toBe('Leila Haddad'));
   });
 
   it('a failed request shows the standard error toast and re-enables the button', async () => {

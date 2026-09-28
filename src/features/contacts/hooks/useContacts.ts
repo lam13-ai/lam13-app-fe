@@ -136,14 +136,19 @@ export function useApproveSuggestion() {
 
 /**
  * TODO(temporary): demo control for POST /contacts/test-adding-suggestions. Remove when AI/Granola
- * suggestion generation is integrated. Creates a new-contact suggestion, then re-reads the pending list.
+ * suggestion generation is integrated. Creates a new-contact suggestion for the demo person after the one
+ * currently shown (read from the fetched suggestions), then re-reads the list.
  */
 export function useAddTestSuggestion() {
   const api = useApi();
   const queryClient = useQueryClient();
   const addTest = api.profileSuggestions.addTest?.bind(api.profileSuggestions);
   const mutation = useMutation({
-    mutationFn: () => addTest!(nextDemoSuggestion()),
+    mutationFn: () => {
+      const all = queryClient.getQueryData<SuggestionList>(queryKeys.profileSuggestions.list())?.items ?? [];
+      const shown = currentSuggestions(all).find((s) => s.kind === 'create');
+      return addTest!(nextDemoSuggestion(shown?.changes.find((c) => c.field === 'full_name')?.to ?? undefined));
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.profileSuggestions.list() }),
   });
   return { ...mutation, available: Boolean(addTest) };

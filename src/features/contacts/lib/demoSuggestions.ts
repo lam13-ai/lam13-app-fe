@@ -3,7 +3,8 @@ import type { TestSuggestionBody } from '@/api';
 /*
  * TODO(temporary): demo control for /contacts/test-adding-suggestions. Remove when AI/Granola suggestion
  * generation is integrated. The endpoint stores exactly what it is sent, so the demo sends one of these
- * fictional people (`.example` addresses) as a new-contact suggestion from a made-up meeting.
+ * fictional people (`.example` addresses) as a new-contact suggestion from a made-up meeting. Each click
+ * sends the person after the one currently shown (Omar → Leila → Tomás → Omar), so the card always changes.
  */
 const SAMPLES: { fields: TestSuggestionBody['fields']; reason: string; meeting: string }[] = [
   {
@@ -16,8 +17,8 @@ const SAMPLES: { fields: TestSuggestionBody['fields']; reason: string; meeting: 
       phone: '+1 202-555-0142',
       linkedin: 'linkedin.com/in/omar-siddiqui-demo',
     },
-    reason: 'New stakeholder introduced during the vendor shortlist review.',
-    meeting: 'Vendor Shortlist Review',
+    reason: 'Joined the procurement planning call as the new vendor-selection lead.',
+    meeting: 'Procurement Planning Call (demo)',
   },
   {
     fields: {
@@ -42,11 +43,14 @@ const SAMPLES: { fields: TestSuggestionBody['fields']; reason: string; meeting: 
   },
 ];
 
-let next = 0;
-
-/** The next sample, as the endpoint's request body (no `contact_id` → a new-contact suggestion). */
-export function nextDemoSuggestion(now = new Date()): TestSuggestionBody {
-  const sample = SAMPLES[next++ % SAMPLES.length]!;
+/**
+ * The sample after `shownName` (the new-contact suggestion on screen), as the endpoint's request body
+ * (no `contact_id` → a new-contact suggestion). Nothing shown, or someone else → Omar. Derived from the
+ * fetched suggestions rather than a counter, so it continues correctly after a reload.
+ */
+export function nextDemoSuggestion(shownName: string | undefined, now = new Date()): TestSuggestionBody {
+  const shown = SAMPLES.findIndex((s) => s.fields.full_name === shownName);
+  const sample = SAMPLES[(shown + 1) % SAMPLES.length]!;
   return {
     contact_id: null,
     fields: sample.fields,
