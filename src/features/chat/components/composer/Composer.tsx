@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
-import { useVoiceRecorder, VoiceComposer, type SendRecording, type TranscribeRecording } from '@/features/voice';
+import { useVoiceRecorder, VoiceComposer, type SendRecording, type TranscribeRecording, type VoiceAction } from '@/features/voice';
 import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
 import { cn } from '@/lib/cn';
 import { useComposerStore } from '@/stores/composerStore';
@@ -21,6 +21,8 @@ export interface ComposerProps {
   onSendVoice?: SendRecording;
   /** Transcribes a recording for review before sending. Omit when the backend can't transcribe. */
   onTranscribeVoice?: TranscribeRecording;
+  /** What the voice composer's send does: send the recording, or transcribe it into this box. */
+  voiceAction?: VoiceAction;
   onAttach: () => void;
   /** Files picked for the next message, shown above the input (keeps the composer open). */
   attachments?: ReactNode;
@@ -39,6 +41,7 @@ export function Composer({
   onStop,
   onSendVoice,
   onTranscribeVoice,
+  voiceAction,
   onAttach,
   attachments,
 }: ComposerProps) {
@@ -151,7 +154,7 @@ export function Composer({
         )}
       >
         {voiceActive && onSendVoice ? (
-          <VoiceComposer recorder={recorder} onSend={onSendVoice} transcribe={onTranscribeVoice} />
+          <VoiceComposer recorder={recorder} onSend={onSendVoice} transcribe={onTranscribeVoice} action={voiceAction} />
         ) : expanded ? (
           <>
             {attachments}

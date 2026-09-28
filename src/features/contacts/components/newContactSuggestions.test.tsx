@@ -56,6 +56,9 @@ function backend({ testEndpoint }: { testEndpoint?: (body: unknown) => Response 
       if (testEndpoint) return testEndpoint(body);
       // Like the server: stamped now (later than anything seeded).
       const created = suggestionDto(`new${suggestions.length}`, {
+        // Like create_suggestion: a contact_id makes it an update for that contact.
+        kind: body.contact_id ? 'update' : 'create',
+        contact_id: body.contact_id ?? null,
         suggested: body.fields,
         reason: body.reason,
         source: body.source,
@@ -87,6 +90,7 @@ function backend({ testEndpoint }: { testEndpoint?: (body: unknown) => Response 
     calls,
     add: (dto: ReturnType<typeof suggestionDto>) => (suggestions = [dto, ...suggestions]),
     addContact: (c: ReturnType<typeof contact>) => contacts.push(c),
+    renameContact: (id: string, full_name: string) => Object.assign(contacts.find((c) => c.id === id)!, { full_name }),
   };
 }
 
@@ -310,5 +314,74 @@ describe('only the newest suggestion per group is shown', () => {
     renderApp('/contacts', { api: server.api });
     const grid = await screen.findByRole('list', { name: 'Contacts' }, { timeout: 8000 });
     await waitFor(() => expect(within(grid).getAllByText('1 suggested update')).toHaveLength(2));
+  });
+});
+
+describe('Test update revisions (temporary demo control)', () => {
+  const revisionButton = () => screen.findByRole('button', { name: 'Test update revisions' });
+  const shownRevision = async () => {
+    const sheet = await screen.findByRole('dialog', { name: 'Daniel Brandt' });
+    const group = within(sheet).getByRole('group', { name: 'Position: current and suggested' });
+    return within(group).getByText('Suggested').nextSibling?.textContent;
+  };
+
+  it('each click adds the next numbered revision for Daniel; his drawer only ever shows the newest; the contact is never edited', async () => {
+    const server = backend();
+    renderApp('/contacts', { api: server.api });
+    const grid = await screen.findByRole('list', { name: 'Contacts' }, { timeout: 8000 });
+    // The seeded "CFO → Chief Financial Officer" update is pending for Daniel.
+    for (const n of [1, 2, 3]) {
+      fireEvent.click(await revisionButton());
+      expect(await screen.findByText(`Revision ${n} suggested for Daniel Brandt.`)).toBeTruthy();
+    }
+    const posts = server.calls.filter((c) => c.url === '/contacts/test-adding-suggestions').map((c) => c.body);
+    expect(posts).toEqual([1, 2, 3].map((n) => expect.objectContaining({ contact_id: 'c1', fields: { position: `Demo position — revision ${n}` } })));
+
+    await waitFor(() => expect(within(grid).getByText('1 suggested update')).toBeTruthy());
+    fireEvent.click(within(grid).getByRole('button', { name: 'Daniel Brandt' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Daniel Brandt' });
+    expect(within(sheet).getByRole('heading', { name: 'Review 1 suggested update' })).toBeTruthy();
+    expect(await shownRevision()).toBe('Demo position — revision 3');
+    expect(within(sheet).getAllByRole('group', { name: /current and suggested/ })).toHaveLength(1);
+    expect(within(sheet).queryByText(/revision [12]\b/)).toBeNull();
+    // Only suggestions were created: no contact write, and Daniel's position is still CFO.
+    expect(server.calls.some((c) => c.method === 'PATCH' || (c.method === 'POST' && c.url.endsWith('/approve')))).toBe(false);
+    expect(within(within(grid).getByRole('button', { name: 'Daniel Brandt' }).closest('article')!).getByText('CFO')).toBeTruthy();
+  });
+
+  it('continues from the server data after a reload (revision 2 exists → next is 3), and approving it surfaces no older revision', async () => {
+    const server = backend();
+    server.add(
+      suggestionDto('existing-rev2', {
+        kind: 'update',
+        contact_id: 'c1',
+        suggested: { position: 'Demo position — revision 2' },
+        reason: 'Demo revision 2: testing that only the newest update suggestion is shown.',
+        created_at: '2026-09-28T11:00:00',
+      }),
+    );
+    renderApp('/contacts', { api: server.api });
+    await screen.findByRole('list', { name: 'Contacts' }, { timeout: 8000 });
+    await waitFor(() => expect(screen.getByText('1 suggested update')).toBeTruthy());
+    fireEvent.click(await revisionButton());
+    expect(await screen.findByText('Revision 3 suggested for Daniel Brandt.')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Daniel Brandt' }));
+    await waitFor(async () => expect(await shownRevision()).toBe('Demo position — revision 3'));
+    const sheet = screen.getByRole('dialog', { name: 'Daniel Brandt' });
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Approve update to Position' }));
+    expect(await screen.findByText('Profile updated.')).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(within(sheet).queryByText(/suggested update/)).toBeNull(); // revision 2 does not come back
+  });
+
+  it('without a (single) Daniel Brandt contact, shows the standard error and creates nothing', async () => {
+    const server = backend();
+    server.renameContact('c1', 'Dan B.');
+    renderApp('/contacts', { api: server.api });
+    await screen.findByRole('list', { name: 'Contacts' }, { timeout: 8000 });
+    fireEvent.click(await revisionButton());
+    expect(await screen.findByText("Couldn't create a test revision. Add exactly one contact named Daniel Brandt first.")).toBeTruthy();
+    expect(server.calls.some((c) => c.url === '/contacts/test-adding-suggestions')).toBe(false);
   });
 });

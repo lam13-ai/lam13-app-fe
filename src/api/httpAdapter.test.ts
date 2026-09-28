@@ -281,8 +281,8 @@ describe('HTTP adapter — capabilities', () => {
   it('declares what the backend lacks and rejects those calls with 501', async () => {
     const { fetch } = stubFetch(() => json({}));
     const api = createHttpAdapter();
-    expect(api.capabilities).toEqual({ regenerate: false, voiceNotes: false, transcription: false });
-    await expect(api.audio.transcribe({ file: new Blob(), duration_ms: 1000 })).rejects.toMatchObject({ status: 501 });
+    // No voice-message endpoint, but recordings can be transcribed (POST /voice/transcribe).
+    expect(api.capabilities).toEqual({ regenerate: false, voiceNotes: false, transcription: true });
     await expect(api.messages.regenerate('s', 'm')).rejects.toMatchObject({ status: 501, code: 'not_supported' });
     await expect(api.messages.send('s', { client_message_id: 'c', kind: 'voice', audio_id: 'x' })).rejects.toMatchObject({ status: 501 });
     await expect(api.audio.upload({ file: new Blob(), duration_ms: 1000 })).rejects.toMatchObject({ status: 501 });
@@ -452,5 +452,69 @@ describe('HTTP adapter — My Contacts (/contacts)', () => {
     await expect(api.profileSuggestions.approve('gone')).rejects.toMatchObject({ status: 404, message: 'Pending suggestion not found.' });
     await expect(api.profiles.update('66f0c0ffee', { position: 'X' })).rejects.toMatchObject({ status: 409, message: 'Contact was changed elsewhere. Reload and try again.' });
     await expect(api.profiles.create({ ...profile, email: 'nope' })).rejects.toMatchObject({ status: 422, message: 'value is not a valid email address' });
+  });
+});
+
+describe('HTTP adapter — POST /voice/transcribe', () => {
+  const recording = (type: string, bytes = 'fake-audio') => new Blob([bytes], { type });
+
+  it('sends the recording as multipart `file` with the bearer token and returns the text', async () => {
+    const { calls } = stubFetch(() => json({ text: 'Draft the Q4 plan' }));
+    const result = await createHttpAdapter().audio.transcribe({ file: recording('audio/webm;codecs=opus'), duration_ms: 4000 });
+    expect(result).toEqual({ text: 'Draft the Q4 plan' });
+    expect(calls[0]).toMatchObject({ url: '/voice/transcribe', method: 'POST' });
+    expect(calls[0]!.headers.Authorization).toBe(`Bearer ${TOKEN}`);
+    expect(calls[0]!.headers['Content-Type']).toBeUndefined(); // the browser sets the multipart boundary
+    const form = calls[0]!.body as FormData;
+    const file = form.get('file') as File;
+    expect([...form.keys()]).toEqual(['file']);
+    expect(file.name).toBe('recording.webm');
+    expect(file.type).toBe('audio/webm;codecs=opus');
+  });
+
+  it('names the file after the real container — the backend checks the extension', async () => {
+    const { calls } = stubFetch(() => json({ text: 'ok' }));
+    const api = createHttpAdapter();
+    for (const type of ['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/wav', 'audio/ogg;codecs=opus']) {
+      await api.audio.transcribe({ file: recording(type), duration_ms: 1000 });
+    }
+    expect(calls.map((c) => ((c.body as FormData).get('file') as File).name)).toEqual([
+      'recording.webm',
+      'recording.m4a',
+      'recording.mp3',
+      'recording.wav',
+      'recording.ogg', // not accepted by the backend: its 415 message is shown
+    ]);
+  });
+
+  it('refuses a recording over 25 MB without uploading it', async () => {
+    const { fetch } = stubFetch(() => json({ text: 'never' }));
+    const big = { size: 25_000_001, type: 'audio/webm' } as Blob;
+    await expect(createHttpAdapter().audio.transcribe({ file: big, duration_ms: 1000 })).rejects.toMatchObject({
+      status: 413,
+      message: 'Audio file must be 25 MB or smaller.',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('passes the backend reason through (415 / 413 / 400), and honours abort', async () => {
+    const responses = [
+      json({ detail: 'Supported audio formats: mp3, mp4, mpeg, mpga, m4a, wav, webm.' }, 415),
+      json({ detail: 'Audio file is empty.' }, 400),
+    ];
+    stubFetch((_call, i) => responses[i]!);
+    const api = createHttpAdapter();
+    await expect(api.audio.transcribe({ file: recording('audio/ogg'), duration_ms: 1000 })).rejects.toMatchObject({
+      status: 415,
+      message: 'Supported audio formats: mp3, mp4, mpeg, mpga, m4a, wav, webm.',
+    });
+    await expect(api.audio.transcribe({ file: recording('audio/webm'), duration_ms: 1000 })).rejects.toMatchObject({ status: 400 });
+
+    const controller = new AbortController();
+    controller.abort();
+    stubFetch(async () => {
+      throw new DOMException('aborted', 'AbortError');
+    });
+    await expect(api.audio.transcribe({ file: recording('audio/webm'), duration_ms: 1000 }, { signal: controller.signal })).rejects.toSatisfy(isAbortError);
   });
 });

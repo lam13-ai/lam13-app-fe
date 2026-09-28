@@ -113,3 +113,38 @@ describe('currentSuggestions (only the newest suggestion per group, while pendin
     expect(ids(currentSuggestions(tie))).toEqual(['66f0000000000000000000b2']);
   });
 });
+
+describe('currentSuggestions — update revisions for one contact', () => {
+  const rev = (n: number, created_at: string, over: Partial<ProfileUpdateSuggestion> = {}): ProfileUpdateSuggestion => ({
+    id: `rev-${n}`,
+    kind: 'update',
+    profile_id: 'daniel',
+    source_type: 'meeting',
+    source_id: 'm',
+    source_title: `Revision test #${n} (demo)`,
+    created_at,
+    status: 'pending',
+    changes: [{ field: 'position', to: `Demo position — revision ${n}` }],
+    ...over,
+  });
+  const shown = (list: ProfileUpdateSuggestion[]) => currentSuggestions(list).map((s) => s.id);
+
+  it('one revision is shown; with two or three, only the newest by created_at', () => {
+    const r1 = rev(1, '2026-09-28T10:00:00Z');
+    const r2 = rev(2, '2026-09-28T10:01:00Z');
+    const r3 = rev(3, '2026-09-28T10:02:00Z');
+    expect(shown([r1])).toEqual(['rev-1']);
+    expect(shown([r1, r2])).toEqual(['rev-2']);
+    expect(shown([r3, r1, r2])).toEqual(['rev-3']);
+    // created_at decides, not the id: an older timestamp with a "larger" id still loses.
+    expect(shown([rev(9, '2026-09-28T09:00:00Z'), r2])).toEqual(['rev-2']);
+  });
+
+  it('equal timestamps fall back to the larger (newer) id; a decided newest revision keeps older ones hidden', () => {
+    const same = '2026-09-28T10:00:00Z';
+    expect(shown([{ ...rev(1, same), id: '66f00000000000000000000a' }, { ...rev(2, same), id: '66f00000000000000000000b' }])).toEqual([
+      '66f00000000000000000000b',
+    ]);
+    expect(shown([rev(1, '2026-09-28T10:00:00Z'), rev(2, '2026-09-28T10:01:00Z', { status: 'approved' })])).toEqual([]);
+  });
+});

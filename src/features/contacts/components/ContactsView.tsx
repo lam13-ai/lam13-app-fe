@@ -1,4 +1,4 @@
-import { ArrowDownUp, FlaskConical, Menu as MenuIcon, Plus, Search } from 'lucide-react';
+import { ArrowDownUp, FlaskConical, History, Menu as MenuIcon, Plus, Search } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { ErrorState } from '@/components/ErrorState';
 import { ScrollArea } from '@/components/ScrollArea';
@@ -6,7 +6,7 @@ import { toErrorInfo } from '@/api';
 import { Button, IconButton, Menu, MenuItem, Popover, Skeleton, Spinner, VisuallyHidden, iconProps, smallIconProps, useToast } from '@/components/ui';
 import { useUiStore } from '@/stores/uiStore';
 import type { ProfileUpdateSuggestion } from '@/types/api';
-import { useAddTestSuggestion, usePendingSuggestions, useProfiles } from '../hooks/useContacts';
+import { useAddTestRevision, useAddTestSuggestion, usePendingSuggestions, useProfiles } from '../hooks/useContacts';
 import { filterContacts, type ContactSort } from '../lib/contacts';
 import { ContactCard } from './ContactCard';
 import { ContactSheet, type SheetState } from './ContactSheet';
@@ -66,6 +66,36 @@ function TestSuggestionButton() {
     >
       {/* Icon-only on phones (like the sort button), so the page title keeps its room. */}
       <span className="max-sm:sr-only">{add.isPending ? 'Creating…' : 'Test suggestion'}</span>
+    </Button>
+  );
+}
+
+/**
+ * TODO(temporary): demo control — creates the next numbered UPDATE revision for Daniel Brandt through
+ * /contacts/test-adding-suggestions, to check that his drawer only ever shows the newest one. Remove when
+ * AI/Granola suggestion generation is integrated. Creates suggestions only; never edits the contact.
+ */
+function TestRevisionButton() {
+  const toast = useToast();
+  const add = useAddTestRevision();
+  if (!add.available) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={add.isPending}
+      aria-busy={add.isPending || undefined}
+      leadingIcon={add.isPending ? <Spinner size={14} state="active" /> : <History {...smallIconProps} />}
+      title="Demo: suggests the next numbered position revision for Daniel Brandt (temporary)"
+      onClick={() =>
+        add.mutate(undefined, {
+          onSuccess: ({ revision, contact, created }) =>
+            toast.show(created ? `Revision ${revision} suggested for ${contact.full_name}.` : 'Nothing new to suggest.'),
+          onError: (error) => toast.show(`Couldn't create a test revision. ${toErrorInfo(error).message}`, { tone: 'danger' }),
+        })
+      }
+    >
+      <span className="max-sm:sr-only">{add.isPending ? 'Creating…' : 'Test update revisions'}</span>
     </Button>
   );
 }
@@ -210,6 +240,7 @@ export function ContactsView() {
           <p className="hidden truncate text-2xs text-fg-muted sm:block">People you work with and insights you&apos;ve approved.</p>
         </div>
         <TestSuggestionButton />
+        <TestRevisionButton />
         {/* The empty state has its own primary Add contact. */}
         {all?.length !== 0 && (
           <Button variant="primary" size="sm" leadingIcon={<Plus {...smallIconProps} />} onClick={openCreate}>

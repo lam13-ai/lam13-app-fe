@@ -1,4 +1,5 @@
 import type { TestSuggestionBody } from '@/api';
+import type { Profile, ProfileUpdateSuggestion } from '@/types/api';
 
 /*
  * TODO(temporary): demo control for /contacts/test-adding-suggestions. Remove when AI/Granola suggestion
@@ -56,5 +57,41 @@ export function nextDemoSuggestion(shownName: string | undefined, now = new Date
     fields: sample.fields,
     reason: sample.reason,
     source: { type: 'meeting', ref_id: `demo-${now.getTime()}`, title: sample.meeting, occurred_at: now.toISOString() },
+  };
+}
+
+/*
+ * TODO(temporary): demo control for UPDATE revisions via /contacts/test-adding-suggestions (with a
+ * contact_id → kind "update"). Remove when AI/Granola suggestion generation is integrated. Each click
+ * proposes a new position for ONE existing contact as the next numbered revision; it only creates a
+ * suggestion — the contact itself changes only if someone approves one.
+ */
+export const DEMO_REVISION_CONTACT = 'Daniel Brandt';
+const REVISION_REASON = /^Demo revision (\d+)\b/;
+
+/** The one loaded contact named exactly DEMO_REVISION_CONTACT (ignoring case/spaces); null if none or several. */
+export function demoRevisionContact(profiles: readonly Profile[]): Profile | null {
+  const name = DEMO_REVISION_CONTACT.toLowerCase();
+  const matches = profiles.filter((p) => p.full_name.trim().toLowerCase() === name);
+  return matches.length === 1 ? matches[0]! : null;
+}
+
+/** The next revision number for `contactId`: one past the highest demo revision among its suggestions (any status). */
+export function nextDemoRevision(suggestions: readonly ProfileUpdateSuggestion[], contactId: string): number {
+  let highest = 0;
+  for (const s of suggestions) {
+    const n = s.kind !== 'create' && s.profile_id === contactId ? Number(REVISION_REASON.exec(s.reason ?? '')?.[1]) : NaN;
+    if (n > highest) highest = n;
+  }
+  return highest + 1;
+}
+
+/** The backend CreateSuggestionRequest for revision `n` of `contactId` (a position that differs every time). */
+export function demoRevisionSuggestion(contactId: string, n: number, now = new Date()): TestSuggestionBody {
+  return {
+    contact_id: contactId,
+    fields: { position: `Demo position — revision ${n}` },
+    reason: `Demo revision ${n}: testing that only the newest update suggestion is shown.`,
+    source: { type: 'meeting', ref_id: `demo-revision-${n}-${now.getTime()}`, title: `Revision test #${n} (demo)`, occurred_at: now.toISOString() },
   };
 }

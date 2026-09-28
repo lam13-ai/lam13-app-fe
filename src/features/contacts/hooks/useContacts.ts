@@ -1,8 +1,14 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { queryKeys, useApi } from '@/api';
+import { ApiError, queryKeys, useApi } from '@/api';
 import type { Page, Profile, ProfileInput, ProfileUpdateSuggestion } from '@/types/api';
 import { applyChanges, currentSuggestions } from '../lib/contacts';
-import { nextDemoSuggestion } from '../lib/demoSuggestions';
+import {
+  DEMO_REVISION_CONTACT,
+  demoRevisionContact,
+  demoRevisionSuggestion,
+  nextDemoRevision,
+  nextDemoSuggestion,
+} from '../lib/demoSuggestions';
 
 // ponytail: one page of up to 100 contacts, searched client-side; server search + paging if lists grow.
 const LIST_LIMIT = 100;
@@ -148,6 +154,30 @@ export function useAddTestSuggestion() {
       const all = queryClient.getQueryData<SuggestionList>(queryKeys.profileSuggestions.list())?.items ?? [];
       const shown = currentSuggestions(all).find((s) => s.kind === 'create');
       return addTest!(nextDemoSuggestion(shown?.changes.find((c) => c.field === 'full_name')?.to ?? undefined));
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.profileSuggestions.list() }),
+  });
+  return { ...mutation, available: Boolean(addTest) };
+}
+
+/**
+ * TODO(temporary): demo control — creates the next numbered UPDATE revision for Daniel Brandt (found by name
+ * in the loaded contacts) via /contacts/test-adding-suggestions, then re-reads the suggestions. Remove when
+ * AI/Granola suggestion generation is integrated. Never edits the contact.
+ */
+export function useAddTestRevision() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  const addTest = api.profileSuggestions.addTest?.bind(api.profileSuggestions);
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const profiles = queryClient.getQueryData<ProfileList>(queryKeys.profiles.list())?.items ?? [];
+      const contact = demoRevisionContact(profiles);
+      if (!contact) throw new ApiError(404, 'not_found', `Add exactly one contact named ${DEMO_REVISION_CONTACT} first.`);
+      const all = queryClient.getQueryData<SuggestionList>(queryKeys.profileSuggestions.list())?.items ?? [];
+      const revision = nextDemoRevision(all, contact.id);
+      const created = await addTest!(demoRevisionSuggestion(contact.id, revision));
+      return { revision, contact, created };
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.profileSuggestions.list() }),
   });

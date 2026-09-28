@@ -1,7 +1,7 @@
 import { FileText, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ATTACHMENT_LIMITS, toErrorInfo, useApi } from '@/api';
+import { ApiError, ATTACHMENT_LIMITS, toErrorInfo, useApi } from '@/api';
 import { ErrorState } from '@/components/ErrorState';
 import { Spinner, smallIconProps, useToast } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -10,6 +10,7 @@ import { createId } from '@/lib/id';
 import { useComposerStore } from '@/stores/composerStore';
 import { useStreamStore, type StreamPhase } from '@/stores/streamStore';
 import { useUiStore } from '@/stores/uiStore';
+import type { Recording } from '@/features/voice';
 import type { Conversation } from '@/types/api';
 import type { AgentStatus } from '@/types/chat';
 import { AGENT_NAME, AGENT_TAGLINE } from '../constants';
@@ -111,6 +112,21 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
   };
   const loadingHistory = Boolean(conversationId) && history.isPending;
 
+  const transcribe = (recording: Recording, signal: AbortSignal) =>
+    api.audio.transcribe({ file: recording.blob, duration_ms: recording.durationMs }, { signal }).then((r) => r.text);
+  /**
+   * Backends without voice messages (the FastAPI one): the recording is transcribed into the message box
+   * for editing, then sent as an ordinary text message. A failure keeps the recording (Retry) — the
+   * recorder's send step owns busy / error / retry.
+   */
+  const transcribeIntoDraft = async (recording: Recording, signal: AbortSignal) => {
+    const text = (await transcribe(recording, signal)).trim();
+    if (!text) throw new ApiError(422, 'no_speech', 'No speech was detected. Try recording again.');
+    const { drafts, setDraft } = useComposerStore.getState();
+    const current = drafts[draftKey]?.trim();
+    setDraft(draftKey, current ? `${current} ${text}` : text);
+  };
+
   let body;
   if (loadingHistory) {
     body = <MessagesSkeleton />;
@@ -167,18 +183,18 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
             onSend={send}
             onStop={() => actions.stop(key)}
             onSendVoice={
-              env.features.voiceNotes && capabilities.voiceNotes
-                ? (recording, signal) => actions.sendVoice(conversationId, recording, { origin, signal })
-                : undefined
+              !env.features.voiceNotes
+                ? undefined
+                : capabilities.voiceNotes
+                  ? (recording, signal) => actions.sendVoice(conversationId, recording, { origin, signal })
+                  : capabilities.transcription
+                    ? transcribeIntoDraft
+                    : undefined
             }
-            onTranscribeVoice={
-              capabilities.transcription
-                ? (recording, signal) =>
-                    api.audio
-                      .transcribe({ file: recording.blob, duration_ms: recording.durationMs }, { signal })
-                      .then((result) => result.text)
-                : undefined
-            }
+            // The preview's automatic transcript only where the recording itself is sent (voice notes); when
+            // transcribing IS the send, it would just transcribe twice.
+            onTranscribeVoice={capabilities.voiceNotes && capabilities.transcription ? transcribe : undefined}
+            voiceAction={capabilities.voiceNotes ? 'send' : 'transcribe'}
             onAttach={() => fileInputRef.current?.click()}
             attachments={
               files.drafts.length > 0 && (

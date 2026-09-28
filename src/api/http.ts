@@ -212,6 +212,30 @@ function documentRef(id: string, filename: string, file?: Blob): AttachmentRef {
   };
 }
 
+// ── Voice (routers/voice_route.py) ────────────────────────────────────────────
+
+/** POST /voice/transcribe accepts up to 25 MB. */
+export const MAX_TRANSCRIBE_BYTES = 25_000_000;
+
+/**
+ * The backend decides the format from the file NAME's extension (mp3, mp4, mpeg, mpga, m4a, wav, webm), so
+ * the name follows the recording's real container: Chrome / Edge / Firefox record WebM (Opus), Safari MP4.
+ * Anything else keeps its own extension and gets the backend's 415 message.
+ */
+function recordingFilename(file: Blob): string {
+  const container = file.type.split(';')[0]!.trim().toLowerCase();
+  const ext: Record<string, string> = {
+    'audio/webm': 'webm',
+    'audio/mp4': 'm4a',
+    'audio/x-m4a': 'm4a',
+    'audio/mpeg': 'mp3',
+    'audio/wav': 'wav',
+    'audio/x-wav': 'wav',
+    'audio/ogg': 'ogg',
+  };
+  return `recording.${ext[container] ?? (container.split('/')[1] || 'webm')}`;
+}
+
 // ── Contacts (routers/contacts_routes.py) ────────────────────────────────────
 
 /** ContactOut / ContactSummary / ContactDetail. Timestamps are the server's ISO strings, passed through. */
@@ -447,8 +471,9 @@ export function createHttpAdapter(): ApiAdapter {
   };
 
   return {
-    // No regenerate or /audio endpoint: the UI hides Regenerate and voice notes.
-    capabilities: { regenerate: false, voiceNotes: false, transcription: false },
+    // No regenerate or /audio (voice-message) endpoint: the UI hides Regenerate and audio messages. Recordings
+    // are transcribed (POST /voice/transcribe) into the message box and sent as text.
+    capabilities: { regenerate: false, voiceNotes: false, transcription: true },
 
     conversations: {
       async list() {
@@ -532,8 +557,13 @@ export function createHttpAdapter(): ApiAdapter {
       async get() {
         throw notSupported('Voice notes');
       },
-      async transcribe() {
-        throw notSupported('Transcription');
+      /** POST /voice/transcribe — multipart `file` → `{ text }` (TranscriptionResponse). Stores nothing. */
+      async transcribe({ file }, options) {
+        if (file.size > MAX_TRANSCRIBE_BYTES) throw new ApiError(413, 'payload_too_large', 'Audio file must be 25 MB or smaller.');
+        const form = new FormData();
+        form.append('file', file, recordingFilename(file));
+        const { text } = await requestJson<{ text: string }>('/voice/transcribe', { method: 'POST', body: form, signal: options?.signal });
+        return { text };
       },
     },
 

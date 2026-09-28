@@ -12,6 +12,17 @@ import type { RecorderState } from '../lib/recorderMachine';
 import type { Recording } from '../lib/types';
 import { VoicePlayer } from './VoicePlayer';
 
+/**
+ * What "send" does with the recording: `send` — it is the message (voice note); `transcribe` — it becomes
+ * editable text in the message box (backends without voice messages). Only the wording differs.
+ */
+export type VoiceAction = 'send' | 'transcribe';
+
+const LABELS: Record<VoiceAction, { send: string; busy: string; retry: string }> = {
+  send: { send: 'Send voice message', busy: 'Sending voice message', retry: 'Retry sending' },
+  transcribe: { send: 'Transcribe recording', busy: 'Transcribing recording', retry: 'Retry transcription' },
+};
+
 /** Black round primary action — same treatment as the composer's send button. */
 function PrimaryRound({
   label,
@@ -43,7 +54,7 @@ function PrimaryRound({
   );
 }
 
-function announcement(state: RecorderState): string {
+function announcement(state: RecorderState, action: VoiceAction): string {
   switch (state.status) {
     case 'requesting':
       return 'Requesting microphone access.';
@@ -56,13 +67,13 @@ function announcement(state: RecorderState): string {
     case 'preview':
       return `Recording ready to review, ${describeDuration(state.recording.durationMs)}.${state.limitReached ? ' Maximum length reached.' : ''}`;
     case 'uploading':
-      return 'Sending voice message.';
+      return `${LABELS[action].busy}.`;
     default:
       return '';
   }
 }
 
-function RecordingBar({ recorder, onSend }: { recorder: VoiceRecorderApi; onSend: SendRecording }) {
+function RecordingBar({ recorder, onSend, action }: { recorder: VoiceRecorderApi; onSend: SendRecording; action: VoiceAction }) {
   const { state, maxDurationMs } = recorder;
   const elapsed = 'elapsedMs' in state ? state.elapsedMs : 0;
   const remaining = Math.max(0, maxDurationMs - elapsed);
@@ -118,7 +129,7 @@ function RecordingBar({ recorder, onSend }: { recorder: VoiceRecorderApi; onSend
         />
       </Tooltip>
       {VOICE_CONFIG.directSend && (
-        <PrimaryRound label="Send voice message" disabled={stopping} onClick={() => void recorder.stopAndSend(onSend)}>
+        <PrimaryRound label={LABELS[action].send} disabled={stopping} onClick={() => void recorder.stopAndSend(onSend)}>
           <ArrowUp size={14} strokeWidth={1.75} aria-hidden />
         </PrimaryRound>
       )}
@@ -180,10 +191,12 @@ function PreviewBar({
   recorder,
   onSend,
   transcribe,
+  action,
 }: {
   recorder: VoiceRecorderApi;
   onSend: SendRecording;
   transcribe: TranscribeRecording | undefined;
+  action: VoiceAction;
 }) {
   const { state } = recorder;
   const recording = state.status === 'preview' || state.status === 'uploading' ? state.recording : null;
@@ -194,9 +207,9 @@ function PreviewBar({
   return (
     <div>
       <div className="flex h-12 items-center gap-1 px-2">
-        <Tooltip content={uploading ? 'Cancel sending' : 'Delete recording'}>
+        <Tooltip content={uploading ? 'Cancel' : 'Delete recording'}>
           <IconButton
-            label={uploading ? 'Cancel sending' : 'Delete recording'}
+            label={uploading ? (action === 'transcribe' ? 'Cancel transcription' : 'Cancel sending') : 'Delete recording'}
             size="md"
             icon={uploading ? <X {...iconProps} /> : <Trash2 {...iconProps} />}
             onClick={recorder.discard}
@@ -215,7 +228,7 @@ function PreviewBar({
           />
         </Tooltip>
         <PrimaryRound
-          label={uploading ? 'Sending voice message' : 'Send voice message'}
+          label={uploading ? LABELS[action].busy : LABELS[action].send}
           disabled={uploading}
           busy={uploading}
           autoFocus={!uploading}
@@ -234,7 +247,7 @@ function PreviewBar({
   );
 }
 
-function ErrorBar({ recorder, onSend }: { recorder: VoiceRecorderApi; onSend: SendRecording }) {
+function ErrorBar({ recorder, onSend, action }: { recorder: VoiceRecorderApi; onSend: SendRecording; action: VoiceAction }) {
   const { state } = recorder;
   if (state.status !== 'error') return null;
   const canRetryUpload = state.recording !== null;
@@ -246,7 +259,7 @@ function ErrorBar({ recorder, onSend }: { recorder: VoiceRecorderApi; onSend: Se
       <div className="flex items-center gap-1">
         {canRetryUpload ? (
           <Button variant="ghost" size="sm" onClick={() => void recorder.send(onSend)}>
-            Retry sending
+            {LABELS[action].retry}
           </Button>
         ) : (
           canRetryRecording && (
@@ -275,17 +288,20 @@ export function VoiceComposer({
   recorder,
   onSend,
   transcribe,
+  action = 'send',
 }: {
   recorder: VoiceRecorderApi;
   onSend: SendRecording;
   /** Omitted when the backend can't transcribe: the preview then shows no transcript section. */
   transcribe?: TranscribeRecording;
+  /** `transcribe`: `onSend` turns the recording into editable text instead of sending it (labels follow). */
+  action?: VoiceAction;
 }) {
   const { state } = recorder;
   return (
     <div className="animate-fade">
       <p role="status" className="sr-only">
-        {announcement(state)}
+        {announcement(state, action)}
       </p>
       {state.status === 'requesting' && (
         <div className="flex h-12 items-center gap-3 pl-4 pr-2 text-xs text-fg-muted">
@@ -295,12 +311,12 @@ export function VoiceComposer({
         </div>
       )}
       {(state.status === 'recording' || state.status === 'paused' || state.status === 'stopping') && (
-        <RecordingBar recorder={recorder} onSend={onSend} />
+        <RecordingBar recorder={recorder} onSend={onSend} action={action} />
       )}
       {(state.status === 'preview' || state.status === 'uploading') && (
-        <PreviewBar recorder={recorder} onSend={onSend} transcribe={transcribe} />
+        <PreviewBar recorder={recorder} onSend={onSend} transcribe={transcribe} action={action} />
       )}
-      {state.status === 'error' && <ErrorBar recorder={recorder} onSend={onSend} />}
+      {state.status === 'error' && <ErrorBar recorder={recorder} onSend={onSend} action={action} />}
     </div>
   );
 }
