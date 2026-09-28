@@ -194,7 +194,10 @@ export function Composer({
                 onScroll={updateEdges}
                 className={cn(
                   'block max-h-[min(40dvh,240px)] w-full animate-enter-sm resize-none overflow-y-auto bg-transparent',
-                  'px-4 pb-1 pt-3.5 text-base leading-[22px] text-fg outline-none scrollbar-none sm:text-sm sm:leading-[22px]',
+                  'px-4 pb-1 pt-3.5 text-base leading-[22px] text-fg outline-none sm:text-sm sm:leading-[22px]',
+                  // The shared thin scrollbar, shown only when the text overflows; its track starts below the
+                  // pill's rounded corner so it runs along the straight edge.
+                  'scrollbar-subtle [&::-webkit-scrollbar-track]:mt-3 [&::-webkit-scrollbar-track]:mb-1',
                   'placeholder:font-medium placeholder:text-fg-muted focus-visible:outline-none disabled:cursor-not-allowed',
                 )}
               />
