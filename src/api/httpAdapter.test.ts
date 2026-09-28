@@ -133,6 +133,23 @@ describe('HTTP adapter — sessions and messages', () => {
   });
 });
 
+describe('HTTP adapter — one request per session load', () => {
+  it('the conversation (header) and its messages, requested together, share one GET /chat/sessions/{id}', async () => {
+    const detail = { sessionId: 's1', title: 'Growth plan', messages: [{ id: 'u1', role: 'user', content: 'Hi' }] };
+    const { calls } = stubFetch(() => json(detail));
+    const api = createHttpAdapter();
+
+    const [conversation, page] = await Promise.all([api.conversations.get('s1'), api.messages.list('s1')]);
+    expect(calls.filter((c) => c.url === '/chat/sessions/s1')).toHaveLength(1);
+    expect(conversation).toMatchObject({ id: 's1', title: 'Growth plan' });
+    expect(page.items.map((m) => m.id)).toEqual(['u1']);
+
+    // Not a cache: once settled, the next load asks the server again.
+    await api.messages.list('s1');
+    expect(calls.filter((c) => c.url === '/chat/sessions/s1')).toHaveLength(2);
+  });
+});
+
 describe('HTTP adapter — errors', () => {
   it.each([
     [400, { detail: 'Title is required' }, 'Title is required'],

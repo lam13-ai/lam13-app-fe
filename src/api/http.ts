@@ -344,7 +344,17 @@ export async function* translateStream(
 // ── Adapter ──────────────────────────────────────────────────────────────────
 
 export function createHttpAdapter(): ApiAdapter {
-  const loadDetail = (id: string) => requestJson<SessionDetailDto>(`/chat/sessions/${encodeURIComponent(id)}`);
+  // One endpoint serves both the conversation (header) and its messages, which are separate queries that
+  // mount together: callers asking for the same session while a request is in flight share it.
+  const inFlight = new Map<string, Promise<SessionDetailDto>>();
+  const loadDetail = (id: string) => {
+    let pending = inFlight.get(id);
+    if (!pending) {
+      pending = requestJson<SessionDetailDto>(`/chat/sessions/${encodeURIComponent(id)}`).finally(() => inFlight.delete(id));
+      inFlight.set(id, pending);
+    }
+    return pending;
+  };
   let counter = 0;
 
   return {

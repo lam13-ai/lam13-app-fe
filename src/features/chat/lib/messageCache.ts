@@ -1,4 +1,4 @@
-import type { InfiniteData } from '@tanstack/react-query';
+import { replaceEqualDeep, type InfiniteData } from '@tanstack/react-query';
 import type { Page } from '@/types/api';
 import type { MessageView } from '@/types/chat';
 
@@ -93,4 +93,29 @@ export function patchMessage(data: MessagesData | undefined, id: string, patch: 
     ...data,
     pages: data.pages.map((page) => ({ ...page, items: page.items.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
   };
+}
+
+/**
+ * Structural sharing for the messages cache, matched by message key rather than array position. Pages are
+ * newest-first, so a new exchange shifts every index; TanStack's positional sharing then compares each
+ * message with its neighbour and copies all of them — every row re-renders. Here an unchanged message
+ * keeps its object (memoized rows skip it) and a changed one is shared field by field.
+ */
+export function shareMessages(previous: unknown, next: unknown): unknown {
+  const prev = previous as MessagesData | undefined;
+  const data = next as MessagesData | undefined;
+  if (!prev || !data?.pages) return replaceEqualDeep(prev, data);
+  const old = new Map(toChronological(prev).map((m) => [messageKey(m), m]));
+  const sameItems = (a: readonly unknown[], b: readonly unknown[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+  // Never positional sharing past this point: it would pair shifted messages up again and copy them.
+  const pages = data.pages.map((page, i) => {
+    const items = page.items.map((m) => {
+      const before = old.get(messageKey(m));
+      return before ? replaceEqualDeep(before, m) : m;
+    });
+    const was = prev.pages[i];
+    return was && was.next_cursor === page.next_cursor && sameItems(was.items, items) ? was : { ...page, items };
+  });
+  // Nothing changed (e.g. a refetch of the same history): keep the previous data object itself.
+  return sameItems(prev.pages, pages) && sameItems(prev.pageParams, data.pageParams) ? prev : { ...data, pages };
 }

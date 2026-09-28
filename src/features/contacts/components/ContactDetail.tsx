@@ -2,6 +2,7 @@ import { Clock3, Maximize2, Minimize2, Pencil, Sparkles, Trash2, X } from 'lucid
 import { useId, useRef, useState, type ReactNode } from 'react';
 import { ScrollArea } from '@/components/ScrollArea';
 import { Button, IconButton, Tooltip, iconProps, smallIconProps } from '@/components/ui';
+import { cn } from '@/lib/cn';
 import { describeMessageTime } from '@/lib/format';
 import type { Profile, ProfileUpdateSuggestion } from '@/types/api';
 import { linkedinHref } from '../lib/contacts';
@@ -9,9 +10,20 @@ import { ContactAvatar } from './ContactAvatar';
 import { FieldIcon } from './FieldIcon';
 import { SuggestionCard } from './SuggestionCard';
 
-function Section({ title, icon, children }: { title: string; icon?: ReactNode; children: ReactNode }) {
+function Section({
+  title,
+  icon,
+  className,
+  children,
+}: {
+  title: string;
+  icon?: ReactNode;
+  /** Spacing from the previous section (the drawer sets a deliberate rhythm, not equal gaps). */
+  className?: string;
+  children: ReactNode;
+}) {
   return (
-    <section className="flex flex-col gap-2">
+    <section className={cn('flex flex-col gap-1', className)}>
       <h3 className="flex items-center gap-1.5 text-2xs font-bold uppercase tracking-eyebrow text-fg-muted">
         {icon}
         {title}
@@ -33,17 +45,17 @@ interface Row {
   node: ReactNode;
 }
 
-/** Icon, muted label, value: the value reads strongest. */
+/** Compact metadata block — icon, muted label, value — supporting the About text, not competing with it. */
 function Rows({ rows }: { rows: Row[] }) {
   return (
-    <dl className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-baseline gap-x-2.5 gap-y-1.5 text-xs">
+    <dl className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-baseline gap-x-2.5 gap-y-0.5 text-xs leading-4">
       {rows.map((row) => (
         <div key={row.label} className="contents">
           <span aria-hidden="true" className="self-center text-fg-muted">
             {row.icon}
           </span>
           <dt className="text-fg-muted">{row.label}</dt>
-          <dd className="min-w-0">{row.node}</dd>
+          <dd className="min-w-0 text-fg/85">{row.node}</dd>
         </div>
       ))}
     </dl>
@@ -75,7 +87,7 @@ function ContactInfo({ profile }: { profile: Profile }) {
   ].filter((row) => !!row);
   if (rows.length === 0) return null;
   return (
-    <Section title="Contact">
+    <Section title="Contact" className="mt-6">
       <Rows rows={rows} />
     </Section>
   );
@@ -175,10 +187,11 @@ export function ContactDetail({
         </div>
       </div>
 
-      <ScrollArea className="flex min-h-0 flex-1 flex-col gap-5 px-4 py-4 md:px-5">
-        <Section title="About" icon={<FieldIcon field="description" />}>
+      {/* Rhythm: About (the content) → moderate gap → Contact → compact gap → Details (supporting metadata). */}
+      <ScrollArea className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-3 md:px-5">
+        <Section title="About" icon={<FieldIcon field="description" />} className="gap-2">
           {profile.description ? (
-            <p className="whitespace-pre-wrap break-words text-body leading-relaxed">{profile.description}</p>
+            <p className="max-w-[72ch] whitespace-pre-wrap break-words text-body leading-relaxed">{profile.description}</p>
           ) : (
             <p className="text-xs text-fg-muted">No description yet.</p>
           )}
@@ -187,7 +200,7 @@ export function ContactDetail({
         <ContactInfo profile={profile} />
 
         {suggestions.length > 0 && (
-          <section aria-labelledby={reviewHeadingId} className="flex flex-col gap-2">
+          <section aria-labelledby={reviewHeadingId} className="mt-6 flex flex-col gap-2">
             <div>
               <h3 id={reviewHeadingId} className="flex items-center gap-1.5 text-xs font-bold">
                 <Sparkles {...smallIconProps} className="shrink-0 text-accent" />
@@ -207,7 +220,7 @@ export function ContactDetail({
           </section>
         )}
 
-        <Section title="Details">
+        <Section title="Details" className="mt-4">
           <Rows
             rows={[
               { label: 'Created', icon: <Clock3 {...smallIconProps} />, node: <Timestamp iso={profile.created_at} /> },

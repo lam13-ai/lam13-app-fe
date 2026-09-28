@@ -5,6 +5,7 @@ import {
   emptyMessagesData,
   messageKey,
   removeMessages,
+  shareMessages,
   toChronological,
   upsertMessage,
   withConversationId,
@@ -70,5 +71,30 @@ describe('messageCache', () => {
     expect(ids(removeMessages(twoPages, ['m2', 'm4']))).toEqual(['m1', 'm3']);
     const moved = withConversationId(appendMessages(emptyMessagesData(), [m('u')]), 'c9');
     expect(toChronological(moved)[0]?.conversation_id).toBe('c9');
+  });
+});
+
+describe('shareMessages (structural sharing by message, not position)', () => {
+  it('a new exchange at the newest end keeps every existing message object', () => {
+    const next = appendMessages(twoPages, [m('u5', { role: 'user' }), m('a5')]);
+    const shared = shareMessages(twoPages, next) as MessagesData;
+    const before = toChronological(twoPages);
+    const after = toChronological(shared);
+    expect(after.map((x) => x.id)).toEqual(['m1', 'm2', 'm3', 'm4', 'u5', 'a5']);
+    before.forEach((message, i) => expect(after[i]).toBe(message));
+  });
+
+  it('a refetch returning equal messages (new objects) keeps the previous data object', () => {
+    const refetched: MessagesData = JSON.parse(JSON.stringify(twoPages));
+    expect(shareMessages(twoPages, refetched)).toBe(twoPages);
+  });
+
+  it('a changed message gets a new object; its unchanged neighbours keep theirs', () => {
+    const next = upsertMessage(twoPages, 'm3', m('m3', { content: 'edited' }))!;
+    const after = toChronological(shareMessages(twoPages, next) as MessagesData);
+    const before = toChronological(twoPages);
+    expect(after[2]).not.toBe(before[2]);
+    expect(after[2]?.content).toBe('edited');
+    [0, 1, 3].forEach((i) => expect(after[i]).toBe(before[i]));
   });
 });

@@ -1,5 +1,5 @@
 import { ArrowDown } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { useApi } from '@/api';
 import { Spinner } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -30,6 +30,39 @@ export interface MessageLogProps {
   /** What the streaming response is doing before its first words ("Generating response…"). */
   activity?: string;
 }
+
+interface MessageRowProps {
+  message: MessageView;
+  failure: ErrorInfo | undefined;
+  /** Only for a row that offers Retry / Regenerate; otherwise undefined, so the row's props stay stable. */
+  onRetry?: (message: MessageView) => void;
+  regenerate: boolean;
+  animate: boolean;
+  sending: boolean;
+  activity: string | undefined;
+}
+
+/**
+ * One message. Memoized: a finished message keeps the same props (the same cached object, no callbacks),
+ * so a long history doesn't re-render while a new answer is generating — only the rows that change do.
+ */
+const MessageRow = memo(function MessageRow({ message, failure, onRetry, regenerate, animate, sending, activity }: MessageRowProps) {
+  const key = messageKey(message);
+  const retry = onRetry && (() => onRetry(message));
+  return message.role === 'user' ? (
+    <UserMessage anchorKey={key} message={message} failure={failure} onRetry={retry} animate={animate} sending={sending} />
+  ) : (
+    <AssistantMessage
+      anchorKey={key}
+      message={message}
+      failure={failure}
+      onRetry={retry}
+      onRegenerate={regenerate ? retry : undefined}
+      animate={animate}
+      activity={activity}
+    />
+  );
+});
 
 interface Turn {
   key: string;
@@ -78,31 +111,21 @@ export function MessageLog({ messages, failures, older, onRetry, streaming = fal
   const renderMessages = (list: MessageView[]) =>
     list.map((message) => {
       const key = messageKey(message);
-      // Only messages created on this client animate in (keys are stable, so no replays).
-      const animate = Boolean(message.local_key) || isLocalId(message.id);
-      const retry = onRetry && (() => onRetry(message));
-      return message.role === 'user' ? (
-        <UserMessage
+      // Regenerate the latest completed server answer (api-contract.md §4.3) when the backend can; never while streaming.
+      const regenerate =
+        Boolean(onRetry) && canRegenerate && message === last && message.status === 'complete' && !isLocalId(message.id);
+      // Retry belongs to a failed / stopped message only (and Regenerate to the latest answer).
+      const offersRetry = message.status === 'error' || message.status === 'cancelled' || regenerate;
+      return (
+        <MessageRow
           key={key}
-          anchorKey={key}
           message={message}
           failure={failures[key]}
-          onRetry={retry}
-          animate={animate}
+          onRetry={offersRetry ? onRetry : undefined}
+          regenerate={regenerate}
+          // Only messages created on this client animate in (keys are stable, so no replays).
+          animate={Boolean(message.local_key) || isLocalId(message.id)}
           sending={streaming && message === lastUser}
-        />
-      ) : (
-        <AssistantMessage
-          key={key}
-          anchorKey={key}
-          message={message}
-          failure={failures[key]}
-          onRetry={retry}
-          // Regenerate the latest completed server answer (api-contract.md §4.3) when the backend can; never while streaming.
-          onRegenerate={
-            canRegenerate && message === last && message.status === 'complete' && !isLocalId(message.id) ? retry : undefined
-          }
-          animate={animate}
           activity={message === last ? activity : undefined}
         />
       );

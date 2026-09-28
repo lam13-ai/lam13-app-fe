@@ -4,7 +4,7 @@ import { queryKeys, useApi } from '@/api';
 import { useStreamStore } from '@/stores/streamStore';
 import type { Page } from '@/types/api';
 import type { MessageView } from '@/types/chat';
-import { toChronological, type MessagesData } from '../lib/messageCache';
+import { shareMessages, toChronological, type MessagesData } from '../lib/messageCache';
 
 const PAGE_SIZE = 20;
 /** How often to re-read a conversation while the server is still producing something. */
@@ -31,6 +31,8 @@ export function useMessages(key: string, conversationId: string | undefined) {
     enabled: Boolean(conversationId),
     initialPageParam: null,
     getNextPageParam: (last) => last.next_cursor,
+    // Unchanged messages keep their objects across writes and refetches (see shareMessages).
+    structuralSharing: shareMessages,
     // Never while this client streams: a refetch would overwrite the live draft.
     refetchInterval: (query) => (!streaming && hasPendingWork(query.state.data) ? POLL_MS : false),
     // Back on the tab: catch up at once on work the server finished meanwhile (polling pauses while hidden).
