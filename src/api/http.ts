@@ -1,8 +1,17 @@
 import { env } from '@/lib/env';
-import type { Artifact, AttachmentRef, Conversation, Message } from '@/types/api';
+import type {
+  Artifact,
+  AttachmentRef,
+  Conversation,
+  Message,
+  Profile,
+  ProfileField,
+  ProfileInput,
+  ProfileSuggestionStatus,
+  ProfileUpdateSuggestion,
+} from '@/types/api';
 import { getAccessToken } from './auth';
 import { abortError, ApiError } from './errors';
-import { createMockProfiles } from './mock/profiles';
 import type { ApiAdapter, SendMessageBody } from './services';
 import { readSseMessages, type SseMessage, type StreamEvent } from './stream';
 
@@ -203,6 +212,84 @@ function documentRef(id: string, filename: string, file?: Blob): AttachmentRef {
   };
 }
 
+// ── Contacts (routers/contacts_routes.py) ────────────────────────────────────
+
+/** ContactOut / ContactSummary / ContactDetail. Timestamps are the server's ISO strings, passed through. */
+interface ContactDto {
+  id: string;
+  full_name: string;
+  position: string | null;
+  company: string | null;
+  description: string | null;
+  email: string | null;
+  phone: string | null;
+  linkedin: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** SuggestionOut. `kind: 'create'` proposes a new contact (no `contact_id`). */
+interface ContactSuggestionDto {
+  id: string;
+  contact_id: string | null;
+  kind: string;
+  status: string;
+  suggested: Record<string, unknown>;
+  source: { type: string; ref_id: string | null; title: string | null } | null;
+  created_at: string;
+}
+
+const PROFILE_FIELDS: ReadonlySet<string> = new Set<ProfileField>([
+  'full_name',
+  'position',
+  'company',
+  'description',
+  'email',
+  'phone',
+  'linkedin',
+]);
+
+/**
+ * The contacts service stamps records with a naive `datetime.now()` (no offset). The server clock is UTC,
+ * so read offset-less timestamps as UTC; otherwise browsers take them as local time and a contact
+ * created a moment ago shows as "5h ago" in UTC+5. [CONFIRM: backend to send offset-aware times]
+ */
+const asUtc = (iso: string) => (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(iso) ? iso : `${iso}Z`);
+
+function toProfile(dto: ContactDto): Profile {
+  return {
+    id: dto.id,
+    full_name: dto.full_name,
+    position: dto.position ?? '',
+    company: dto.company ?? '',
+    description: dto.description ?? '',
+    email: dto.email ?? null,
+    phone: dto.phone ?? null,
+    linkedin: dto.linkedin ?? null,
+    created_at: asUtc(dto.created_at),
+    updated_at: asUtc(dto.updated_at),
+  };
+}
+
+function toSuggestion(dto: ContactSuggestionDto): ProfileUpdateSuggestion {
+  return {
+    id: dto.id,
+    profile_id: dto.contact_id ?? '',
+    source_type: 'meeting',
+    source_id: dto.source?.ref_id ?? '',
+    source_title: dto.source?.title ?? null,
+    created_at: asUtc(dto.created_at),
+    status: dto.status as ProfileSuggestionStatus,
+    // `suggested` maps field → proposed value; null clears an optional field.
+    changes: Object.entries(dto.suggested)
+      .filter(([field]) => PROFILE_FIELDS.has(field))
+      .map(([field, to]) => ({ field: field as ProfileField, to: to == null ? null : String(to) })),
+  };
+}
+
+/** Only update suggestions for an existing contact have a place in the UI (Current vs Suggested on a profile). */
+const isProfileUpdate = (dto: ContactSuggestionDto) => dto.kind === 'update' && Boolean(dto.contact_id);
+
 // ── Stream translation ───────────────────────────────────────────────────────
 
 type Json = Record<string, unknown>;
@@ -355,7 +442,6 @@ export function createHttpAdapter(): ApiAdapter {
     }
     return pending;
   };
-  let counter = 0;
 
   return {
     // No regenerate or /audio endpoint: the UI hides Regenerate and voice notes.
@@ -455,11 +541,49 @@ export function createHttpAdapter(): ApiAdapter {
       },
     },
 
-    // Not part of the chat backend: My Contacts stays in memory until its API exists.
-    ...createMockProfiles({
-      now: Date.now,
-      respond: async () => {},
-      newId: (prefix) => `${prefix}_${Date.now().toString(36)}${(++counter).toString(36)}`,
-    }),
+    // My Contacts: /contacts. The UI searches and sorts the (unpaginated) list itself; version history and
+    // new-contact suggestions have no UI yet and are not called.
+    profiles: {
+      async list() {
+        const items = await requestJson<ContactDto[]>('/contacts');
+        return { items: items.map(toProfile), next_cursor: null };
+      },
+      async get(id) {
+        return toProfile(await requestJson<ContactDto>(`/contacts/${encodeURIComponent(id)}`));
+      },
+      async create(body: ProfileInput) {
+        return toProfile(await requestJson<ContactDto>('/contacts', { method: 'POST', body }));
+      },
+      async update(id, body) {
+        return toProfile(await requestJson<ContactDto>(`/contacts/${encodeURIComponent(id)}`, { method: 'PATCH', body }));
+      },
+      async delete(id) {
+        await request(`/contacts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      },
+    },
+
+    profileSuggestions: {
+      async list(params) {
+        const query = new URLSearchParams();
+        if (params?.status) query.set('status', params.status);
+        if (params?.profile_id) query.set('contact_id', params.profile_id);
+        const qs = query.toString();
+        const items = await requestJson<ContactSuggestionDto[]>(`/contacts/suggestions${qs ? `?${qs}` : ''}`);
+        return { items: items.filter(isProfileUpdate).map(toSuggestion) };
+      },
+      async approve(id) {
+        // No body: the suggestion is applied as proposed (the UI has no partial-apply step).
+        const result = await requestJson<{ suggestion: ContactSuggestionDto; contact: ContactDto }>(
+          `/contacts/suggestions/${encodeURIComponent(id)}/approve`,
+          { method: 'POST' },
+        );
+        return { suggestion: toSuggestion(result.suggestion), profile: toProfile(result.contact) };
+      },
+      async reject(id) {
+        return toSuggestion(
+          await requestJson<ContactSuggestionDto>(`/contacts/suggestions/${encodeURIComponent(id)}/reject`, { method: 'POST' }),
+        );
+      },
+    },
   };
 }

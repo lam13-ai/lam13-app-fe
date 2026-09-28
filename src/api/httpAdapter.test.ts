@@ -278,7 +278,7 @@ describe('HTTP adapter — POST /chat/stream (real backend SSE)', () => {
 });
 
 describe('HTTP adapter — capabilities', () => {
-  it('declares what the backend lacks, rejects those calls with 501, and keeps My Contacts in memory', async () => {
+  it('declares what the backend lacks and rejects those calls with 501', async () => {
     const { fetch } = stubFetch(() => json({}));
     const api = createHttpAdapter();
     expect(api.capabilities).toEqual({ regenerate: false, voiceNotes: false, transcription: false });
@@ -288,7 +288,134 @@ describe('HTTP adapter — capabilities', () => {
     await expect(api.audio.upload({ file: new Blob(), duration_ms: 1000 })).rejects.toMatchObject({ status: 501 });
     await expect(api.messages.cancel('s', 'm')).resolves.toBeUndefined();
     expect(await api.models.list()).toEqual({ items: [] });
-    expect((await api.profiles.list()).items.length).toBeGreaterThan(0);
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('HTTP adapter — My Contacts (/contacts)', () => {
+  const contact = {
+    id: '66f0c0ffee',
+    full_name: 'Daniel Brandt',
+    position: 'CFO',
+    company: 'Harbor & Finch',
+    description: null,
+    email: 'd.brandt@harborfinch.example',
+    phone: null,
+    linkedin: null,
+    current_version: 3,
+    created_at: '2026-09-20T10:00:00',
+    updated_at: '2026-09-27T09:30:00',
+  };
+  const suggestion = (over: Record<string, unknown> = {}) => ({
+    id: 'sug1',
+    contact_id: '66f0c0ffee',
+    kind: 'update',
+    status: 'pending',
+    suggested: { position: 'Chief Financial Officer', phone: '+1 555 0142', linkedin: null },
+    applied: {},
+    reason: 'Mentioned in the meeting',
+    source: { type: 'meeting', ref_id: 'm-9', title: 'Q4 board prep', occurred_at: null },
+    base_version: 3,
+    resolved_version: null,
+    created_at: '2026-09-27T09:00:00',
+    resolved_at: null,
+    ...over,
+  });
+  const profile = {
+    id: '66f0c0ffee',
+    full_name: 'Daniel Brandt',
+    position: 'CFO',
+    company: 'Harbor & Finch',
+    description: '',
+    email: 'd.brandt@harborfinch.example',
+    phone: null,
+    linkedin: null,
+    created_at: '2026-09-20T10:00:00Z',
+    updated_at: '2026-09-27T09:30:00Z',
+  };
+
+  it('list: GET /contacts, mapped to the UI profile (missing text fields become empty strings)', async () => {
+    const { calls } = stubFetch(() => json([{ ...contact, pending_suggestions: 1 }]));
+    const page = await createHttpAdapter().profiles.list({ limit: 100 });
+    expect(calls[0]).toMatchObject({ url: '/contacts', method: 'GET' });
+    expect(calls[0]!.headers.Authorization).toBe(`Bearer ${TOKEN}`);
+    expect(page).toEqual({ items: [profile], next_cursor: null });
+  });
+
+  it('create / update / delete: POST /contacts, PATCH and DELETE /contacts/{id}', async () => {
+    const { calls } = stubFetch((call) =>
+      call.method === 'DELETE' ? new Response(null, { status: 204 }) : json(call.method === 'POST' ? contact : { ...contact, position: 'Chief Financial Officer' }, call.method === 'POST' ? 201 : 200),
+    );
+    const api = createHttpAdapter();
+    const body = { full_name: 'Daniel Brandt', position: 'CFO', company: 'Harbor & Finch', description: '', email: 'd.brandt@harborfinch.example', phone: null, linkedin: null };
+
+    expect(await api.profiles.create(body)).toEqual(profile);
+    expect(calls[0]).toMatchObject({ url: '/contacts', method: 'POST' });
+    expect(JSON.parse(calls[0]!.body as string)).toEqual(body);
+
+    expect((await api.profiles.update('66f0c0ffee', { ...body, position: 'Chief Financial Officer' })).position).toBe('Chief Financial Officer');
+    expect(calls[1]).toMatchObject({ url: '/contacts/66f0c0ffee', method: 'PATCH' });
+
+    await expect(api.profiles.delete('66f0c0ffee')).resolves.toBeUndefined();
+    expect(calls[2]).toMatchObject({ url: '/contacts/66f0c0ffee', method: 'DELETE' });
+  });
+
+  it('pending suggestions: GET /contacts/suggestions?status=pending, as Current-vs-Suggested changes; new-contact proposals are left out', async () => {
+    const { calls } = stubFetch(() => json([suggestion(), suggestion({ id: 'sug2', kind: 'create', contact_id: null, suggested: { full_name: 'New Person' } })]));
+    const { items } = await createHttpAdapter().profileSuggestions.list({ status: 'pending' });
+    expect(calls[0]).toMatchObject({ url: '/contacts/suggestions?status=pending', method: 'GET' });
+    expect(items).toEqual([
+      {
+        id: 'sug1',
+        profile_id: '66f0c0ffee',
+        source_type: 'meeting',
+        source_id: 'm-9',
+        source_title: 'Q4 board prep',
+        created_at: '2026-09-27T09:00:00Z',
+        status: 'pending',
+        changes: [
+          { field: 'position', to: 'Chief Financial Officer' },
+          { field: 'phone', to: '+1 555 0142' },
+          { field: 'linkedin', to: null },
+        ],
+      },
+    ]);
+  });
+
+  it('approve applies the suggestion as proposed (no body) and returns the updated contact; reject leaves it', async () => {
+    const { calls } = stubFetch((call) =>
+      call.url.endsWith('/approve')
+        ? json({ suggestion: suggestion({ status: 'approved' }), contact: { ...contact, position: 'Chief Financial Officer' } })
+        : json(suggestion({ status: 'rejected' })),
+    );
+    const api = createHttpAdapter();
+
+    const approved = await api.profileSuggestions.approve('sug1');
+    expect(calls[0]).toMatchObject({ url: '/contacts/suggestions/sug1/approve', method: 'POST', body: undefined });
+    expect(approved.suggestion.status).toBe('approved');
+    expect(approved.profile).toEqual({ ...profile, position: 'Chief Financial Officer' });
+
+    expect((await api.profileSuggestions.reject('sug1')).status).toBe('rejected');
+    expect(calls[1]).toMatchObject({ url: '/contacts/suggestions/sug1/reject', method: 'POST' });
+  });
+
+  it('reads offset-less timestamps as UTC, and leaves offset-aware ones alone', async () => {
+    stubFetch(() => json([{ ...contact, created_at: '2026-09-20T10:00:00.123456', updated_at: '2026-09-27T09:30:00+05:00' }]));
+    const [p] = (await createHttpAdapter().profiles.list()).items;
+    expect(p!.created_at).toBe('2026-09-20T10:00:00.123456Z');
+    expect(p!.updated_at).toBe('2026-09-27T09:30:00+05:00');
+  });
+
+  it('surfaces the backend reasons: 404 / 409 / field validation', async () => {
+    const responses = [
+      json({ detail: 'Pending suggestion not found.' }, 404),
+      json({ detail: 'Contact was changed elsewhere. Reload and try again.' }, 409),
+      json({ detail: [{ msg: 'value is not a valid email address' }] }, 422),
+    ];
+    stubFetch((_call, i) => responses[i]!);
+    const api = createHttpAdapter();
+    await expect(api.profileSuggestions.approve('gone')).rejects.toMatchObject({ status: 404, message: 'Pending suggestion not found.' });
+    await expect(api.profiles.update('66f0c0ffee', { position: 'X' })).rejects.toMatchObject({ status: 409, message: 'Contact was changed elsewhere. Reload and try again.' });
+    await expect(api.profiles.create({ ...profile, email: 'nope' })).rejects.toMatchObject({ status: 422, message: 'value is not a valid email address' });
   });
 });
