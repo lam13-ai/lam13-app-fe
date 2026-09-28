@@ -10,8 +10,8 @@ export type RecordingIntent = 'preview' | 'review' | 'send';
 /**
  * Voice-note state machine:
  *
- *   idle → requesting → recording ⇄ paused → stopping(intent) ─ preview → preview → uploading → sent
- *                                                            └ review / send → uploading(intent) → sent
+ *   idle → requesting → recording → stopping(intent) ─ preview → preview → uploading → sent
+ *                                                  └ review / send → uploading(intent) → sent
  *                  ↘ error        ↘ error (recording failure)          ↘ error (upload failure, recording + intent kept)
  *
  * On the transcription backend `uploading` is the transcription request: `review` = transcribing for
@@ -26,7 +26,6 @@ export type RecorderState =
   | { status: 'idle' }
   | { status: 'requesting' }
   | { status: 'recording'; elapsedMs: number }
-  | { status: 'paused'; elapsedMs: number }
   | { status: 'stopping'; elapsedMs: number; intent: RecordingIntent }
   | { status: 'preview'; recording: Recording; limitReached: boolean }
   | { status: 'uploading'; recording: Recording; intent: UploadIntent }
@@ -42,8 +41,6 @@ export type RecorderEvent =
   | { type: 'REQUEST' }
   | { type: 'STARTED' }
   | { type: 'TICK'; elapsedMs: number }
-  | { type: 'PAUSE' }
-  | { type: 'RESUME' }
   | { type: 'STOP'; intent?: RecordingIntent }
   | { type: 'STOPPED'; recording: Recording; limitReached?: boolean }
   | { type: 'FAIL'; error: VoiceError }
@@ -53,8 +50,6 @@ export type RecorderEvent =
   | { type: 'RESET' };
 
 export const initialRecorderState: RecorderState = { status: 'idle' };
-
-const elapsedOf = (state: RecorderState) => ('elapsedMs' in state ? state.elapsedMs : 0);
 
 export function recorderReducer(state: RecorderState, event: RecorderEvent): RecorderState {
   if (event.type === 'RESET') return initialRecorderState;
@@ -74,13 +69,10 @@ export function recorderReducer(state: RecorderState, event: RecorderEvent): Rec
       return state;
 
     case 'recording':
-    case 'paused':
     case 'stopping':
       if (event.type === 'TICK' && state.status === 'recording') return { status: 'recording', elapsedMs: event.elapsedMs };
-      if (event.type === 'PAUSE' && state.status === 'recording') return { status: 'paused', elapsedMs: elapsedOf(state) };
-      if (event.type === 'RESUME' && state.status === 'paused') return { status: 'recording', elapsedMs: elapsedOf(state) };
-      if (event.type === 'STOP' && state.status !== 'stopping')
-        return { status: 'stopping', elapsedMs: elapsedOf(state), intent: event.intent ?? 'preview' };
+      if (event.type === 'STOP' && state.status === 'recording')
+        return { status: 'stopping', elapsedMs: state.elapsedMs, intent: event.intent ?? 'preview' };
       if (event.type === 'STOPPED') {
         const intent = state.status === 'stopping' ? state.intent : 'preview';
         // Stopped to review/send: straight on to that step, no preview in between.
@@ -106,5 +98,5 @@ export function recorderReducer(state: RecorderState, event: RecorderEvent): Rec
 
 /** True while the microphone may be in use. */
 export function isCapturing(status: RecorderStatus): boolean {
-  return status === 'requesting' || status === 'recording' || status === 'paused' || status === 'stopping';
+  return status === 'requesting' || status === 'recording' || status === 'stopping';
 }

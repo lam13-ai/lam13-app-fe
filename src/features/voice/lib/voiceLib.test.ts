@@ -26,14 +26,12 @@ describe('pickAudioMimeType', () => {
 });
 
 describe('recorderReducer', () => {
-  it('walks the happy path: idle → requesting → recording ⇄ paused → stopping → preview → uploading → sent', () => {
+  it('walks the happy path: idle → requesting → recording → stopping → preview → uploading → sent', () => {
     let state = run([{ type: 'REQUEST' }]);
     expect(state.status).toBe('requesting');
     state = run([{ type: 'STARTED' }, { type: 'TICK', elapsedMs: 2000 }], state);
     expect(state).toEqual({ status: 'recording', elapsedMs: 2000 });
-    state = run([{ type: 'PAUSE' }, { type: 'TICK', elapsedMs: 9999 }], state);
-    expect(state).toEqual({ status: 'paused', elapsedMs: 2000 });
-    state = run([{ type: 'RESUME' }, { type: 'STOP' }], state);
+    state = run([{ type: 'STOP' }, { type: 'TICK', elapsedMs: 9999 }], state); // the clock stops with the recording
     expect(state).toEqual({ status: 'stopping', elapsedMs: 2000, intent: 'preview' });
     state = run([{ type: 'STOPPED', recording }], state);
     expect(state).toEqual({ status: 'preview', recording, limitReached: false });
@@ -55,8 +53,8 @@ describe('recorderReducer', () => {
       expect(failed).toMatchObject({ status: 'error', recording, intent });
       expect(run([{ type: 'UPLOAD' }], failed)).toEqual({ status: 'uploading', recording, intent });
     }
-    // Pause → resume never finishes the recording.
-    expect(run([{ type: 'PAUSE' }, { type: 'RESUME' }], recordingState)).toEqual(recordingState);
+    // Recording keeps going on its own: only a stop ends it.
+    expect(run([{ type: 'TICK', elapsedMs: 4000 }], recordingState)).toEqual({ status: 'recording', elapsedMs: 4000 });
   });
 
   it('models failures: permission/recording errors drop audio, upload errors keep it for retry', () => {
@@ -78,7 +76,7 @@ describe('recorderReducer', () => {
   });
 
   it('ignores invalid events and always resets', () => {
-    expect(run([{ type: 'PAUSE' }, { type: 'UPLOAD' }, { type: 'STOPPED', recording }])).toEqual(initialRecorderState);
+    expect(run([{ type: 'TICK', elapsedMs: 1 }, { type: 'UPLOAD' }, { type: 'STOPPED', recording }])).toEqual(initialRecorderState);
     const uploading: RecorderState = { status: 'uploading', recording, intent: 'send' };
     expect(run([{ type: 'REQUEST' }, { type: 'UPLOAD' }], uploading)).toBe(uploading); // no double send / re-record mid-upload
     expect(run([{ type: 'RESET' }], uploading)).toEqual(initialRecorderState);
@@ -88,7 +86,7 @@ describe('recorderReducer', () => {
   });
 
   it('reports when the microphone may be in use', () => {
-    expect(['requesting', 'recording', 'paused', 'stopping'].every((s) => isCapturing(s as never))).toBe(true);
+    expect(['requesting', 'recording', 'stopping'].every((s) => isCapturing(s as never))).toBe(true);
     expect(['idle', 'preview', 'uploading', 'sent', 'error'].some((s) => isCapturing(s as never))).toBe(false);
   });
 });

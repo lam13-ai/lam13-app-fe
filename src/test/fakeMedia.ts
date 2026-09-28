@@ -23,7 +23,7 @@ export class FakeStream {
   }
 }
 
-type RecorderState = 'inactive' | 'recording' | 'paused';
+type RecorderState = 'inactive' | 'recording';
 
 export class FakeMediaRecorder {
   static supported = new Set(['audio/webm;codecs=opus', 'audio/webm']);
@@ -49,12 +49,6 @@ export class FakeMediaRecorder {
     FakeMediaRecorder.instances.push(this);
   }
   start() {
-    this.state = 'recording';
-  }
-  pause() {
-    this.state = 'paused';
-  }
-  resume() {
     this.state = 'recording';
   }
   stop() {

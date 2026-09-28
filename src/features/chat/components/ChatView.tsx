@@ -110,6 +110,8 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
       }
     })();
   };
+  /** Picked or pasted files: one validation path, rejections reported the same way. */
+  const addFiles = (picked: File[]) => files.add(picked).forEach((r) => toast.show(`${r.name}: ${r.reason}`));
   const loadingHistory = Boolean(conversationId) && history.isPending;
 
   const transcribe = (recording: Recording, signal: AbortSignal) =>
@@ -208,6 +210,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
             // transcribing IS the send, it would just transcribe twice.
             onTranscribeVoice={capabilities.voiceNotes && capabilities.transcription ? transcribe : undefined}
             onAttach={() => fileInputRef.current?.click()}
+            onPasteFiles={addFiles}
             attachments={
               files.drafts.length > 0 && (
                 <ul aria-label="Attached files" className="flex flex-wrap gap-1.5 px-3 pt-3">
@@ -247,7 +250,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
             hidden
             accept={ATTACHMENT_LIMITS.mimeTypes.join(',')}
             onChange={(e) => {
-              files.add(Array.from(e.target.files ?? [])).forEach((r) => toast.show(`${r.name}: ${r.reason}`));
+              addFiles(Array.from(e.target.files ?? []));
               e.target.value = '';
             }}
           />

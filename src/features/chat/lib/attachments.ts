@@ -26,3 +26,32 @@ export function validateImageFiles(files: readonly File[], alreadyAttached = 0):
   }
   return { accepted, rejected };
 }
+
+const PASTED_EXTENSIONS: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'application/pdf': 'pdf',
+};
+
+/**
+ * The files on a paste — a screenshot, a copied image, files copied in Explorer / Finder — or none for
+ * plain text (and in browsers that don't expose clipboard files). Files are used as they are; one without
+ * a name gets `pasted-image.<ext>` / `pasted-file.<ext>` with its type, size and bytes unchanged.
+ */
+export function clipboardFiles(data: Pick<DataTransfer, 'files' | 'items'> | null): File[] {
+  if (!data) return [];
+  const files = data.files?.length
+    ? Array.from(data.files)
+    : Array.from(data.items ?? []).flatMap((item) => {
+        const file = item.kind === 'file' ? item.getAsFile() : null;
+        return file ? [file] : [];
+      });
+  return files.map((file) => {
+    if (file.name) return file;
+    const base = file.type.startsWith('image/') ? 'pasted-image' : 'pasted-file';
+    const ext = PASTED_EXTENSIONS[file.type] ?? (file.type.split('/')[1] || 'bin');
+    return new File([file], `${base}.${ext}`, { type: file.type, lastModified: file.lastModified });
+  });
+}

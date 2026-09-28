@@ -15,7 +15,7 @@ interface LiveProps extends CommonProps {
   mode: 'live';
   /** Polled every animation frame — must be cheap and must not trigger React updates. */
   getLevel: () => number;
-  /** When false the history freezes (e.g. paused). */
+  /** When false the history freezes (e.g. while the recording is finishing). */
   active: boolean;
 }
 
@@ -76,7 +76,7 @@ function resample(peaks: number[], count: number): number[] {
 export function Waveform(props: WaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const getLevelRef = useRef<() => number>(() => 0);
-  // Kept across pause/resume so the waveform does not reset.
+  // Kept while inactive so the waveform does not reset.
   const historyRef = useRef<number[]>([]);
   const { mode, className } = props;
   const active = props.mode === 'live' ? props.active : false;

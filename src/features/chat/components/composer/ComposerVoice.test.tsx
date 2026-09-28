@@ -37,7 +37,7 @@ afterEach(() => {
 });
 
 describe('Composer voice recording', () => {
-  it('mic → recording controls with time, pause/resume, and a live status', async () => {
+  it('mic → recording controls: Delete, time, Stop and Send — no pause — and a live status', async () => {
     setup();
     await startRecording();
     expect(media.getUserMedia).toHaveBeenCalledOnce();
@@ -46,10 +46,9 @@ describe('Composer voice recording', () => {
     expect(screen.getByText('/ 5:00')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Delete recording' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Pause recording' }));
-    expect(screen.getByText('Recording paused.')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Resume recording' }));
-    expect(screen.getByText('Recording.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Stop recording' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Send voice message' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /pause|resume/i })).toBeNull();
   });
 
   it('stop → preview with playback, re-record and send; the microphone is released', async () => {

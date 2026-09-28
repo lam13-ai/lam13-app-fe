@@ -63,7 +63,7 @@ describe('createAudioRecorder', () => {
     expect(tracksStopped()).toBe(true);
   });
 
-  it('records with a supported MIME type, pauses/resumes, and stops into a playable Blob', async () => {
+  it('records continuously with a supported MIME type and stops into a playable Blob', async () => {
     const onTick = vi.fn();
     const rec = recorder({ onTick });
     await rec.start();
@@ -76,11 +76,11 @@ describe('createAudioRecorder', () => {
     expect(onTick).toHaveBeenLastCalledWith(2000);
     expect(rec.getLevel()).toBeGreaterThan(0);
 
-    rec.pause();
-    expect(media.state).toBe('paused');
-    clock = 10_000; // paused time is excluded
-    rec.resume();
-    clock = 11_000;
+    expect('pause' in rec || 'resume' in rec).toBe(false); // no pause: one continuous take
+    clock = 3000;
+    vi.advanceTimersByTime(200);
+    expect(onTick).toHaveBeenLastCalledWith(3000);
+    expect(media.state).toBe('recording');
 
     const result = await rec.stop();
     expect(result.durationMs).toBe(3000);

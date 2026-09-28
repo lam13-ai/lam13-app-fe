@@ -28,7 +28,7 @@ export function browserMediaDeps(): MediaDeps {
 export interface RecorderOptions {
   maxDurationMs: number;
   peakCount: number;
-  /** Called every `tickMs` while capturing, with the elapsed (unpaused) time. */
+  /** Called every `tickMs` while capturing, with the elapsed time. */
   onTick?: (elapsedMs: number) => void;
   /** Called once when the maximum duration is reached (the owner should stop). */
   onLimitReached?: () => void;
@@ -40,11 +40,8 @@ export interface RecorderOptions {
 }
 
 export interface AudioRecorder {
-  readonly canPause: boolean;
   /** Requests the microphone and starts recording. Rejects with VoiceRecorderError (or AbortError if cancelled). */
   start(): Promise<void>;
-  pause(): void;
-  resume(): void;
   /** Stops and resolves with the recording. Microphone and audio graph are released. */
   stop(): Promise<Recording>;
   /** Discards everything and releases the microphone. Safe to call at any time, repeatedly. */
@@ -87,13 +84,12 @@ export function createAudioRecorder(options: RecorderOptions): AudioRecorder {
   let timer: ReturnType<typeof setInterval> | null = null;
   let chunks: Blob[] = [];
   let levels: number[] = [];
-  let accumulatedMs = 0;
-  let segmentStart: number | null = null;
+  let startedAt: number | null = null;
   let closed = false;
   let limitNotified = false;
   let pendingStop: { resolve: (recording: Recording) => void; reject: (error: unknown) => void } | null = null;
 
-  const elapsed = () => accumulatedMs + (segmentStart === null ? 0 : now() - segmentStart);
+  const elapsed = () => (startedAt === null ? 0 : now() - startedAt);
 
   const readLevel = () => {
     if (!analyser || !samples) return 0;
@@ -154,10 +150,6 @@ export function createAudioRecorder(options: RecorderOptions): AudioRecorder {
   }
 
   return {
-    get canPause() {
-      return typeof deps.MediaRecorder?.prototype?.pause === 'function';
-    },
-
     async start() {
       if (!deps.isSecureContext) throw new VoiceRecorderError('insecure-context');
       if (!deps.getUserMedia || !deps.MediaRecorder) throw new VoiceRecorderError('unsupported');
@@ -216,7 +208,7 @@ export function createAudioRecorder(options: RecorderOptions): AudioRecorder {
         throw new VoiceRecorderError('recorder-failed');
       }
 
-      segmentStart = now();
+      startedAt = now();
       timer = setInterval(() => {
         if (closed) return;
         if (recorder?.state === 'recording') levels.push(readLevel());
@@ -229,19 +221,6 @@ export function createAudioRecorder(options: RecorderOptions): AudioRecorder {
       }, tickMs);
     },
 
-    pause() {
-      if (closed || recorder?.state !== 'recording' || typeof recorder.pause !== 'function') return;
-      recorder.pause();
-      if (segmentStart !== null) accumulatedMs += now() - segmentStart;
-      segmentStart = null;
-    },
-
-    resume() {
-      if (closed || recorder?.state !== 'paused') return;
-      recorder.resume();
-      segmentStart = now();
-    },
-
     stop() {
       return new Promise<Recording>((resolve, reject) => {
         const active = recorder;
@@ -250,8 +229,7 @@ export function createAudioRecorder(options: RecorderOptions): AudioRecorder {
           return;
         }
         const durationMs = Math.min(elapsed(), options.maxDurationMs);
-        if (segmentStart !== null) accumulatedMs += now() - segmentStart;
-        segmentStart = null;
+        startedAt = null;
         pendingStop = { resolve, reject };
 
         active.onstop = () => {

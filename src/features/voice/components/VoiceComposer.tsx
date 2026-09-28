@@ -1,4 +1,4 @@
-import { ArrowUp, Mic, Pause, RotateCcw, Square, Trash2, X } from 'lucide-react';
+import { ArrowUp, RotateCcw, Square, Trash2, X } from 'lucide-react';
 import { useId, type ReactNode } from 'react';
 import { Waveform } from '@/components/Waveform';
 import { Button, IconButton, Spinner, Tooltip, iconProps } from '@/components/ui';
@@ -65,8 +65,6 @@ function announcement(state: RecorderState, mode: Mode): string {
       return 'Requesting microphone access.';
     case 'recording':
       return 'Recording.';
-    case 'paused':
-      return 'Recording paused.';
     case 'stopping':
       return state.intent === 'preview' || mode === 'voiceNote' ? 'Finishing recording.' : `${LABELS[mode][state.intent].busy}.`;
     case 'preview':
@@ -92,7 +90,6 @@ function RecordingBar({
   const elapsed = 'elapsedMs' in state ? state.elapsedMs : 0;
   const remaining = Math.max(0, maxDurationMs - elapsed);
   const warn = remaining <= VOICE_CONFIG.warnRemainingMs;
-  const paused = state.status === 'paused';
   const stopping = state.status === 'stopping';
 
   return (
@@ -102,7 +99,7 @@ function RecordingBar({
       </Tooltip>
 
       <div className="flex shrink-0 items-center gap-2 pl-1 text-xs tabular-nums" aria-hidden="true">
-        <span className={cn('size-2 bg-danger', !paused && 'motion-safe:animate-pulse', paused && 'opacity-40')} />
+        <span className={cn('size-2 bg-danger', !stopping && 'motion-safe:animate-pulse')} />
         {warn ? (
           <span className="text-danger">{formatDuration(remaining)} left</span>
         ) : (
@@ -111,27 +108,15 @@ function RecordingBar({
             <span className="text-fg-muted max-sm:hidden"> / {formatDuration(maxDurationMs)}</span>
           </span>
         )}
-        {paused && <span className="text-fg-muted max-sm:hidden">Paused</span>}
       </div>
 
       <Waveform
         mode="live"
         getLevel={recorder.getLevel}
         active={state.status === 'recording'}
-        className={cn('mx-2 min-w-0 flex-1', paused ? 'text-fg/30' : 'text-fg/70')}
+        className="mx-2 min-w-0 flex-1 text-fg/70"
       />
 
-      {recorder.canPause && (
-        <Tooltip content={paused ? 'Resume' : 'Pause'}>
-          <IconButton
-            label={paused ? 'Resume recording' : 'Pause recording'}
-            size="md"
-            disabled={stopping}
-            icon={paused ? <Mic {...iconProps} /> : <Pause {...iconProps} />}
-            onClick={paused ? recorder.resume : recorder.pause}
-          />
-        </Tooltip>
-      )}
       <Tooltip content={onReview ? 'Stop and transcribe' : 'Stop and review'} align="end">
         <IconButton
           label="Stop recording"
@@ -375,7 +360,7 @@ export function VoiceComposer({
         </div>
       )}
       {transcribing && <TranscribingBar recorder={recorder} intent={transcribing} />}
-      {(state.status === 'recording' || state.status === 'paused' || state.status === 'stopping') && !transcribing && (
+      {(state.status === 'recording' || state.status === 'stopping') && !transcribing && (
         <RecordingBar recorder={recorder} onSend={onSend} onReview={onReview} />
       )}
       {(state.status === 'preview' || state.status === 'uploading') && !transcribing && (

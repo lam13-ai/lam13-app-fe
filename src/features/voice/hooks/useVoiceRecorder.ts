@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useId, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useId, useReducer, useRef } from 'react';
 import { isAbortError, toErrorInfo } from '@/api';
 import { VOICE_CONFIG } from '../config';
 import { audioFocus } from '../lib/audioFocus';
-import { browserMediaDeps, createAudioRecorder, type AudioRecorder, type RecorderOptions } from '../lib/recorder';
+import { createAudioRecorder, type AudioRecorder, type RecorderOptions } from '../lib/recorder';
 import {
   initialRecorderState,
   recorderReducer,
@@ -24,10 +24,7 @@ export interface UseVoiceRecorderOptions {
 export interface VoiceRecorderApi {
   state: RecorderState;
   maxDurationMs: number;
-  canPause: boolean;
   start: () => Promise<void>;
-  pause: () => void;
-  resume: () => void;
   /** Stop → preview. */
   stop: () => Promise<Recording | undefined>;
   /**
@@ -67,7 +64,6 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): VoiceRe
   // stop it again — the engine would drop the first stop's result and the recording would be handled twice.
   const stoppingRef = useRef<AudioRecorder | null>(null);
   const lastSecond = useRef(-1);
-  const canPause = useMemo(() => typeof browserMediaDeps().MediaRecorder?.prototype?.pause === 'function', []);
 
   useEffect(() => {
     stateRef.current = state;
@@ -158,20 +154,6 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): VoiceRe
     }
   }, [createRecorder, maxDurationMs, focusId, discard, stop]);
 
-  const pause = useCallback(() => {
-    const engine = engineRef.current;
-    if (!engine?.canPause) return;
-    engine.pause();
-    dispatch({ type: 'PAUSE' });
-  }, []);
-
-  const resume = useCallback(() => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    engine.resume();
-    dispatch({ type: 'RESUME' });
-  }, []);
-
   const upload = useCallback(async (sendRecording: SendRecording, recording: Recording, intent: UploadIntent) => {
     if (uploadRef.current) return; // no duplicate sends
     const controller = new AbortController();
@@ -223,10 +205,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): VoiceRe
   return {
     state,
     maxDurationMs,
-    canPause,
     start,
-    pause,
-    resume,
     stop: () => stop(false),
     stopAndSend,
     send,

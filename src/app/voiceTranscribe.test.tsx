@@ -55,18 +55,11 @@ function held(text: string) {
   return { release, respond: async () => (await gate, Response.json({ text })) };
 }
 
-async function record({ pause = false } = {}) {
+async function record() {
   const mic = await screen.findByRole('button', { name: 'Record voice message' }, { timeout: 8000 });
   await act(async () => fireEvent.click(mic));
   await screen.findByRole('button', { name: 'Stop recording' });
   await speak(300);
-  if (pause) {
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Pause recording' })));
-    expect(await screen.findByRole('button', { name: 'Resume recording' })).toBeTruthy();
-    await speak(200);
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Resume recording' })));
-    await speak(300);
-  }
 }
 
 /** Clicks twice before React can re-render — a double click / rapid repeat. */
@@ -88,12 +81,35 @@ const setup = (transcribe: () => Response | Promise<Response>) => {
 };
 
 describe('voice → Stop: transcribe for review (production adapter)', () => {
-  it('pause/resume never transcribes; Stop transcribes once into the box, sends nothing; the edited text is sent once', async () => {
+  it('records continuously (Delete / Stop / Send only), nothing uploaded while recording', async () => {
+    const { transcriptions, chats } = setup(() => Response.json({ text: 'unused' }));
+    await record();
+    expect(screen.getByRole('button', { name: 'Delete recording' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Send recording' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /pause|resume/i })).toBeNull();
+    expect(screen.queryByText(/^Paused$|Recording paused/)).toBeNull();
+    await speak(300);
+    expect(screen.getByText('Recording.')).toBeTruthy(); // still recording: nothing paused it
+    expect(transcriptions()).toHaveLength(0);
+    expect(chats()).toHaveLength(0);
+  });
+
+  it('Delete discards the recording: no transcription, no message, microphone released', async () => {
+    const { transcriptions, chats } = setup(() => Response.json({ text: 'unused' }));
+    await record();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Delete recording' })));
+    expect(await screen.findByRole('button', { name: 'Record voice message' })).toBeTruthy();
+    expect(media.allTracksStopped()).toBe(true);
+    await speak(100);
+    expect(transcriptions()).toHaveLength(0);
+    expect(chats()).toHaveLength(0);
+  });
+
+  it('Stop transcribes once into the box, sends nothing; the edited text is sent once', async () => {
     const response = held('Draft the Q4 plan for the board');
     const { transcriptions, chats } = setup(response.respond);
 
-    await record({ pause: true });
-    expect(transcriptions()).toHaveLength(0); // pause → resume uploads nothing
+    await record();
     // Vapi calling is untouched by the voice-note UI.
     expect(screen.getByRole('button', { name: 'Start voice call' })).toBeTruthy();
 
@@ -143,6 +159,19 @@ describe('voice → Stop: transcribe for review (production adapter)', () => {
     await waitFor(() => expect(box().value).toBe('Second time lucky'));
     expect(transcriptions()).toHaveLength(2);
     expect(media.getUserMedia.mock.calls.length).toBe(recordings); // the microphone was not opened again
+    expect(chats()).toHaveLength(0);
+  });
+
+  it('Stop then Send in quick succession: the first action wins — one transcription, into the box, nothing sent', async () => {
+    const { transcriptions, chats } = setup(() => Response.json({ text: 'Stop won' }));
+    await record();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Stop recording' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Send recording' }));
+    });
+    await waitFor(() => expect(box().value).toBe('Stop won'));
+    await speak(100);
+    expect(transcriptions()).toHaveLength(1);
     expect(chats()).toHaveLength(0);
   });
 

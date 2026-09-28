@@ -3,6 +3,7 @@ import { useVoiceRecorder, VoiceComposer, type SendRecording, type TranscribeRec
 import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
 import { cn } from '@/lib/cn';
 import { useComposerStore } from '@/stores/composerStore';
+import { clipboardFiles } from '../../lib/attachments';
 import { ComposerToolbar } from './ComposerToolbar';
 import { SendButton, type SendButtonMode } from './SendButton';
 
@@ -24,6 +25,8 @@ export interface ComposerProps {
   /** Stop on the recording: transcribes it into this box for editing (backends without voice notes). Omit to preview it. */
   onReviewVoice?: SendRecording;
   onAttach: () => void;
+  /** Files pasted into the message box (screenshots, copied images / files) — same path as `onAttach`'s picker. */
+  onPasteFiles?: (files: File[]) => void;
   /** Files picked for the next message, shown above the input (keeps the composer open). */
   attachments?: ReactNode;
 }
@@ -43,6 +46,7 @@ export function Composer({
   onTranscribeVoice,
   onReviewVoice,
   onAttach,
+  onPasteFiles,
   attachments,
 }: ComposerProps) {
   const draft = useComposerStore((s) => s.drafts[draftKey] ?? '');
@@ -179,6 +183,14 @@ export function Composer({
                 enterKeyHint="send"
                 onChange={(e) => setDraft(draftKey, e.target.value)}
                 onKeyDown={onKeyDown}
+                onPaste={(e) => {
+                  const files = clipboardFiles(e.clipboardData);
+                  if (!onPasteFiles || files.length === 0) return; // text: the browser pastes it as usual
+                  // Files only: nothing to paste as text. With text too, the textarea still takes just its
+                  // plain text (never HTML) while the files are attached.
+                  if (!e.clipboardData.types.includes('text/plain')) e.preventDefault();
+                  onPasteFiles(files);
+                }}
                 onScroll={updateEdges}
                 className={cn(
                   'block max-h-[min(40dvh,240px)] w-full animate-enter-sm resize-none overflow-y-auto bg-transparent',
