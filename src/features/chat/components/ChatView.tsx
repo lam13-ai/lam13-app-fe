@@ -115,16 +115,28 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
   const transcribe = (recording: Recording, signal: AbortSignal) =>
     api.audio.transcribe({ file: recording.blob, duration_ms: recording.durationMs }, { signal }).then((r) => r.text);
   /**
-   * Backends without voice messages (the FastAPI one): the recording is transcribed into the message box
-   * for editing, then sent as an ordinary text message. A failure keeps the recording (Retry) — the
-   * recorder's send step owns busy / error / retry.
+   * Backends without voice messages (the FastAPI one) send a recording as text. A failure throws, so the
+   * recorder keeps the recording and offers Retry (it owns busy / error / retry) — nothing is sent.
    */
-  const transcribeIntoDraft = async (recording: Recording, signal: AbortSignal) => {
+  const transcribeText = async (recording: Recording, signal: AbortSignal) => {
     const text = (await transcribe(recording, signal)).trim();
     if (!text) throw new ApiError(422, 'no_speech', 'No speech was detected. Try recording again.');
+    return text;
+  };
+  /** Stop: the transcript goes into the message box for editing; the user sends it. */
+  const transcribeIntoDraft = async (recording: Recording, signal: AbortSignal) => {
+    const text = await transcribeText(recording, signal);
     const { drafts, setDraft } = useComposerStore.getState();
     const current = drafts[draftKey]?.trim();
     setDraft(draftKey, current ? `${current} ${text}` : text);
+  };
+  /** Send: the transcript is sent as the message straight away — exactly once, never empty. */
+  const transcribeAndSend = async (recording: Recording, signal: AbortSignal) => {
+    const text = await transcribeText(recording, signal);
+    if (useStreamStore.getState().active[key]) {
+      throw new ApiError(409, 'busy', 'Lam13 is still answering. Try again when it has finished.');
+    }
+    send(text);
   };
 
   let body;
@@ -188,13 +200,13 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
                 : capabilities.voiceNotes
                   ? (recording, signal) => actions.sendVoice(conversationId, recording, { origin, signal })
                   : capabilities.transcription
-                    ? transcribeIntoDraft
+                    ? transcribeAndSend
                     : undefined
             }
+            onReviewVoice={env.features.voiceNotes && !capabilities.voiceNotes && capabilities.transcription ? transcribeIntoDraft : undefined}
             // The preview's automatic transcript only where the recording itself is sent (voice notes); when
             // transcribing IS the send, it would just transcribe twice.
             onTranscribeVoice={capabilities.voiceNotes && capabilities.transcription ? transcribe : undefined}
-            voiceAction={capabilities.voiceNotes ? 'send' : 'transcribe'}
             onAttach={() => fileInputRef.current?.click()}
             attachments={
               files.drafts.length > 0 && (

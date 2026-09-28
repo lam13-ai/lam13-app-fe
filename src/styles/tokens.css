@@ -32,9 +32,10 @@
   --color-accent-wash: rgb(43 92 230 / 0.1);
   --color-danger: hsl(11 58% 44%);
   --color-ring: #0a0a0a;
-  /* Inverse block (user messages): black with white text in light mode. */
-  --color-inverse: #0a0a0a;
-  --color-on-inverse: #ffffff;
+  /* Inverse block (user messages): a soft charcoal with off-white text in light mode — never pure black
+     behind long text. */
+  --color-inverse: #1c1c1c;
+  --color-on-inverse: #ededed;
   /* Text links (Markdown). */
   --color-link: #2b5ce6;
   /* Keyboard focus outline. */

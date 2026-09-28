@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
-import { useVoiceRecorder, VoiceComposer, type SendRecording, type TranscribeRecording, type VoiceAction } from '@/features/voice';
+import { useCallback, useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useVoiceRecorder, VoiceComposer, type SendRecording, type TranscribeRecording } from '@/features/voice';
 import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
 import { cn } from '@/lib/cn';
 import { useComposerStore } from '@/stores/composerStore';
@@ -17,12 +17,12 @@ export interface ComposerProps {
   disabled?: boolean;
   onSend: (text: string) => void;
   onStop: () => void;
-  /** Uploads and sends a recorded voice note. Omit to hide voice recording. */
+  /** Send on a recording: sends the voice note (or its transcript as the message). Omit to hide voice recording. */
   onSendVoice?: SendRecording;
   /** Transcribes a recording for review before sending. Omit when the backend can't transcribe. */
   onTranscribeVoice?: TranscribeRecording;
-  /** What the voice composer's send does: send the recording, or transcribe it into this box. */
-  voiceAction?: VoiceAction;
+  /** Stop on the recording: transcribes it into this box for editing (backends without voice notes). Omit to preview it. */
+  onReviewVoice?: SendRecording;
   onAttach: () => void;
   /** Files picked for the next message, shown above the input (keeps the composer open). */
   attachments?: ReactNode;
@@ -41,7 +41,7 @@ export function Composer({
   onStop,
   onSendVoice,
   onTranscribeVoice,
-  voiceAction,
+  onReviewVoice,
   onAttach,
   attachments,
 }: ComposerProps) {
@@ -62,7 +62,10 @@ export function Composer({
   const canSend = !streaming && !disabled && draft.trim().length > 0;
   const mode: SendButtonMode = streaming ? 'stop' : draft.trim() || !onSendVoice ? 'send' : 'voice';
 
-  useAutoResizeTextarea(textareaRef, expanded ? draft : '');
+  // Keyed on the textarea being shown: a transcript set while the voice panel is up must still size it
+  // (and its scroll fades) once the textarea is back.
+  const shownDraft = expanded && !voiceActive ? draft : '';
+  useAutoResizeTextarea(textareaRef, shownDraft);
 
   // Focus the textarea when the user opens the composer.
   useEffect(() => {
@@ -102,13 +105,17 @@ export function Composer({
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [expanded]);
 
-  const updateEdges = () => {
+  const updateEdges = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
     const top = el.scrollTop > 0;
     const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
     setEdges((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
-  };
+  }, []);
+  useEffect(() => {
+    const frame = requestAnimationFrame(updateEdges);
+    return () => cancelAnimationFrame(frame);
+  }, [shownDraft, updateEdges]);
 
   const submit = () => {
     if (!canSend) return;
@@ -154,7 +161,7 @@ export function Composer({
         )}
       >
         {voiceActive && onSendVoice ? (
-          <VoiceComposer recorder={recorder} onSend={onSendVoice} transcribe={onTranscribeVoice} action={voiceAction} />
+          <VoiceComposer recorder={recorder} onSend={onSendVoice} onReview={onReviewVoice} transcribe={onTranscribeVoice} />
         ) : expanded ? (
           <>
             {attachments}
@@ -170,10 +177,7 @@ export function Composer({
                 disabled={streaming}
                 placeholder={streaming ? 'Lam13 is responding…' : PLACEHOLDER}
                 enterKeyHint="send"
-                onChange={(e) => {
-                  setDraft(draftKey, e.target.value);
-                  requestAnimationFrame(updateEdges);
-                }}
+                onChange={(e) => setDraft(draftKey, e.target.value)}
                 onKeyDown={onKeyDown}
                 onScroll={updateEdges}
                 className={cn(
@@ -185,14 +189,14 @@ export function Composer({
               <div
                 aria-hidden="true"
                 className={cn(
-                  'pointer-events-none absolute inset-x-4 top-0 h-8 bg-linear-to-b from-bg via-bg/90 to-transparent transition-opacity duration-150',
+                  'pointer-events-none absolute inset-x-4 top-0 h-8 bg-linear-to-b from-composer via-composer/90 to-transparent transition-opacity duration-150',
                   edges.top ? 'opacity-100' : 'opacity-0',
                 )}
               />
               <div
                 aria-hidden="true"
                 className={cn(
-                  'pointer-events-none absolute inset-x-4 bottom-0 h-8 bg-linear-to-t from-bg via-bg/90 to-transparent transition-opacity duration-150',
+                  'pointer-events-none absolute inset-x-4 bottom-0 h-8 bg-linear-to-t from-composer via-composer/90 to-transparent transition-opacity duration-150',
                   edges.bottom ? 'opacity-100' : 'opacity-0',
                 )}
               />

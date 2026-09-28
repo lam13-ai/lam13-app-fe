@@ -8,19 +8,24 @@ import { VOICE_CONFIG } from '../config';
 import { useObjectUrl } from '../hooks/useObjectUrl';
 import { useTranscript, type TranscribeRecording } from '../hooks/useTranscript';
 import type { SendRecording, VoiceRecorderApi } from '../hooks/useVoiceRecorder';
-import type { RecorderState } from '../lib/recorderMachine';
+import type { RecorderState, UploadIntent } from '../lib/recorderMachine';
 import type { Recording } from '../lib/types';
 import { VoicePlayer } from './VoicePlayer';
 
 /**
- * What "send" does with the recording: `send` — it is the message (voice note); `transcribe` — it becomes
- * editable text in the message box (backends without voice messages). Only the wording differs.
+ * Two modes. Voice notes (no `onReview`): the recording is the message — Stop previews it, Send sends it.
+ * Transcription (`onReview` given, backends without voice messages): Stop transcribes it into the message
+ * box to edit (`review`), Send transcribes it and sends the text at once (`send`).
  */
-export type VoiceAction = 'send' | 'transcribe';
+type Mode = 'voiceNote' | 'transcription';
 
-const LABELS: Record<VoiceAction, { send: string; busy: string; retry: string }> = {
-  send: { send: 'Send voice message', busy: 'Sending voice message', retry: 'Retry sending' },
-  transcribe: { send: 'Transcribe recording', busy: 'Transcribing recording', retry: 'Retry transcription' },
+const VOICE_NOTE = { send: 'Send voice message', busy: 'Sending voice message', retry: 'Retry sending' };
+const LABELS: Record<Mode, Record<UploadIntent, { send: string; busy: string; retry: string }>> = {
+  voiceNote: { send: VOICE_NOTE, review: VOICE_NOTE },
+  transcription: {
+    send: { send: 'Send recording', busy: 'Transcribing and sending', retry: 'Retry sending' },
+    review: { send: 'Transcribe recording', busy: 'Transcribing recording', retry: 'Retry transcription' },
+  },
 };
 
 /** Black round primary action — same treatment as the composer's send button. */
@@ -54,7 +59,7 @@ function PrimaryRound({
   );
 }
 
-function announcement(state: RecorderState, action: VoiceAction): string {
+function announcement(state: RecorderState, mode: Mode): string {
   switch (state.status) {
     case 'requesting':
       return 'Requesting microphone access.';
@@ -63,17 +68,26 @@ function announcement(state: RecorderState, action: VoiceAction): string {
     case 'paused':
       return 'Recording paused.';
     case 'stopping':
-      return 'Finishing recording.';
+      return state.intent === 'preview' || mode === 'voiceNote' ? 'Finishing recording.' : `${LABELS[mode][state.intent].busy}.`;
     case 'preview':
       return `Recording ready to review, ${describeDuration(state.recording.durationMs)}.${state.limitReached ? ' Maximum length reached.' : ''}`;
     case 'uploading':
-      return `${LABELS[action].busy}.`;
+      return `${LABELS[mode][state.intent].busy}.`;
     default:
       return '';
   }
 }
 
-function RecordingBar({ recorder, onSend, action }: { recorder: VoiceRecorderApi; onSend: SendRecording; action: VoiceAction }) {
+function RecordingBar({
+  recorder,
+  onSend,
+  onReview,
+}: {
+  recorder: VoiceRecorderApi;
+  onSend: SendRecording;
+  onReview: SendRecording | undefined;
+}) {
+  const mode: Mode = onReview ? 'transcription' : 'voiceNote';
   const { state, maxDurationMs } = recorder;
   const elapsed = 'elapsedMs' in state ? state.elapsedMs : 0;
   const remaining = Math.max(0, maxDurationMs - elapsed);
@@ -118,18 +132,22 @@ function RecordingBar({ recorder, onSend, action }: { recorder: VoiceRecorderApi
           />
         </Tooltip>
       )}
-      <Tooltip content="Stop and review" align="end">
+      <Tooltip content={onReview ? 'Stop and transcribe' : 'Stop and review'} align="end">
         <IconButton
           label="Stop recording"
           size="md"
           disabled={stopping}
           icon={<Square {...iconProps} size={14} />}
-          onClick={() => void recorder.stop()}
+          onClick={() => void (onReview ? recorder.stopAndSend(onReview, 'review') : recorder.stop())}
           autoFocus
         />
       </Tooltip>
       {VOICE_CONFIG.directSend && (
-        <PrimaryRound label={LABELS[action].send} disabled={stopping} onClick={() => void recorder.stopAndSend(onSend)}>
+        <PrimaryRound
+          label={LABELS[mode].send.send}
+          disabled={stopping}
+          onClick={() => void recorder.stopAndSend(onSend, 'send')}
+        >
           <ArrowUp size={14} strokeWidth={1.75} aria-hidden />
         </PrimaryRound>
       )}
@@ -190,14 +208,17 @@ function TranscriptPreview({ recording, transcribe }: { recording: Recording; tr
 function PreviewBar({
   recorder,
   onSend,
+  onReview,
   transcribe,
-  action,
 }: {
   recorder: VoiceRecorderApi;
   onSend: SendRecording;
+  onReview: SendRecording | undefined;
   transcribe: TranscribeRecording | undefined;
-  action: VoiceAction;
 }) {
+  const mode: Mode = onReview ? 'transcription' : 'voiceNote';
+  // A preview on the transcription backend (the length limit stopped it) is transcribed for review.
+  const intent: UploadIntent = onReview ? 'review' : 'send';
   const { state } = recorder;
   const recording = state.status === 'preview' || state.status === 'uploading' ? state.recording : null;
   const uploading = state.status === 'uploading';
@@ -209,7 +230,7 @@ function PreviewBar({
       <div className="flex h-12 items-center gap-1 px-2">
         <Tooltip content={uploading ? 'Cancel' : 'Delete recording'}>
           <IconButton
-            label={uploading ? (action === 'transcribe' ? 'Cancel transcription' : 'Cancel sending') : 'Delete recording'}
+            label={uploading ? (onReview ? 'Cancel transcription' : 'Cancel sending') : 'Delete recording'}
             size="md"
             icon={uploading ? <X {...iconProps} /> : <Trash2 {...iconProps} />}
             onClick={recorder.discard}
@@ -228,11 +249,11 @@ function PreviewBar({
           />
         </Tooltip>
         <PrimaryRound
-          label={uploading ? LABELS[action].busy : LABELS[action].send}
+          label={uploading ? LABELS[mode][intent].busy : LABELS[mode][intent].send}
           disabled={uploading}
           busy={uploading}
           autoFocus={!uploading}
-          onClick={() => void recorder.send(onSend)}
+          onClick={() => void recorder.send(onReview ?? onSend, intent)}
         >
           {uploading ? <Spinner size={16} state="active" /> : <ArrowUp size={14} strokeWidth={1.75} aria-hidden />}
         </PrimaryRound>
@@ -247,9 +268,45 @@ function PreviewBar({
   );
 }
 
-function ErrorBar({ recorder, onSend, action }: { recorder: VoiceRecorderApi; onSend: SendRecording; action: VoiceAction }) {
+/**
+ * Transcribing after Stop (for review) or Send: the recording is finished; the row says what is happening
+ * until the text lands in the message box, or is sent. Cancel discards the recording.
+ */
+function TranscribingBar({ recorder, intent }: { recorder: VoiceRecorderApi; intent: UploadIntent }) {
+  const { state } = recorder;
+  const durationMs = state.status === 'uploading' ? state.recording.durationMs : 'elapsedMs' in state ? state.elapsedMs : 0;
+  return (
+    // Cancel sits on the left like Delete on the other bars — never under the Stop / Send just clicked,
+    // so a double click can't cancel.
+    <div className="flex h-12 animate-fade select-none items-center gap-1 px-2 text-xs text-fg-muted">
+      <Tooltip content="Cancel">
+        <IconButton label="Cancel transcription" size="md" icon={<X {...iconProps} />} onClick={recorder.discard} />
+      </Tooltip>
+      <span className="flex min-w-0 flex-1 items-center gap-2 pl-1">
+        <Spinner size={16} state="active" />
+        <span className="truncate">{intent === 'send' ? 'Transcribing and sending…' : 'Transcribing recording…'}</span>
+      </span>
+      <span className="shrink-0 pr-3 tabular-nums max-sm:hidden" aria-hidden="true">
+        {formatDuration(durationMs)}
+      </span>
+    </div>
+  );
+}
+
+function ErrorBar({
+  recorder,
+  onSend,
+  onReview,
+}: {
+  recorder: VoiceRecorderApi;
+  onSend: SendRecording;
+  onReview: SendRecording | undefined;
+}) {
   const { state } = recorder;
   if (state.status !== 'error') return null;
+  const mode: Mode = onReview ? 'transcription' : 'voiceNote';
+  // Retry repeats the failed step: a failed review is transcribed for review again, a failed send is sent.
+  const retry = state.intent === 'review' && onReview ? onReview : onSend;
   const canRetryUpload = state.recording !== null;
   const canRetryRecording = !['unsupported', 'insecure-context'].includes(state.error.code);
 
@@ -258,8 +315,8 @@ function ErrorBar({ recorder, onSend, action }: { recorder: VoiceRecorderApi; on
       <p className="min-w-0 flex-1 text-xs text-danger">{state.error.message}</p>
       <div className="flex items-center gap-1">
         {canRetryUpload ? (
-          <Button variant="ghost" size="sm" onClick={() => void recorder.send(onSend)}>
-            {LABELS[action].retry}
+          <Button variant="ghost" size="sm" onClick={() => void recorder.send(retry)}>
+            {LABELS[mode][state.intent].retry}
           </Button>
         ) : (
           canRetryRecording && (
@@ -282,26 +339,33 @@ function ErrorBar({ recorder, onSend, action }: { recorder: VoiceRecorderApi; on
 /**
  * The composer's voice mode (reference-styled, inside the same 24px pill):
  * permission prompt → recording bar → preview (+ detected transcript when `transcribe` is given) / send →
- * error. Media access stays in the hook.
+ * error. With `onReview`, Stop and Send transcribe instead (a transcribing row, no preview). Media access
+ * stays in the hook.
  */
 export function VoiceComposer({
   recorder,
   onSend,
+  onReview,
   transcribe,
-  action = 'send',
 }: {
   recorder: VoiceRecorderApi;
+  /** Send: sends the recording (voice note), or transcribes it and sends the text. */
   onSend: SendRecording;
+  /** Stop: transcribes the recording into the message box for editing. Omit for voice notes (Stop previews). */
+  onReview?: SendRecording;
   /** Omitted when the backend can't transcribe: the preview then shows no transcript section. */
   transcribe?: TranscribeRecording;
-  /** `transcribe`: `onSend` turns the recording into editable text instead of sending it (labels follow). */
-  action?: VoiceAction;
 }) {
   const { state } = recorder;
+  const mode: Mode = onReview ? 'transcription' : 'voiceNote';
+  const transcribing =
+    mode === 'transcription' && (state.status === 'uploading' || (state.status === 'stopping' && state.intent !== 'preview'))
+      ? (state.intent as UploadIntent)
+      : null;
   return (
     <div className="animate-fade">
       <p role="status" className="sr-only">
-        {announcement(state, action)}
+        {announcement(state, mode)}
       </p>
       {state.status === 'requesting' && (
         <div className="flex h-12 items-center gap-3 pl-4 pr-2 text-xs text-fg-muted">
@@ -310,13 +374,14 @@ export function VoiceComposer({
           <IconButton label="Cancel recording" size="md" icon={<X {...iconProps} />} onClick={recorder.discard} />
         </div>
       )}
-      {(state.status === 'recording' || state.status === 'paused' || state.status === 'stopping') && (
-        <RecordingBar recorder={recorder} onSend={onSend} action={action} />
+      {transcribing && <TranscribingBar recorder={recorder} intent={transcribing} />}
+      {(state.status === 'recording' || state.status === 'paused' || state.status === 'stopping') && !transcribing && (
+        <RecordingBar recorder={recorder} onSend={onSend} onReview={onReview} />
       )}
-      {(state.status === 'preview' || state.status === 'uploading') && (
-        <PreviewBar recorder={recorder} onSend={onSend} transcribe={transcribe} action={action} />
+      {(state.status === 'preview' || state.status === 'uploading') && !transcribing && (
+        <PreviewBar recorder={recorder} onSend={onSend} onReview={onReview} transcribe={transcribe} />
       )}
-      {state.status === 'error' && <ErrorBar recorder={recorder} onSend={onSend} action={action} />}
+      {state.status === 'error' && <ErrorBar recorder={recorder} onSend={onSend} onReview={onReview} />}
     </div>
   );
 }

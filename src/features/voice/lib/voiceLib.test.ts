@@ -34,12 +34,29 @@ describe('recorderReducer', () => {
     state = run([{ type: 'PAUSE' }, { type: 'TICK', elapsedMs: 9999 }], state);
     expect(state).toEqual({ status: 'paused', elapsedMs: 2000 });
     state = run([{ type: 'RESUME' }, { type: 'STOP' }], state);
-    expect(state).toEqual({ status: 'stopping', elapsedMs: 2000 });
+    expect(state).toEqual({ status: 'stopping', elapsedMs: 2000, intent: 'preview' });
     state = run([{ type: 'STOPPED', recording }], state);
     expect(state).toEqual({ status: 'preview', recording, limitReached: false });
     state = run([{ type: 'UPLOAD' }], state);
-    expect(state).toEqual({ status: 'uploading', recording });
+    expect(state).toEqual({ status: 'uploading', recording, intent: 'send' });
     expect(run([{ type: 'UPLOADED' }], state)).toEqual({ status: 'sent' });
+  });
+
+  it('stopping to review or send goes straight to that step — no preview, and the intent is kept', () => {
+    const recordingState: RecorderState = { status: 'recording', elapsedMs: 3000 };
+    for (const intent of ['review', 'send'] as const) {
+      const stopping = run([{ type: 'STOP', intent }], recordingState);
+      expect(stopping).toEqual({ status: 'stopping', elapsedMs: 3000, intent });
+      expect(run([{ type: 'STOP', intent: 'preview' }], stopping)).toBe(stopping); // a second stop changes nothing
+      const uploading = run([{ type: 'STOPPED', recording }], stopping);
+      expect(uploading).toEqual({ status: 'uploading', recording, intent });
+      // Failure keeps the recording and the intent: Retry repeats the same step (review stays review).
+      const failed = run([{ type: 'UPLOAD_FAILED', error: { code: 'upload-failed', message: 'x' } }], uploading);
+      expect(failed).toMatchObject({ status: 'error', recording, intent });
+      expect(run([{ type: 'UPLOAD' }], failed)).toEqual({ status: 'uploading', recording, intent });
+    }
+    // Pause → resume never finishes the recording.
+    expect(run([{ type: 'PAUSE' }, { type: 'RESUME' }], recordingState)).toEqual(recordingState);
   });
 
   it('models failures: permission/recording errors drop audio, upload errors keep it for retry', () => {
@@ -51,14 +68,18 @@ describe('recorderReducer', () => {
       run([{ type: 'REQUEST' }, { type: 'STARTED' }, { type: 'FAIL', error: { code: 'recording-failed', message: 'x' } }]),
     ).toMatchObject({ status: 'error', recording: null });
 
-    const failed = run([{ type: 'UPLOAD_FAILED', error: { code: 'upload-failed', message: 'x' } }], { status: 'uploading', recording });
+    const failed = run([{ type: 'UPLOAD_FAILED', error: { code: 'upload-failed', message: 'x' } }], {
+      status: 'uploading',
+      recording,
+      intent: 'send',
+    });
     expect(failed).toMatchObject({ status: 'error', recording });
-    expect(run([{ type: 'UPLOAD' }], failed)).toEqual({ status: 'uploading', recording });
+    expect(run([{ type: 'UPLOAD' }], failed)).toEqual({ status: 'uploading', recording, intent: 'send' });
   });
 
   it('ignores invalid events and always resets', () => {
     expect(run([{ type: 'PAUSE' }, { type: 'UPLOAD' }, { type: 'STOPPED', recording }])).toEqual(initialRecorderState);
-    const uploading: RecorderState = { status: 'uploading', recording };
+    const uploading: RecorderState = { status: 'uploading', recording, intent: 'send' };
     expect(run([{ type: 'REQUEST' }, { type: 'UPLOAD' }], uploading)).toBe(uploading); // no double send / re-record mid-upload
     expect(run([{ type: 'RESET' }], uploading)).toEqual(initialRecorderState);
     expect(run([{ type: 'STOPPED', recording, limitReached: true }], { status: 'recording', elapsedMs: 1 })).toMatchObject({

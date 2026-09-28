@@ -3,7 +3,13 @@ import { isAbortError, toErrorInfo } from '@/api';
 import { VOICE_CONFIG } from '../config';
 import { audioFocus } from '../lib/audioFocus';
 import { browserMediaDeps, createAudioRecorder, type AudioRecorder, type RecorderOptions } from '../lib/recorder';
-import { initialRecorderState, recorderReducer, type RecorderState } from '../lib/recorderMachine';
+import {
+  initialRecorderState,
+  recorderReducer,
+  type RecorderState,
+  type RecordingIntent,
+  type UploadIntent,
+} from '../lib/recorderMachine';
 import { VoiceRecorderError, type Recording, type VoiceError } from '../lib/types';
 
 /** Uploads/sends a finished recording. Must honour `signal` (the user can cancel while sending). */
@@ -24,10 +30,14 @@ export interface VoiceRecorderApi {
   resume: () => void;
   /** Stop → preview. */
   stop: () => Promise<Recording | undefined>;
-  /** Stop and send immediately (direct send). */
-  stopAndSend: (send: SendRecording) => Promise<void>;
-  /** Send the previewed recording (or retry a failed upload). */
-  send: (send: SendRecording) => Promise<void>;
+  /**
+   * Stop and hand the finished recording to `send` straight away, without a preview — `intent` says what
+   * that step is (`send`: direct send; `review`: transcribe into the message box). One call per recording:
+   * repeated clicks while stopping or uploading are ignored.
+   */
+  stopAndSend: (send: SendRecording, intent?: UploadIntent) => Promise<void>;
+  /** Send the previewed recording (as `intent`), or retry a failed upload with its original intent. */
+  send: (send: SendRecording, intent?: UploadIntent) => Promise<void>;
   /** Delete: cancels recording/upload, releases the microphone, back to idle. */
   discard: () => void;
   /** Live input level 0..1 for the waveform (read without re-rendering). */
@@ -53,6 +63,9 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): VoiceRe
   const stateRef = useRef(state);
   const engineRef = useRef<AudioRecorder | null>(null);
   const uploadRef = useRef<AbortController | null>(null);
+  // The engine being stopped: a second stop (double click, Stop then Send, the length limit) must not
+  // stop it again — the engine would drop the first stop's result and the recording would be handled twice.
+  const stoppingRef = useRef<AudioRecorder | null>(null);
   const lastSecond = useRef(-1);
   const canPause = useMemo(() => typeof browserMediaDeps().MediaRecorder?.prototype?.pause === 'function', []);
 
@@ -74,10 +87,11 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): VoiceRe
   }, [releaseEngine]);
 
   const stop = useCallback(
-    async (limitReached = false): Promise<Recording | undefined> => {
+    async (limitReached = false, intent: RecordingIntent = 'preview'): Promise<Recording | undefined> => {
       const engine = engineRef.current;
-      if (!engine) return undefined;
-      dispatch({ type: 'STOP' });
+      if (!engine || stoppingRef.current === engine) return undefined;
+      stoppingRef.current = engine;
+      dispatch({ type: 'STOP', intent });
       try {
         const recording = await engine.stop();
         if (engineRef.current !== engine) return undefined;
@@ -158,11 +172,11 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): VoiceRe
     dispatch({ type: 'RESUME' });
   }, []);
 
-  const upload = useCallback(async (sendRecording: SendRecording, recording: Recording) => {
+  const upload = useCallback(async (sendRecording: SendRecording, recording: Recording, intent: UploadIntent) => {
     if (uploadRef.current) return; // no duplicate sends
     const controller = new AbortController();
     uploadRef.current = controller;
-    dispatch({ type: 'UPLOAD' });
+    dispatch({ type: 'UPLOAD', intent });
     try {
       await sendRecording(recording, controller.signal);
       if (uploadRef.current !== controller) return;
@@ -177,19 +191,18 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): VoiceRe
   }, []);
 
   const send = useCallback(
-    async (sendRecording: SendRecording) => {
+    async (sendRecording: SendRecording, intent: UploadIntent = 'send') => {
       const current = stateRef.current;
-      const recording =
-        current.status === 'preview' ? current.recording : current.status === 'error' ? current.recording : null;
-      if (recording) await upload(sendRecording, recording);
+      if (current.status === 'preview') await upload(sendRecording, current.recording, intent);
+      else if (current.status === 'error' && current.recording) await upload(sendRecording, current.recording, current.intent);
     },
     [upload],
   );
 
   const stopAndSend = useCallback(
-    async (sendRecording: SendRecording) => {
-      const recording = await stop();
-      if (recording) await upload(sendRecording, recording);
+    async (sendRecording: SendRecording, intent: UploadIntent = 'send') => {
+      const recording = await stop(false, intent);
+      if (recording) await upload(sendRecording, recording, intent);
     },
     [stop, upload],
   );
