@@ -1,14 +1,16 @@
-import { ArrowDownUp, Menu as MenuIcon, Plus, Search } from 'lucide-react';
+import { ArrowDownUp, FlaskConical, Menu as MenuIcon, Plus, Search } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { ErrorState } from '@/components/ErrorState';
 import { ScrollArea } from '@/components/ScrollArea';
-import { Button, IconButton, Menu, MenuItem, Popover, Skeleton, VisuallyHidden, iconProps, smallIconProps } from '@/components/ui';
+import { toErrorInfo } from '@/api';
+import { Button, IconButton, Menu, MenuItem, Popover, Skeleton, Spinner, VisuallyHidden, iconProps, smallIconProps, useToast } from '@/components/ui';
 import { useUiStore } from '@/stores/uiStore';
 import type { ProfileUpdateSuggestion } from '@/types/api';
-import { usePendingSuggestions, useProfiles } from '../hooks/useContacts';
+import { useAddTestSuggestion, usePendingSuggestions, useProfiles } from '../hooks/useContacts';
 import { filterContacts, type ContactSort } from '../lib/contacts';
 import { ContactCard } from './ContactCard';
 import { ContactSheet, type SheetState } from './ContactSheet';
+import { NewContactSuggestions } from './NewContactSuggestions';
 
 const SORTS: { value: ContactSort; label: string }[] = [
   { value: 'all', label: 'All contacts' },
@@ -36,6 +38,35 @@ function SortMenu({ sort, onChange }: { sort: ContactSort; onChange: (sort: Cont
         ))}
       </Menu>
     </Popover>
+  );
+}
+
+/**
+ * TODO(temporary): demo control for /contacts/test-adding-suggestions. Remove when AI/Granola suggestion
+ * generation is integrated. Secondary (ghost) on purpose; only shown where the backend offers the endpoint.
+ */
+function TestSuggestionButton() {
+  const toast = useToast();
+  const add = useAddTestSuggestion();
+  if (!add.available) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={add.isPending}
+      aria-busy={add.isPending || undefined}
+      leadingIcon={add.isPending ? <Spinner size={14} state="active" /> : <FlaskConical {...smallIconProps} />}
+      title="Demo: creates a new-contact suggestion (temporary)"
+      onClick={() =>
+        add.mutate(undefined, {
+          onSuccess: (suggestion) => toast.show(suggestion ? 'Test suggestion created.' : 'Nothing new to suggest.'),
+          onError: (error) => toast.show(`Couldn't create a test suggestion. ${toErrorInfo(error).message}`, { tone: 'danger' }),
+        })
+      }
+    >
+      {/* Icon-only on phones (like the sort button), so the page title keeps its room. */}
+      <span className="max-sm:sr-only">{add.isPending ? 'Creating…' : 'Test suggestion'}</span>
+    </Button>
   );
 }
 
@@ -68,10 +99,15 @@ export function ContactsView() {
   const [sort, setSort] = useState<ContactSort>('all');
   const [sheet, setSheet] = useState<SheetState>({ open: false, mode: 'view', profileId: null, seq: 0 });
 
-  const pendingByProfile = useMemo(() => {
+  const { pendingByProfile, newContacts } = useMemo(() => {
     const map = new Map<string, ProfileUpdateSuggestion[]>();
-    for (const s of pending.data ?? []) map.set(s.profile_id, [...(map.get(s.profile_id) ?? []), s]);
-    return map;
+    const proposed: ProfileUpdateSuggestion[] = [];
+    for (const s of pending.data ?? []) {
+      // New-contact suggestions have no profile yet: they get their own section, not a card badge.
+      if (s.kind === 'create') proposed.push(s);
+      else map.set(s.profile_id, [...(map.get(s.profile_id) ?? []), s]);
+    }
+    return { pendingByProfile: map, newContacts: proposed };
   }, [pending.data]);
   const all = profiles.data;
   const visible = useMemo(() => filterContacts(all ?? [], query, sort), [all, query, sort]);
@@ -173,6 +209,7 @@ export function ContactsView() {
           </h1>
           <p className="hidden truncate text-2xs text-fg-muted sm:block">People you work with and insights you&apos;ve approved.</p>
         </div>
+        <TestSuggestionButton />
         {/* The empty state has its own primary Add contact. */}
         {all?.length !== 0 && (
           <Button variant="primary" size="sm" leadingIcon={<Plus {...smallIconProps} />} onClick={openCreate}>
@@ -182,7 +219,10 @@ export function ContactsView() {
       </header>
 
       <ScrollArea className="@container min-h-0 flex-1 px-3 py-4 md:px-6 md:py-6">
-        <div className="mx-auto w-full max-w-[1120px]">{body}</div>
+        <div className="mx-auto w-full max-w-[1120px]">
+          {profiles.isSuccess && <NewContactSuggestions suggestions={newContacts} />}
+          {body}
+        </div>
       </ScrollArea>
 
       <ContactSheet

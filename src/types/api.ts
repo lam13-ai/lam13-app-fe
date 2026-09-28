@@ -150,6 +150,12 @@ export type ProfileSuggestionSource = 'meeting';
  */
 export interface ProfileUpdateSuggestion {
   id: Id;
+  /**
+   * `update` (default when absent): changes to the profile `profile_id`.
+   * `create`: a new contact proposed from a meeting — no profile yet (`profile_id` is ''), `changes`
+   * holds its fields, and approving creates the contact.
+   */
+  kind?: 'update' | 'create';
   profile_id: Id;
   source_type: ProfileSuggestionSource;
   source_id: Id;
@@ -159,6 +165,8 @@ export interface ProfileUpdateSuggestion {
   status: ProfileSuggestionStatus;
   /** Applied together on approval; unrelated changes arrive as separate suggestions. */
   changes: ProfileFieldChange[];
+  /** Why it was suggested, when the source says so. */
+  reason?: string;
 }
 
 export interface CallSession {

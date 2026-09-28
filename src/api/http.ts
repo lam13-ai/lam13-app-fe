@@ -235,6 +235,7 @@ interface ContactSuggestionDto {
   kind: string;
   status: string;
   suggested: Record<string, unknown>;
+  reason?: string;
   source: { type: string; ref_id: string | null; title: string | null } | null;
   created_at: string;
 }
@@ -274,6 +275,7 @@ function toProfile(dto: ContactDto): Profile {
 function toSuggestion(dto: ContactSuggestionDto): ProfileUpdateSuggestion {
   return {
     id: dto.id,
+    kind: dto.kind === 'create' ? 'create' : 'update',
     profile_id: dto.contact_id ?? '',
     source_type: 'meeting',
     source_id: dto.source?.ref_id ?? '',
@@ -284,11 +286,12 @@ function toSuggestion(dto: ContactSuggestionDto): ProfileUpdateSuggestion {
     changes: Object.entries(dto.suggested)
       .filter(([field]) => PROFILE_FIELDS.has(field))
       .map(([field, to]) => ({ field: field as ProfileField, to: to == null ? null : String(to) })),
+    ...(dto.reason && { reason: dto.reason }),
   };
 }
 
-/** Only update suggestions for an existing contact have a place in the UI (Current vs Suggested on a profile). */
-const isProfileUpdate = (dto: ContactSuggestionDto) => dto.kind === 'update' && Boolean(dto.contact_id);
+/** The UI shows update suggestions for an existing contact, and new-contact (`create`) suggestions. */
+const isShown = (dto: ContactSuggestionDto) => dto.kind === 'create' || (dto.kind === 'update' && Boolean(dto.contact_id));
 
 // ── Stream translation ───────────────────────────────────────────────────────
 
@@ -541,8 +544,8 @@ export function createHttpAdapter(): ApiAdapter {
       },
     },
 
-    // My Contacts: /contacts. The UI searches and sorts the (unpaginated) list itself; version history and
-    // new-contact suggestions have no UI yet and are not called.
+    // My Contacts: /contacts. The UI searches and sorts the (unpaginated) list itself; version history has
+    // no UI yet and is not called.
     profiles: {
       async list() {
         const items = await requestJson<ContactDto[]>('/contacts');
@@ -569,7 +572,7 @@ export function createHttpAdapter(): ApiAdapter {
         if (params?.profile_id) query.set('contact_id', params.profile_id);
         const qs = query.toString();
         const items = await requestJson<ContactSuggestionDto[]>(`/contacts/suggestions${qs ? `?${qs}` : ''}`);
-        return { items: items.filter(isProfileUpdate).map(toSuggestion) };
+        return { items: items.filter(isShown).map(toSuggestion) };
       },
       async approve(id) {
         // No body: the suggestion is applied as proposed (the UI has no partial-apply step).
@@ -583,6 +586,12 @@ export function createHttpAdapter(): ApiAdapter {
         return toSuggestion(
           await requestJson<ContactSuggestionDto>(`/contacts/suggestions/${encodeURIComponent(id)}/reject`, { method: 'POST' }),
         );
+      },
+      // TODO(temporary): demo control for /contacts/test-adding-suggestions. Remove when AI/Granola suggestion
+      // generation is integrated.
+      async addTest(body) {
+        const dto = await requestJson<ContactSuggestionDto | null>('/contacts/test-adding-suggestions', { method: 'POST', body });
+        return dto ? toSuggestion(dto) : null;
       },
     },
   };

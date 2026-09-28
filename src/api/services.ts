@@ -165,6 +165,19 @@ export interface ProfileSuggestionsService {
   approve(id: string): Promise<{ suggestion: ProfileUpdateSuggestion; profile: Profile }>;
   /** POST /profile-suggestions/{id}/reject — the profile is not modified. */
   reject(id: string): Promise<ProfileUpdateSuggestion>;
+  /**
+   * TODO(temporary): demo control for POST /contacts/test-adding-suggestions. Remove when AI/Granola
+   * suggestion generation is integrated. Only the HTTP adapter has it; resolves null when nothing is new.
+   */
+  addTest?(body: TestSuggestionBody): Promise<ProfileUpdateSuggestion | null>;
+}
+
+/** The backend's CreateSuggestionRequest. No `contact_id` = a new-contact suggestion (needs `full_name`). */
+export interface TestSuggestionBody {
+  contact_id?: string | null;
+  fields: Partial<ProfileInput>;
+  reason?: string;
+  source?: { type: 'meeting'; ref_id?: string | null; title?: string | null; occurred_at?: string | null };
 }
 
 /** What the connected backend supports; the UI hides the rest instead of offering failing actions. */

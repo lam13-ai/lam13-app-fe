@@ -360,13 +360,14 @@ describe('HTTP adapter — My Contacts (/contacts)', () => {
     expect(calls[2]).toMatchObject({ url: '/contacts/66f0c0ffee', method: 'DELETE' });
   });
 
-  it('pending suggestions: GET /contacts/suggestions?status=pending, as Current-vs-Suggested changes; new-contact proposals are left out', async () => {
-    const { calls } = stubFetch(() => json([suggestion(), suggestion({ id: 'sug2', kind: 'create', contact_id: null, suggested: { full_name: 'New Person' } })]));
+  it('pending suggestions: GET /contacts/suggestions?status=pending — updates as Current-vs-Suggested changes, plus new-contact proposals', async () => {
+    const { calls } = stubFetch(() => json([suggestion(), suggestion({ id: 'sug2', kind: 'create', contact_id: null, suggested: { full_name: 'New Person', company: 'NewCo' }, reason: 'Met at the review' })]));
     const { items } = await createHttpAdapter().profileSuggestions.list({ status: 'pending' });
     expect(calls[0]).toMatchObject({ url: '/contacts/suggestions?status=pending', method: 'GET' });
     expect(items).toEqual([
       {
         id: 'sug1',
+        kind: 'update',
         profile_id: '66f0c0ffee',
         source_type: 'meeting',
         source_id: 'm-9',
@@ -378,8 +379,42 @@ describe('HTTP adapter — My Contacts (/contacts)', () => {
           { field: 'phone', to: '+1 555 0142' },
           { field: 'linkedin', to: null },
         ],
+        reason: 'Mentioned in the meeting',
+      },
+      {
+        id: 'sug2',
+        kind: 'create',
+        profile_id: '',
+        source_type: 'meeting',
+        source_id: 'm-9',
+        source_title: 'Q4 board prep',
+        created_at: '2026-09-27T09:00:00Z',
+        status: 'pending',
+        changes: [
+          { field: 'full_name', to: 'New Person' },
+          { field: 'company', to: 'NewCo' },
+        ],
+        reason: 'Met at the review',
       },
     ]);
+  });
+
+  it('TEMP test endpoint: POST /contacts/test-adding-suggestions with the backend body; null when nothing is new', async () => {
+    const created = suggestion({ id: 'sug3', kind: 'create', contact_id: null, suggested: { full_name: 'Omar Siddiqui' } });
+    const responses = [json(created, 201), json(null, 201)];
+    const { calls } = stubFetch((_call, i) => responses[i]!);
+    const api = createHttpAdapter();
+    const body = {
+      contact_id: null,
+      fields: { full_name: 'Omar Siddiqui', position: 'Head of Procurement', company: 'Northgate Health Trust' },
+      reason: 'New stakeholder',
+      source: { type: 'meeting' as const, ref_id: 'demo-1', title: 'Vendor Shortlist Review', occurred_at: '2026-09-28T10:00:00.000Z' },
+    };
+
+    expect(await api.profileSuggestions.addTest!(body)).toMatchObject({ id: 'sug3', kind: 'create', changes: [{ field: 'full_name', to: 'Omar Siddiqui' }] });
+    expect(calls[0]).toMatchObject({ url: '/contacts/test-adding-suggestions', method: 'POST' });
+    expect(JSON.parse(calls[0]!.body as string)).toEqual(body);
+    expect(await api.profileSuggestions.addTest!(body)).toBeNull();
   });
 
   it('approve applies the suggestion as proposed (no body) and returns the updated contact; reject leaves it', async () => {

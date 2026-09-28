@@ -48,7 +48,8 @@ describe('My Contacts', () => {
     expect(saqlain.getByText('saqlain@northwind.example')).toBeTruthy();
     expect(saqlain.getByText('Product-focused and works closely with engineering teams.').className).toContain('line-clamp-3');
     expect(saqlain.getByText('2h ago')).toBeTruthy();
-    expect(saqlain.getByText('2 suggested updates')).toBeTruthy();
+    // Two pending revisions for Saqlain: only the newest counts.
+    expect(saqlain.getByText('1 suggested update')).toBeTruthy();
 
     // Optional fields are simply absent: no email for Maya, no About for Priya (empty description).
     expect(within(card('Maya Okafor')).queryByText(/@/)).toBeNull();
@@ -192,42 +193,44 @@ describe('My Contacts', () => {
     await expect(api.profiles.get('hannah-lee')).rejects.toMatchObject({ status: 404 });
   });
 
-  it('shows each pending suggestion as Current vs Suggested; Approve applies it, Reject leaves the profile unchanged', async () => {
+  it('shows only the newest pending suggestion as Current vs Suggested; Approve applies it and no older revision resurfaces', async () => {
     const { api } = renderApp('/contacts');
     const sheet = await openContact('Saqlain Haider');
-    const review = within(sheet).getByRole('heading', { name: 'Review 2 suggested updates' });
+    // Two pending revisions (same time; the larger id is the newer): only the position one is shown.
+    expect(within(sheet).getByRole('heading', { name: 'Review 1 suggested update' })).toBeTruthy();
     expect(within(sheet).getByText('Nothing changes until you approve.', { exact: false })).toBeTruthy();
-
     const position = within(sheet).getByRole('group', { name: 'Position: current and suggested' });
     expect(within(position).getByText('Current').nextSibling?.textContent).toBe('Product Manager');
     expect(within(position).getByText('Suggested').nextSibling?.textContent).toBe('Senior Product Manager');
-    const description = within(sheet).getByRole('group', { name: 'Description: current and suggested' });
-    expect(within(description).getByText('Current').nextSibling?.textContent).toBe('Product-focused and works closely with engineering teams.');
-    expect(within(description).getByText('Suggested').nextSibling?.textContent).toMatch(/^Product-focused and structured; prefers concise/);
-    expect(within(sheet).getAllByText('From meeting · Q4 roadmap review ·', { exact: false })).toHaveLength(2);
+    expect(within(sheet).queryByRole('group', { name: 'Description: current and suggested' })).toBeNull();
 
     // Approve: the position changes at once, in the sheet, the card and the backend.
     await act(async () => fireEvent.click(within(sheet).getByRole('button', { name: 'Approve update to Position' })));
     expect(await screen.findByText('Profile updated.')).toBeTruthy();
     expect(document.activeElement).toBe(within(sheet).getByRole('heading', { level: 2, name: 'Saqlain Haider' }));
-    expect(review.textContent).toBe('Review 1 suggested update');
     expect(within(card('Saqlain Haider')).getByText('Senior Product Manager')).toBeTruthy();
-    expect(within(card('Saqlain Haider')).getByText('1 suggested update')).toBeTruthy();
     expect((await api.profiles.get('saqlain-haider')).position).toBe('Senior Product Manager');
 
-    // Reject: the description stays exactly as it was.
+    // The older (still pending) description revision does not take its place.
+    expect(within(sheet).queryByText(/suggested update/)).toBeNull();
+    expect(within(sheet).queryByRole('group', { name: 'Description: current and suggested' })).toBeNull();
+    expect(within(card('Saqlain Haider')).queryByText(/suggested update/)).toBeNull();
+    const all = (await api.profileSuggestions.list({ profile_id: 'saqlain-haider' })).items;
+    expect(Object.fromEntries(all.map((s) => [s.id, s.status]))).toEqual({
+      'sug-saqlain-description': 'pending',
+      'sug-saqlain-position': 'approved',
+    });
+  });
+
+  it('Reject leaves the profile unchanged, and no older revision resurfaces', async () => {
+    const { api } = renderApp('/contacts');
     const before = await api.profiles.get('saqlain-haider');
-    await act(async () => fireEvent.click(within(sheet).getByRole('button', { name: 'Reject update to Description' })));
+    const sheet = await openContact('Saqlain Haider');
+    await act(async () => fireEvent.click(within(sheet).getByRole('button', { name: 'Reject update to Position' })));
     expect(await screen.findByText('Suggestion rejected. Profile unchanged.')).toBeTruthy();
     expect(within(sheet).queryByText(/suggested update/)).toBeNull();
-    expect(within(sheet).getByText('Product-focused and works closely with engineering teams.')).toBeTruthy();
+    expect(within(sheet).getByText('Product Manager')).toBeTruthy();
     expect(await api.profiles.get('saqlain-haider')).toEqual(before);
-
-    const decided = (await api.profileSuggestions.list({ profile_id: 'saqlain-haider' })).items;
-    expect(decided.map((s) => [s.id, s.status])).toEqual([
-      ['sug-saqlain-description', 'rejected'],
-      ['sug-saqlain-position', 'approved'],
-    ]);
     expect(within(card('Saqlain Haider')).queryByText(/suggested update/)).toBeNull();
   });
 
@@ -252,7 +255,7 @@ describe('My Contacts', () => {
 
     await act(async () => fireEvent.click(within(sheet).getByRole('button', { name: 'Approve update to Position' })));
     expect(await screen.findByText(/Couldn't apply the update/)).toBeTruthy();
-    expect(within(sheet).getByText('Review 2 suggested updates')).toBeTruthy();
+    expect(within(sheet).getByText('Review 1 suggested update')).toBeTruthy();
     expect(within(card('Saqlain Haider')).getByText('Product Manager')).toBeTruthy();
     expect(await api.profiles.get('saqlain-haider')).toEqual(before);
   });

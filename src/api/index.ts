@@ -23,6 +23,7 @@ export type {
   ModelsService,
   ProfilesService,
   ProfileSuggestionListParams,
+  TestSuggestionBody,
   ProfileSuggestionsService,
   SendMessageBody,
   StreamOptions,

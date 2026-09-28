@@ -14,6 +14,7 @@ export const queryKeys = {
   },
   /** Every pending suggestion (all profiles): card badges and the detail view read the same list. */
   profileSuggestions: {
-    pending: () => ['profileSuggestions', 'pending'] as const,
+    /** Every suggestion (all statuses): the UI shows the newest per group while it is pending. */
+    list: () => ['profileSuggestions', 'list'] as const,
   },
 };

@@ -1,4 +1,4 @@
-import type { Profile, ProfileField, ProfileFieldChange, ProfileInput } from '@/types/api';
+import type { Profile, ProfileField, ProfileFieldChange, ProfileInput, ProfileUpdateSuggestion } from '@/types/api';
 
 export const FIELD_LABELS: Record<ProfileField, string> = {
   full_name: 'Full name',
@@ -84,4 +84,31 @@ export function toProfileInput(values: ContactFormValues): ProfileInput {
 /** Link target for a stored LinkedIn value; bare "linkedin.com/in/…" gets https (never another scheme). */
 export function linkedinHref(value: string): string {
   return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+}
+
+/** New-contact suggestions form one group; update suggestions one group per existing contact. */
+const suggestionGroup = (s: ProfileUpdateSuggestion) => (s.kind === 'create' ? 'create' : `profile:${s.profile_id}`);
+
+/** Newer first by `created_at` (the server timestamp); a timestamp that doesn't parse counts as oldest, id breaks ties. */
+function compareNewest(a: ProfileUpdateSuggestion, b: ProfileUpdateSuggestion): number {
+  const time = (s: ProfileUpdateSuggestion) => {
+    const t = Date.parse(s.created_at);
+    return Number.isNaN(t) ? -Infinity : t;
+  };
+  return time(b) - time(a) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+}
+
+/**
+ * The suggestions to show: per group, the NEWEST suggestion of any status — and only while it is still
+ * pending. Older revisions are never shown, and deciding the newest doesn't surface an older one (the
+ * decided one stays newest). Order of the input doesn't matter.
+ */
+export function currentSuggestions(all: readonly ProfileUpdateSuggestion[]): ProfileUpdateSuggestion[] {
+  const newest = new Map<string, ProfileUpdateSuggestion>();
+  for (const s of all) {
+    const group = suggestionGroup(s);
+    const current = newest.get(group);
+    if (!current || compareNewest(s, current) < 0) newest.set(group, s);
+  }
+  return [...newest.values()].filter((s) => s.status === 'pending').sort(compareNewest);
 }
