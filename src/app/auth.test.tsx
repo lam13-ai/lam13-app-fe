@@ -39,8 +39,8 @@ describe('auth flow', () => {
   it('shows the profile picture when the account has one, and a generic icon (not "A") for the placeholder name', async () => {
     renderApp('/', { auth: { user: { ...TEST_USER, avatarUrl: 'https://example.com/me.png' } } });
     let sidebar = await findSidebar();
-    expect(sidebar.querySelector('img[src="https://example.com/me.png"]')).toBeTruthy();
-    expect(within(sidebar).queryByText('AL')).toBeNull();
+    // The photo is layered over the initials (which only show through a blank or transparent picture).
+    expect(sidebar.querySelector('img[src="https://example.com/me.png"]')?.className).toContain('absolute inset-0');
     cleanup();
 
     renderApp('/', { auth: { user: { ...TEST_USER, name: 'Account', email: null, avatarUrl: null } } });
@@ -111,6 +111,6 @@ describe('auth flow', () => {
     const sidebar = await findSidebar();
     const img = sidebar.querySelector('img');
     expect(img?.getAttribute('src')).toBe('https://img.example/ada.png');
-    expect(within(sidebar).queryByText('AL')).toBeNull();
+    expect(img?.className).toContain('absolute inset-0'); // covers the initials beneath
   });
 });
