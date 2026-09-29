@@ -14,7 +14,9 @@ import type {
 import { readEventStream, type EventStream } from '../stream';
 import { createSeed, MOCK_MODELS } from './fixtures';
 import { composeReply, deriveTitle } from './responder';
+import { createMockMeetings } from './meetings';
 import { createMockProfiles } from './profiles';
+import { createMockWhatsApp } from './whatsapp';
 import { createEventBody, type EventWriter } from './sseEncoder';
 import { mockTranscribe } from './transcripts';
 import { between, clone, sleep, type Range } from './utils';
@@ -529,5 +531,7 @@ export function createMockAdapter(options: MockAdapterOptions = {}): ApiAdapter 
     },
 
     ...createMockProfiles({ now, respond: () => respond(), newId, failWrites: options.failProfileWrites }),
+    meetings: createMockMeetings({ now, respond: () => respond() }),
+    whatsapp: createMockWhatsApp({ respond: () => respond() }),
   };
 }

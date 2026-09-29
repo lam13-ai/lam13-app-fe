@@ -196,3 +196,61 @@ export interface ApiErrorBody {
     request_id?: string;
   };
 }
+
+// ── Meetings (frontend-only for now: no backend routes yet) ──────────────────
+
+export interface MeetingParticipant {
+  id: Id;
+  name: string;
+  email?: string | null;
+  /** Role and/or company, as the meeting source reports it. */
+  role?: string | null;
+}
+
+export interface MeetingActionItem {
+  id: Id;
+  text: string;
+  assignee?: string | null;
+  completed?: boolean;
+}
+
+/** A meeting as listed: enough for the list and the composer's picker. */
+export interface MeetingSummary {
+  id: Id;
+  title: string;
+  started_at: IsoDateTime;
+  duration_seconds: number;
+  participants: MeetingParticipant[];
+}
+
+/** One meeting. Every section is optional: the source may not have produced it. */
+export interface Meeting extends MeetingSummary {
+  summary?: string | null;
+  decisions?: string[];
+  action_items?: MeetingActionItem[];
+  /** Markdown. */
+  notes?: string | null;
+}
+
+/** Whether the meeting source (Granola) is connected. */
+export interface MeetingSourceConnection {
+  provider: 'granola';
+  status: 'connected' | 'disconnected';
+}
+
+// ── WhatsApp (frontend-only for now: no backend routes yet) ──────────────────
+
+/** Whether a WhatsApp number is connected. `phone_number` is E.164 ("+923001234567"). */
+export interface WhatsAppConnection {
+  status: 'disconnected' | 'connected';
+  phone_number: string | null;
+}
+
+/** A verification code was requested for `phone_number`. */
+export interface WhatsAppVerification {
+  phone_number: string;
+  /** Seconds before another code may be requested. */
+  resend_after_seconds: number;
+  /** Shown under the code input when set (e.g. a preview backend that sends nothing). */
+  notice?: string | null;
+}

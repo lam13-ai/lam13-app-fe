@@ -18,6 +18,8 @@ export type {
   AudioUploadInput,
   ConversationsService,
   ListParams,
+  MeetingsService,
+  WhatsAppService,
   MessageListParams,
   MessagesService,
   ModelsService,

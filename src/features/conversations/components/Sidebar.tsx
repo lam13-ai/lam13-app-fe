@@ -1,14 +1,21 @@
-import { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router';
-import { LogOut, PanelLeftClose, PanelLeftOpen, Shield, SquarePen, Users, X } from 'lucide-react';
+import { CalendarDays, LogOut, Plug, PanelLeftClose, PanelLeftOpen, Shield, SquarePen, Users, X } from 'lucide-react';
 import { Wordmark } from '@/components/AgentMark';
 import { LegalLinks } from '@/components/LegalLinks';
 import { ThemeMenu } from '@/components/ThemeMenu';
+import { UserAvatar } from '@/components/UserAvatar';
 import { Button, IconButton, Tooltip, iconProps } from '@/components/ui';
 import { useIsAdmin } from '@/features/admin';
+import { PLACEHOLDER_NAME } from '@/features/auth';
 import { cn } from '@/lib/cn';
-import { initials } from '@/lib/initials';
 import { ConversationList } from './ConversationList';
+
+/** Workspace pages below New chat (the chat history follows). */
+const NAV = [
+  { to: '/contacts', label: 'My Contacts', Icon: Users },
+  { to: '/meetings', label: 'Meetings', Icon: CalendarDays },
+  { to: '/integrations', label: 'Integrations', Icon: Plug },
+] as const;
 
 /** The signed-in account shown in the sidebar (provider-agnostic). */
 export interface SidebarUser {
@@ -29,25 +36,9 @@ export interface SidebarProps {
   onNavigate?: () => void;
 }
 
-/** Square avatar: the profile picture when available, otherwise initials. */
+/** The account's avatar; the placeholder label is not a name, so it gets the generic icon, not "A". */
 function Avatar({ user }: { user: SidebarUser }) {
-  const [failed, setFailed] = useState(false);
-  if (user.avatarUrl && !failed) {
-    return (
-      <img
-        src={user.avatarUrl}
-        alt=""
-        referrerPolicy="no-referrer"
-        onError={() => setFailed(true)}
-        className="size-8 shrink-0 bg-muted object-cover"
-      />
-    );
-  }
-  return (
-    <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center bg-fg text-2xs font-bold text-bg">
-      {initials(user.name)}
-    </span>
-  );
+  return <UserAvatar name={user.name === PLACEHOLDER_NAME ? null : user.name} src={user.avatarUrl} />;
 }
 
 /** Shown only to accounts the backend allows into the admin panel. */
@@ -90,21 +81,23 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
         <Tooltip content="New chat" side="bottom" align="start">
           <IconButton label="New chat" size="md" icon={<SquarePen {...iconProps} />} onClick={startNewChat} />
         </Tooltip>
-        <div className="mt-2">
-          <Tooltip content="My Contacts" side="bottom" align="start">
-            <NavLink
-              to="/contacts"
-              aria-label="My Contacts"
-              className={({ isActive }) =>
-                cn(
-                  'hit-area relative inline-flex size-8 items-center justify-center rounded-full transition-all duration-200 ease-standard',
-                  isActive ? 'bg-accent-wash text-fg' : 'text-fg-soft hover:bg-accent-wash hover:text-fg',
-                )
-              }
-            >
-              <Users {...iconProps} />
-            </NavLink>
-          </Tooltip>
+        <div className="mt-2 flex flex-col items-center gap-2">
+          {NAV.map(({ to, label, Icon }) => (
+            <Tooltip key={to} content={label} side="bottom" align="start">
+              <NavLink
+                to={to}
+                aria-label={label}
+                className={({ isActive }) =>
+                  cn(
+                    'hit-area relative inline-flex size-8 items-center justify-center rounded-full transition-all duration-200 ease-standard',
+                    isActive ? 'bg-accent-wash text-fg' : 'text-fg-soft hover:bg-accent-wash hover:text-fg',
+                  )
+                }
+              >
+                <Icon {...iconProps} />
+              </NavLink>
+            </Tooltip>
+          ))}
         </div>
         <div className="mt-auto flex flex-col items-center gap-3 pb-4">
           <ThemeMenu align="start" />
@@ -145,19 +138,23 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
           New chat
         </Button>
         {/* Same row language as the history below: tinted when active, lighter tint on hover. */}
-        <NavLink
-          to="/contacts"
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            cn(
-              'mt-2 flex h-11 items-center gap-2.5 px-3 text-nav transition-colors duration-150 ease-standard md:h-9',
-              isActive ? 'bg-accent-wash font-bold text-fg' : 'text-fg-muted hover:bg-fg/[0.045] hover:text-fg',
-            )
-          }
-        >
-          <Users {...iconProps} />
-          My Contacts
-        </NavLink>
+        {NAV.map(({ to, label, Icon }, i) => (
+          <NavLink
+            key={to}
+            to={to}
+            onClick={onNavigate}
+            className={({ isActive }) =>
+              cn(
+                'flex h-11 items-center gap-2.5 px-3 text-nav transition-colors duration-150 ease-standard md:h-9',
+                i === 0 ? 'mt-2' : 'mt-0.5',
+                isActive ? 'bg-accent-wash font-bold text-fg' : 'text-fg-muted hover:bg-fg/[0.045] hover:text-fg',
+              )
+            }
+          >
+            <Icon {...iconProps} />
+            {label}
+          </NavLink>
+        ))}
       </div>
 
       {/* The only scrolling part of the sidebar; a thin visible bar shows there's more history. */}

@@ -31,7 +31,7 @@ interface Deps {
 
 /** What the user sends: typed text (optionally with already-uploaded images), or an uploaded voice note. */
 export type MessageInput =
-  | { kind: 'text'; content: string; attachments?: AttachmentRef[] }
+  | { kind: 'text'; content: string; attachments?: AttachmentRef[]; meetingIds?: string[] }
   | { kind: 'voice'; audio: AudioRef };
 
 /** A local recording ready to upload (structurally matches the voice feature's Recording). */
@@ -320,19 +320,20 @@ export function createChatActions({ api, queryClient }: Deps) {
                 model,
                 effort,
                 ...(input.attachments?.length && { attachment_ids: input.attachments.map((a) => a.id) }),
+                ...(input.meetingIds?.length && { meeting_ids: input.meetingIds }),
               },
           { signal },
         ),
     });
   }
 
-  /** `attachments`: images already uploaded via `api.attachments.upload`. */
+  /** `attachments`: images already uploaded via `api.attachments.upload`; `meetingIds`: meetings as context. */
   function send(
     conversationId: string | undefined,
     text: string,
-    { attachments, ...options }: SendOptions & { attachments?: AttachmentRef[] } = {},
+    { attachments, meetingIds, ...options }: SendOptions & { attachments?: AttachmentRef[]; meetingIds?: string[] } = {},
   ) {
-    return sendMessage(conversationId, { kind: 'text', content: text, attachments }, options);
+    return sendMessage(conversationId, { kind: 'text', content: text, attachments, meetingIds }, options);
   }
 
   /**

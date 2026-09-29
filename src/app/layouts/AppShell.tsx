@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { Outlet } from 'react-router';
 import { Drawer } from '@/components/ui';
-import { useAuth } from '@/features/auth';
+import { PLACEHOLDER_NAME, useAuth } from '@/features/auth';
 import { CallingProvider, CallPanel, VoiceRequests } from '@/features/calling';
 import { Sidebar } from '@/features/conversations';
 import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
@@ -24,7 +24,7 @@ export function AppShell() {
   const { user } = useAuth();
   const signOut = useSignOut();
   // RequireAuth guarantees a user here; the fallback only guards against provider edge cases.
-  const account = user ?? { name: 'Account', email: null, avatarUrl: null };
+  const account = user ?? { name: PLACEHOLDER_NAME, email: null, avatarUrl: null };
   const onSignOut = () => void signOut();
 
   return (

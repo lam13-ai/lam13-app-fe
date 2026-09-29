@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useId, useMemo, useR
 import { audioFocus } from '@/features/voice';
 import { env as defaultEnv, type Env } from '@/lib/env';
 import { resolveCallingConfig } from './config';
-import { callReducer, initialCallState, type CallState } from './lib/callMachine';
+import { callReducer, initialCallState, isInCall, type CallState } from './lib/callMachine';
 import { transcriptReducer, type TranscriptEntry } from './lib/transcript';
 import { createVapiProvider } from './providers/vapiProvider';
 import { callError, type CallError, type CallProvider, type CreateCallProvider, type Unsubscribe } from './types';
@@ -14,11 +14,18 @@ import { callError, type CallError, type CallProvider, type CreateCallProvider, 
 /** Give up on a call that never connects, and never wait forever for a hang-up to confirm. */
 const CONNECT_TIMEOUT_MS = 30_000;
 const END_TIMEOUT_MS = 5_000;
+/** After a saved call ends, how long to wait for the server to finalize it before reloading the chat anyway. */
+const SAVE_TIMEOUT_MS = 15_000;
 
 export interface CallContextValue {
   state: CallState;
-  /** Live browser view; committed messages are saved by server callbacks. */
+  /**
+   * Live browser view of the current call — the only place its turns show while it runs. Server callbacks
+   * save them to the conversation; the chat reloads once the call is over (see `saving`).
+   */
   transcript: TranscriptEntry[];
+  /** The call ended and its conversation is being saved: the panel stays until the chat shows it. */
+  saving: boolean;
   enabled: boolean;
   persistence: string;
   actions: RecordedAction[];
@@ -80,9 +87,14 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
   const sessionId = /^\/c\/([^/]+)$/.exec(location.pathname)?.[1] ?? '';
   const persistent = createProvider === createVapiProvider && defaultEnv.apiMode === 'http';
   const [callSessionId, setCallSessionId] = useState('');
-  const [currentCallId, setCurrentCallId] = useState('');
+  // The server's record of the current call (set by `prepare`; read from provider callbacks, hence a ref).
+  const callRef = useRef<{ id: string; sessionId: string } | null>(null);
+  // An ended, saved call whose conversation the chat hasn't reloaded yet.
+  const [saving, setSaving] = useState<{ id: string; sessionId: string } | null>(null);
   const [state, dispatch] = useReducer(callReducer, initialCallState);
-  const syncSessionId = state.status === 'idle' || state.status === 'error' ? sessionId : callSessionId || sessionId;
+  const [transcript, dispatchTranscript] = useReducer(transcriptReducer, []);
+  const inCall = isInCall(state);
+  const syncSessionId = saving?.sessionId ?? (inCall ? callSessionId || sessionId : sessionId);
   const rtc = useQuery({
     queryKey: ['rtc', syncSessionId],
     queryFn: () => getRtcStatus(syncSessionId),
@@ -92,18 +104,44 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
   });
   useEffect(() => {
     if (!persistent || !syncSessionId || !rtc.data) return;
-    void queryClient.invalidateQueries({ queryKey: queryKeys.messages(syncSessionId) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
-  }, [rtc.data, persistent, syncSessionId, queryClient]); // refresh when server state changes
+    // A running (or just-ended) call's turns show only in the call panel: the chat behind it stays as it
+    // was, and reloads once the call is saved (finishSaving) — never two live copies.
+    if (inCall || saving) return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.messages(syncSessionId) });
+  }, [rtc.data, persistent, syncSessionId, queryClient, inCall, saving]); // refresh when server state changes
+
+  /** Shows the saved conversation in the chat (one reload of the server's copy), then closes the panel. */
+  const finishingRef = useRef<object | null>(null);
+  const finishSaving = useCallback(
+    (call: { id: string; sessionId: string }) => {
+      if (finishingRef.current === call) return; // finalized and timed out: finish once
+      finishingRef.current = call;
+      void queryClient.invalidateQueries({ queryKey: queryKeys.messages(call.sessionId) }).finally(() => {
+        setSaving((current) => (current === call ? null : current));
+        dispatchTranscript({ type: 'clear' });
+      });
+    },
+    [queryClient],
+  );
+  // Finish when the server has finalized this call (its last turns included), or after a timeout.
+  useEffect(() => {
+    if (saving && rtc.data?.calls.some((c) => c.id === saving.id && c.finalized)) finishSaving(saving);
+  }, [saving, rtc.data, finishSaving]);
+  useEffect(() => {
+    if (!saving) return;
+    const timer = setTimeout(() => finishSaving(saving), SAVE_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [saving, finishSaving]);
+
   const prepare = useCallback(async () => {
     const prepared = await prepareRtc(sessionId);
     setCallSessionId(prepared.session_id);
-    setCurrentCallId(prepared.id);
+    callRef.current = { id: prepared.id, sessionId: prepared.session_id };
     void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
     if (!sessionId) navigate(`/c/${prepared.session_id}`);
     return prepared;
   }, [sessionId, navigate, queryClient]);
-  const [transcript, dispatchTranscript] = useReducer(transcriptReducer, []);
   const providerRef = useRef<CallProvider | null>(null);
   const unsubscribeRef = useRef<Unsubscribe[]>([]);
   const levelRef = useRef(0);
@@ -111,6 +149,17 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
 
   const configResult = useMemo(() => resolveCallingConfig(env.vapi), [env.vapi]);
   const enabled = env.features.calling;
+
+  /**
+   * The call is over. A saved call keeps its transcript in the panel while the conversation is saved;
+   * otherwise (preview calls, calls that never reached the server) it is dropped at once.
+   */
+  const settle = useCallback(() => {
+    const call = callRef.current;
+    callRef.current = null;
+    if (persistent && call) setSaving(call);
+    else dispatchTranscript({ type: 'clear' });
+  }, [persistent]);
 
   const clearTimer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -136,11 +185,11 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
     timerRef.current = setTimeout(() => {
       // The provider never confirmed: treat the call as ended anyway.
       dispatch({ type: 'ENDED' });
-      dispatchTranscript({ type: 'clear' });
+      settle();
       release();
     }, END_TIMEOUT_MS);
     void provider.end().catch(() => {});
-  }, [release]);
+  }, [release, settle]);
 
   const start = useCallback(() => {
     if (providerRef.current) return; // one call at a time
@@ -157,7 +206,8 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
       return;
     }
 
-    setCurrentCallId('');
+    callRef.current = null;
+    setSaving(null);
     dispatchTranscript({ type: 'clear' });
     dispatch({ type: 'START' });
     const provider = createProvider({ ...configResult.config,
@@ -168,7 +218,7 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
     const fail = (error: CallError) => {
       if (providerRef.current !== provider) return;
       dispatch({ type: 'FAIL', error });
-      dispatchTranscript({ type: 'clear' });
+      settle();
       release();
     };
 
@@ -180,7 +230,7 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
           dispatch({ type: 'CONNECTED', at: Date.now() });
         } else if (providerState === 'ended' || providerState === 'completed') {
           dispatch({ type: 'ENDED', completed: providerState === 'completed' });
-          dispatchTranscript({ type: 'clear' });
+          settle();
           release();
         }
       }),
@@ -199,7 +249,7 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
 
     // Anything that isn't a CallError is a client-side fault, not a connection problem.
     provider.start().catch((error: unknown) => fail(isCallError(error) ? error : callError('provider-error')));
-  }, [configResult, createProvider, end, focusId, release, persistent, prepare]);
+  }, [configResult, createProvider, end, focusId, release, persistent, prepare, settle]);
 
   const dismiss = useCallback(() => dispatch({ type: 'RESET' }), []);
   const getLevel = useCallback(() => levelRef.current, []);
@@ -218,10 +268,13 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
     () => ({
       state,
       transcript,
+      saving: Boolean(saving),
       enabled,
-      persistence: !persistent ? 'Preview call: transcript is not saved.' : rtc.isError
-        ? 'Could not check transcript saving.' : rtc.data?.calls.some((c) => c.id === currentCallId && c.saved_messages > 0)
-          ? 'Conversation saved to chat.' : 'Waiting for transcript to save…',
+      persistence: !persistent
+        ? 'Preview call: transcript is not saved.'
+        : rtc.isError
+          ? 'Could not check transcript saving.'
+          : 'Saved to this chat when the call ends.',
       actions: syncSessionId === sessionId ? rtc.data?.actions ?? [] : [],
       summaries: syncSessionId === sessionId ? rtc.data?.calls.map((c) => c.summary).filter(Boolean) ?? [] : [],
       refreshActions: () => { void rtc.refetch(); },
@@ -231,7 +284,7 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
       dismiss,
       getLevel,
     }),
-    [state, transcript, enabled, configResult, start, end, dismiss, getLevel, persistent, rtc, syncSessionId, sessionId, currentCallId],
+    [state, transcript, saving, enabled, configResult, start, end, dismiss, getLevel, persistent, rtc, syncSessionId, sessionId],
   );
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;

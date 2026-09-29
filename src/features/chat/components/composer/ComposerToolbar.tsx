@@ -1,7 +1,9 @@
-import { Plus } from 'lucide-react';
-import { Chip, IconButton, Menu, MenuItem, Popover, Tooltip, iconProps } from '@/components/ui';
+import { CalendarDays, Paperclip, Plus } from 'lucide-react';
+import { useState } from 'react';
+import { Chip, IconButton, Menu, MenuItem, Popover, Tooltip, iconProps, smallIconProps } from '@/components/ui';
+import { MeetingPicker } from '@/features/meetings';
 import { useUiStore } from '@/stores/uiStore';
-import type { Effort } from '@/types/api';
+import type { Effort, MeetingSummary } from '@/types/api';
 import { EFFORT_LABELS } from '../../constants';
 import { useModels } from '../../hooks/useModels';
 
@@ -42,7 +44,45 @@ function SwapLabel({ value }: { value: string }) {
   );
 }
 
-export function ComposerToolbar({ onAttach }: { onAttach: () => void }) {
+/**
+ * "+": add files, or add context — a meeting, picked in a second step of the same menu (like the
+ * conversation actions' confirm step). Without `onAddMeeting` it stays the plain attach button.
+ */
+function AddMenu({ onAttach, onAddMeeting }: { onAttach: () => void; onAddMeeting: (meeting: MeetingSummary) => void }) {
+  const [view, setView] = useState<'menu' | 'meetings'>('menu');
+  return (
+    <Popover
+      placement="top-end"
+      anchor="container"
+      className="w-[min(24rem,calc(100vw-2rem))]"
+      onOpenChange={(open) => {
+        if (!open) setView('menu');
+      }}
+      trigger={(props) => <IconButton {...props} label="Add files or context" icon={<Plus {...iconProps} size={14} />} />}
+    >
+      {view === 'menu' ? (
+        <Menu label="Add to message">
+          <MenuItem leading={<Paperclip {...smallIconProps} />} onSelect={onAttach}>
+            Files and images
+          </MenuItem>
+          <MenuItem leading={<CalendarDays {...smallIconProps} />} keepOpen onSelect={() => setView('meetings')}>
+            Meeting
+          </MenuItem>
+        </Menu>
+      ) : (
+        <MeetingPicker onBack={() => setView('menu')} onSelect={onAddMeeting} />
+      )}
+    </Popover>
+  );
+}
+
+export function ComposerToolbar({
+  onAttach,
+  onAddMeeting,
+}: {
+  onAttach: () => void;
+  onAddMeeting?: (meeting: MeetingSummary) => void;
+}) {
   const modelId = useUiStore((s) => s.model);
   const effort = useUiStore((s) => s.effort);
   const setModel = useUiStore((s) => s.setModel);
@@ -97,9 +137,13 @@ export function ComposerToolbar({ onAttach }: { onAttach: () => void }) {
       )}
 
       <div className="ml-auto">
-        <Tooltip content="Add images" align="end">
-          <IconButton label="Add attachment" icon={<Plus {...iconProps} size={14} />} onClick={onAttach} />
-        </Tooltip>
+        {onAddMeeting ? (
+          <AddMenu onAttach={onAttach} onAddMeeting={onAddMeeting} />
+        ) : (
+          <Tooltip content="Add images" align="end">
+            <IconButton label="Add attachment" icon={<Plus {...iconProps} size={14} />} onClick={onAttach} />
+          </Tooltip>
+        )}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { useVoiceRecorder, VoiceComposer, type SendRecording, type TranscribeRec
 import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
 import { cn } from '@/lib/cn';
 import { useComposerStore } from '@/stores/composerStore';
+import type { MeetingSummary } from '@/types/api';
 import { clipboardFiles } from '../../lib/attachments';
 import { ComposerToolbar } from './ComposerToolbar';
 import { SendButton, type SendButtonMode } from './SendButton';
@@ -25,6 +26,8 @@ export interface ComposerProps {
   /** Stop on the recording: transcribes it into this box for editing (backends without voice notes). Omit to preview it. */
   onReviewVoice?: SendRecording;
   onAttach: () => void;
+  /** Adds a meeting as context for the next message (the "+" menu's Meeting step). Omit to hide it. */
+  onAddMeeting?: (meeting: MeetingSummary) => void;
   /** Files pasted into the message box (screenshots, copied images / files) — same path as `onAttach`'s picker. */
   onPasteFiles?: (files: File[]) => void;
   /** Files picked for the next message, shown above the input (keeps the composer open). */
@@ -46,6 +49,7 @@ export function Composer({
   onTranscribeVoice,
   onReviewVoice,
   onAttach,
+  onAddMeeting,
   onPasteFiles,
   attachments,
 }: ComposerProps) {
@@ -216,7 +220,7 @@ export function Composer({
                 )}
               />
             </div>
-            <ComposerToolbar onAttach={onAttach} />
+            <ComposerToolbar onAttach={onAttach} onAddMeeting={onAddMeeting} />
           </>
         ) : (
           <button

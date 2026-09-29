@@ -1,0 +1,40 @@
+import { useId, type ReactNode } from 'react';
+
+/** One integration on the Integrations page: name and purpose, its state or action, then any flow below. */
+export function IntegrationRow({
+  name,
+  description,
+  action,
+  children,
+}: {
+  name: string;
+  description: string;
+  action?: ReactNode;
+  children?: ReactNode;
+}) {
+  const id = useId();
+  return (
+    <section aria-labelledby={id} className="flex flex-col gap-4 border-b border-hairline py-6 first:pt-0">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0 flex-1 basis-60">
+          <h2 id={id} className="text-sm font-bold">
+            {name}
+          </h2>
+          <p className="mt-1 max-w-[52ch] text-xs leading-relaxed text-fg-muted">{description}</p>
+        </div>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
+      {children && <div className="max-w-md">{children}</div>}
+    </section>
+  );
+}
+
+/** "● Connected", in the product's accent (as Granola's status). */
+export function ConnectedDot() {
+  return (
+    <p className="flex items-center gap-2 text-xs font-bold">
+      <span aria-hidden className="size-1.5 rounded-full bg-accent" />
+      Connected
+    </p>
+  );
+}

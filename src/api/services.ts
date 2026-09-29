@@ -5,6 +5,9 @@ import type {
   Conversation,
   Effort,
   FeedbackRating,
+  Meeting,
+  MeetingSourceConnection,
+  MeetingSummary,
   Message,
   ModelOption,
   Page,
@@ -12,6 +15,8 @@ import type {
   ProfileInput,
   ProfileSuggestionStatus,
   ProfileUpdateSuggestion,
+  WhatsAppConnection,
+  WhatsAppVerification,
 } from '@/types/api';
 import type { EventStream } from './stream';
 
@@ -40,8 +45,11 @@ interface SendMessageBase {
 
 /** api-contract.md §4.3 — text, or a voice note previously uploaded via `audio.upload`. */
 export type SendMessageBody =
-  /** `attachment_ids`: images previously uploaded via `attachments.upload` (api-contract.md §4.7). */
-  | (SendMessageBase & { kind: 'text'; content: string; attachment_ids?: string[] })
+  /**
+   * `attachment_ids`: images previously uploaded via `attachments.upload` (api-contract.md §4.7).
+   * `meeting_ids`: meetings added as context. [BACKEND] Not sent yet: the chat endpoint has no field for it.
+   */
+  | (SendMessageBase & { kind: 'text'; content: string; attachment_ids?: string[]; meeting_ids?: string[] })
   | (SendMessageBase & { kind: 'voice'; audio_id: string });
 
 /** Fields of `POST /audio` (multipart/form-data, api-contract.md §4.4). */
@@ -180,6 +188,36 @@ export interface TestSuggestionBody {
   source?: { type: 'meeting'; ref_id?: string | null; title?: string | null; occurred_at?: string | null };
 }
 
+/**
+ * Meetings from the user's meeting source (Granola). Frontend-only for now: both adapters serve local
+ * fixtures until the backend has meeting routes; the UI depends only on this interface.
+ */
+export interface MeetingsService {
+  /** Newest first. */
+  list(): Promise<MeetingSummary[]>;
+  /** 404 `not_found` for an unknown id. */
+  get(id: string): Promise<Meeting>;
+  /** The meeting source's connection. Connecting is UI-only for now: no OAuth, tokens or Granola calls. */
+  connection(): Promise<MeetingSourceConnection>;
+  setConnected(connected: boolean): Promise<MeetingSourceConnection>;
+}
+
+/**
+ * Connecting a WhatsApp number (so Lam13 can receive its messages and voice notes): request a code for a
+ * number, then verify it. Frontend-only for now — both adapters use a local mock that sends nothing; the
+ * UI depends only on this interface. Rejects with ApiError:
+ * 422 `invalid_phone` · 422 `invalid_code` · 410 `code_expired` · 409 `no_pending_verification`.
+ */
+export interface WhatsAppService {
+  status(): Promise<WhatsAppConnection>;
+  /** `phoneNumber` in E.164. Replaces any pending verification. */
+  requestVerification(phoneNumber: string): Promise<WhatsAppVerification>;
+  /** A new code for the pending number (same number, cooldown restarts). */
+  resendCode(): Promise<WhatsAppVerification>;
+  verifyCode(code: string): Promise<WhatsAppConnection>;
+  disconnect(): Promise<WhatsAppConnection>;
+}
+
 /** What the connected backend supports; the UI hides the rest instead of offering failing actions. */
 export interface ApiCapabilities {
   /** `messages.regenerate` (Regenerate, and Retry of a server-side answer in place). */
@@ -200,4 +238,6 @@ export interface ApiAdapter {
   artifacts: ArtifactsService;
   profiles: ProfilesService;
   profileSuggestions: ProfileSuggestionsService;
+  meetings: MeetingsService;
+  whatsapp: WhatsAppService;
 }

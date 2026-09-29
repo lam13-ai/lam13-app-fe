@@ -2,7 +2,7 @@ import { PhoneOff, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { AgentMark } from '@/components/AgentMark';
 import { ScrollArea } from '@/components/ScrollArea';
-import { Button, iconProps } from '@/components/ui';
+import { Button, Spinner, iconProps } from '@/components/ui';
 import { Waveform } from '@/components/Waveform';
 import { cn } from '@/lib/cn';
 import { formatDuration } from '@/lib/format';
@@ -19,7 +19,8 @@ function useElapsed(startedAt: number | null): number {
   return startedAt === null ? 0 : Math.max(0, now - startedAt);
 }
 
-function statusLine(state: CallState, elapsedMs: number): string {
+function statusLine(state: CallState, elapsedMs: number, saving: boolean): string {
+  if (saving && state.status === 'idle') return 'Call ended · saving to chat…';
   switch (state.status) {
     case 'connecting':
       return 'Connecting…';
@@ -36,10 +37,13 @@ function statusLine(state: CallState, elapsedMs: number): string {
 
 /**
  * Live voice-call panel (desktop: floating card under the chat header; mobile: bottom sheet).
- * Shows state, duration, a level meter, the live transcript (with persistence status for the conversation) and End Call. Rendered only while a call exists or has just failed.
+ * Shows state, duration, a level meter, the live transcript and End Call. The transcript lives only here
+ * while the call runs (the chat behind it doesn't change); after a saved call the panel stays, "saving to
+ * chat", until the chat shows the saved conversation. Rendered only while a call exists, is being saved,
+ * or has just failed.
  */
 export function CallPanel() {
-  const { state, transcript, missingConfig, end, start, dismiss, getLevel, persistence } = useCall();
+  const { state, transcript, saving, missingConfig, end, start, dismiss, getLevel, persistence } = useCall();
   const startedAt = state.status === 'active' || state.status === 'ending' ? (state.startedAt ?? null) : null;
   const elapsed = useElapsed(startedAt);
   const logRef = useRef<HTMLDivElement>(null);
@@ -50,7 +54,8 @@ export function CallPanel() {
     if (log) log.scrollTop = log.scrollHeight;
   }, [transcript]);
 
-  if (state.status === 'idle') return null;
+  // After a saved call, the panel (with its transcript) stays until the chat shows the saved conversation.
+  if (state.status === 'idle' && !saving) return null;
 
   const live = state.status === 'active';
   const error = state.status === 'error' ? state.error : null;
@@ -74,7 +79,7 @@ export function CallPanel() {
               aria-hidden="true"
               className={cn('size-1.5', error ? 'bg-danger' : live ? 'bg-accent motion-safe:animate-pulse' : 'bg-fg/30')}
             />
-            {statusLine(state, elapsed)}
+            {statusLine(state, elapsed, saving)}
           </p>
         </div>
         <div aria-hidden="true" className="w-16 shrink-0">
@@ -102,7 +107,11 @@ export function CallPanel() {
           </div>
         ) : transcript.length === 0 ? (
           <p className="text-xs text-fg-muted">
-            {state.status === 'connecting' ? 'Connecting to Lam13…' : 'Say hello — Lam13 is listening.'}
+            {state.status === 'connecting'
+              ? 'Connecting to Lam13…'
+              : state.status === 'idle'
+                ? 'Nothing was said on this call.'
+                : 'Say hello — Lam13 is listening.'}
           </p>
         ) : (
           transcript.map((entry) => (
@@ -129,6 +138,11 @@ export function CallPanel() {
               </Button>
             )}
           </>
+        ) : state.status === 'idle' ? (
+          <p className="flex min-h-9 items-center gap-2 text-2xs text-fg-muted">
+            <Spinner size={14} state="active" />
+            Adding this conversation to the chat…
+          </p>
         ) : (
           <>
             <p className="min-w-0 flex-1 text-2xs text-fg-muted">{persistence}</p>

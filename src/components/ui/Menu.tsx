@@ -78,7 +78,7 @@ export function MenuItem({ children, onSelect, checked, leading, tone = 'default
         'hover:bg-muted focus-visible:bg-muted aria-checked:bg-muted aria-checked:text-fg active:scale-[0.98]',
       )}
     >
-      <span className="flex items-center gap-2">
+      <span className="flex min-w-0 flex-1 items-center gap-2">
         {leading}
         {children}
       </span>

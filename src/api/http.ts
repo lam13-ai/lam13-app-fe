@@ -12,6 +12,8 @@ import type {
 } from '@/types/api';
 import { getAccessToken } from './auth';
 import { abortError, ApiError } from './errors';
+import { createMockMeetings } from './mock/meetings';
+import { createMockWhatsApp } from './mock/whatsapp';
 import type { ApiAdapter, SendMessageBody } from './services';
 import { readSseMessages, type SseMessage, type StreamEvent } from './stream';
 
@@ -515,6 +517,7 @@ export function createHttpAdapter(): ApiAdapter {
             message_id: body.client_message_id,
             user_message: body.content,
             ...(body.attachment_ids?.length && { users_document_ids: body.attachment_ids }),
+            // TODO(backend): `body.meeting_ids` (meeting context) is not sent — /chat/stream has no field for it yet.
           },
         });
         if (!response.body) throw new ApiError(0, 'network_error', 'The response could not be read.');
@@ -573,6 +576,13 @@ export function createHttpAdapter(): ApiAdapter {
         return { items: [] };
       },
     },
+
+    // TODO(backend): no meeting routes yet — local fixtures behind the same interface until the backend
+    // (Granola via Lam13) serves them. Replace with requests here; the UI does not change.
+    meetings: createMockMeetings(),
+    // TODO(backend): WhatsApp connection is not on the backend yet — a local mock that sends nothing. Replace
+    // with the real integration here (OTP, Meta embedded signup, …); the UI only uses WhatsAppService.
+    whatsapp: createMockWhatsApp(),
 
     // My Contacts: /contacts. The UI searches and sorts the (unpaginated) list itself; version history has
     // no UI yet and is not called.

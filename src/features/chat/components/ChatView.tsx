@@ -1,13 +1,13 @@
-import { FileText, X } from 'lucide-react';
+import { CalendarDays, FileText, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ApiError, ATTACHMENT_LIMITS, toErrorInfo, useApi } from '@/api';
 import { ErrorState } from '@/components/ErrorState';
-import { Spinner, smallIconProps, useToast } from '@/components/ui';
+import { Spinner, VisuallyHidden, smallIconProps, useToast } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
 import { createId } from '@/lib/id';
-import { useComposerStore } from '@/stores/composerStore';
+import { useComposerStore, type MeetingContext } from '@/stores/composerStore';
 import { useStreamStore, type StreamPhase } from '@/stores/streamStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { Recording } from '@/features/voice';
@@ -72,6 +72,17 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
   // Unsent composer text keeps its shared new-chat slot (unchanged behaviour).
   const draftKey = effectiveId ?? NEW_CONVERSATION_KEY;
 
+  // A meeting added as context for the next message (a chip in the composer), kept with the draft.
+  const meeting = useComposerStore((s) => s.meetings[draftKey]);
+  // "Ask Lam13 about this meeting" opens a new chat with the meeting in the router state. Applied once,
+  // then dropped from the history entry so Back / reload can't bring back a context the user removed.
+  const askedMeeting = conversationId ? undefined : (location.state as { meetingContext?: MeetingContext } | null)?.meetingContext;
+  useEffect(() => {
+    if (!askedMeeting) return;
+    useComposerStore.getState().setMeeting(NEW_CONVERSATION_KEY, askedMeeting);
+    navigate(location.pathname, { replace: true, state: { newChat: true } });
+  }, [askedMeeting, location.pathname, navigate]);
+
   const history = useMessages(key, effectiveId);
   const active = useStreamStore((s) => s.active[key]);
   const failures = useStreamStore((s) => s.failures);
@@ -94,8 +105,11 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
   const activity = active && ACTIVITY_LABELS[active.phase];
   const title = conversationId ? conversation?.title : AGENT_NAME;
   const send = (text: string) => {
+    // The meeting context goes with this message, then the chip clears (restored if the send fails first).
+    const meetingIds = meeting ? [meeting.id] : undefined;
+    if (meeting) useComposerStore.getState().clearMeeting(draftKey);
     if (files.drafts.length === 0) {
-      void actions.send(conversationId, text, { origin });
+      void actions.send(conversationId, text, { origin, meetingIds });
       return;
     }
     // Upload first (the backend needs document ids), then send; a failed upload restores the text.
@@ -103,9 +117,10 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
       try {
         const attachments = await files.upload(conversationId ?? null);
         files.clear();
-        await actions.send(conversationId, text, { origin, attachments });
+        await actions.send(conversationId, text, { origin, attachments, meetingIds });
       } catch (error) {
         useComposerStore.getState().setDraft(draftKey, text);
+        if (meeting) useComposerStore.getState().setMeeting(draftKey, meeting);
         toast.show(toErrorInfo(error).message);
       }
     })();
@@ -210,10 +225,28 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
             // transcribing IS the send, it would just transcribe twice.
             onTranscribeVoice={capabilities.voiceNotes && capabilities.transcription ? transcribe : undefined}
             onAttach={() => fileInputRef.current?.click()}
+            onAddMeeting={(m) => useComposerStore.getState().setMeeting(draftKey, { id: m.id, title: m.title })}
             onPasteFiles={addFiles}
             attachments={
-              files.drafts.length > 0 && (
-                <ul aria-label="Attached files" className="flex flex-wrap gap-1.5 px-3 pt-3">
+              (meeting || files.drafts.length > 0) && (
+                <div className="flex flex-wrap gap-1.5 px-3 pt-3">
+                  {meeting && (
+                    <p className="inline-flex max-w-72 items-center gap-1.5 border border-hairline-strong px-2 py-1 text-xs text-fg">
+                      <CalendarDays {...smallIconProps} className="shrink-0" />
+                      <VisuallyHidden>Meeting context: </VisuallyHidden>
+                      <span className="truncate">{meeting.title}</span>
+                      <button
+                        type="button"
+                        aria-label={`Remove meeting ${meeting.title}`}
+                        onClick={() => useComposerStore.getState().clearMeeting(draftKey)}
+                        className="text-fg-muted hover:text-fg"
+                      >
+                        <X {...smallIconProps} />
+                      </button>
+                    </p>
+                  )}
+                  {files.drafts.length > 0 && (
+                <ul aria-label="Attached files" className="flex flex-wrap gap-1.5">
                   {files.drafts.map((d) => (
                     <li
                       key={d.id}
@@ -240,6 +273,8 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
                     </li>
                   ))}
                 </ul>
+                  )}
+                </div>
               )
             }
           />

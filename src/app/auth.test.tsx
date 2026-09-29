@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { getAccessToken } from '@/api';
 import { useComposerStore } from '@/stores/composerStore';
@@ -34,6 +34,19 @@ describe('auth flow', () => {
     expect(within(sidebar).getByText(TEST_USER.name)).toBeTruthy();
     expect(within(sidebar).getByText(TEST_USER.email)).toBeTruthy();
     expect(within(sidebar).getByText('AL')).toBeTruthy(); // initials fallback
+  });
+
+  it('shows the profile picture when the account has one, and a generic icon (not "A") for the placeholder name', async () => {
+    renderApp('/', { auth: { user: { ...TEST_USER, avatarUrl: 'https://example.com/me.png' } } });
+    let sidebar = await findSidebar();
+    expect(sidebar.querySelector('img[src="https://example.com/me.png"]')).toBeTruthy();
+    expect(within(sidebar).queryByText('AL')).toBeNull();
+    cleanup();
+
+    renderApp('/', { auth: { user: { ...TEST_USER, name: 'Account', email: null, avatarUrl: null } } });
+    sidebar = await findSidebar();
+    expect(within(sidebar).getByText('Account')).toBeTruthy(); // the label still shows
+    expect(within(sidebar).queryByText('A', { exact: true })).toBeNull();
   });
 
   it('offers account creation on the same screen', async () => {

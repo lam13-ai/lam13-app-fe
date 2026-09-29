@@ -17,4 +17,10 @@ export const queryKeys = {
     /** Every suggestion (all statuses): the UI shows the newest per group while it is pending. */
     list: () => ['profileSuggestions', 'list'] as const,
   },
+  meetings: {
+    list: () => ['meetings', 'list'] as const,
+    detail: (id: string) => ['meetings', 'detail', id] as const,
+    connection: () => ['meetings', 'connection'] as const,
+  },
+  whatsapp: () => ['whatsapp'] as const,
 };

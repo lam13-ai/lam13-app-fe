@@ -5,6 +5,8 @@ import { RouteError } from './routes/RouteError';
 
 const chatRoute = async () => ({ Component: (await import('./routes/ChatRoute')).default });
 const contactsRoute = async () => ({ Component: (await import('./routes/ContactsRoute')).default });
+const integrationsRoute = async () => ({ Component: (await import('./routes/IntegrationsRoute')).default });
+const meetingsRoute = async () => ({ Component: (await import('./routes/MeetingsRoute')).default });
 const notFoundRoute = async () => ({ Component: (await import('./routes/NotFoundRoute')).default });
 const loginRoute = async () => ({ Component: (await import('./routes/LoginRoute')).default });
 const callbackRoute = async () => ({ Component: (await import('./routes/CallbackRoute')).default });
@@ -52,6 +54,9 @@ export const routes: RouteObject[] = [
           { index: true, lazy: chatRoute, errorElement: <RouteError /> },
           { path: 'c/:conversationId', lazy: chatRoute, errorElement: <RouteError /> },
           { path: 'contacts', lazy: contactsRoute, errorElement: <RouteError /> },
+          { path: 'meetings', lazy: meetingsRoute, errorElement: <RouteError /> },
+          { path: 'meetings/:meetingId', lazy: meetingsRoute, errorElement: <RouteError /> },
+          { path: 'integrations', lazy: integrationsRoute, errorElement: <RouteError /> },
           { path: '*', lazy: notFoundRoute, errorElement: <RouteError /> },
         ],
       },
