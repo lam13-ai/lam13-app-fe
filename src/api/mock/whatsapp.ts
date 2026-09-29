@@ -6,7 +6,10 @@ import { sleep } from './utils';
 /**
  * Local stand-in for WhatsApp verification, used by BOTH adapters until the backend integration exists.
  * It sends nothing: a fixed demo code verifies, `EXPIRED_DEMO_CODE` simulates an expired code, and any
- * other six digits are "incorrect". Replace with the real service — the UI does not change.
+ * other six digits are "incorrect". The demo code is only hinted in development builds — never in
+ * production, where nobody could receive it. It has no Lam13 WhatsApp number, so `contact_link` is null
+ * (no "Open WhatsApp"), and linking from WhatsApp is not simulated here (tests stub `status`).
+ * Replace with the real service — the UI does not change.
  */
 export const DEMO_CODE = '123456';
 export const EXPIRED_DEMO_CODE = '000000';
@@ -18,13 +21,14 @@ export function createMockWhatsApp({
   respond = () => sleep(700),
   resendAfterSeconds = RESEND_AFTER_SECONDS,
 }: { respond?: () => Promise<void>; resendAfterSeconds?: number } = {}): WhatsAppService {
-  let connection: WhatsAppConnection = { status: 'disconnected', phone_number: null };
+  const DISCONNECTED: WhatsAppConnection = { status: 'disconnected', phone_number: null, method: null, contact_link: null };
+  let connection: WhatsAppConnection = { ...DISCONNECTED };
   let pending: string | null = null;
 
   const verification = (phone_number: string): WhatsAppVerification => ({
     phone_number,
     resend_after_seconds: resendAfterSeconds,
-    notice: `Preview: no WhatsApp message is sent yet. Use ${DEMO_CODE} to connect.`,
+    notice: import.meta.env.DEV ? `Development preview: no WhatsApp message is sent. Use ${DEMO_CODE} to connect.` : null,
   });
 
   return {
@@ -48,13 +52,13 @@ export function createMockWhatsApp({
       if (!pending) throw new ApiError(409, 'no_pending_verification', 'Request a verification code first.');
       if (code === EXPIRED_DEMO_CODE) throw new ApiError(410, 'code_expired', 'Your verification code has expired. Request a new one.');
       if (code !== DEMO_CODE) throw new ApiError(422, 'invalid_code', 'That verification code is incorrect.');
-      connection = { status: 'connected', phone_number: pending };
+      connection = { status: 'connected', phone_number: pending, method: 'lam13_to_whatsapp', contact_link: null };
       pending = null;
       return { ...connection };
     },
     async disconnect() {
       await respond();
-      connection = { status: 'disconnected', phone_number: null };
+      connection = { ...DISCONNECTED };
       pending = null;
       return { ...connection };
     },

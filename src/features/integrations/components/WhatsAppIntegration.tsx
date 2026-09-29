@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight } from 'lucide-react';
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { isApiError } from '@/api';
 import { Button, Skeleton, Spinner, iconProps } from '@/components/ui';
@@ -10,6 +10,38 @@ import { PhoneNumberField } from './PhoneNumberField';
 import { ConnectedDot, IntegrationRow } from './IntegrationRow';
 
 const DESCRIPTION = 'Connect your WhatsApp number to receive messages and voice notes directly in Lam13.';
+
+/** Lam13's WhatsApp conversation link from the service, if it is a real WhatsApp link (never another URL). */
+function whatsAppLink(link: string | null | undefined): string | null {
+  return link && /^https:\/\/(wa\.me|api\.whatsapp\.com)\//i.test(link) ? link : null;
+}
+
+/**
+ * The other way to link: from WhatsApp itself (message Lam13 → email → code, all inside WhatsApp). Only
+ * explained here; "Open WhatsApp" appears once the service provides Lam13's WhatsApp link.
+ */
+function StartFromWhatsApp({ link }: { link: string | null }) {
+  return (
+    <div className="flex flex-col gap-2 border-l border-hairline-strong pl-3">
+      <p className="text-xs font-bold">Prefer to start from WhatsApp?</p>
+      <p className="text-xs leading-relaxed text-fg-muted">
+        You can also connect from WhatsApp: message the Lam13 WhatsApp number and follow the verification steps there.
+      </p>
+      {link && (
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            trailingIcon={<ArrowUpRight {...iconProps} size={14} />}
+            onClick={() => window.open(link, '_blank', 'noopener,noreferrer')}
+          >
+            Open WhatsApp
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Whole seconds until `until` (ms), re-rendering while counting down. */
 function useSecondsLeft(until: number) {
@@ -63,6 +95,7 @@ function PhoneStep({
   const describedBy = fieldError ? `${id}-error` : `${id}-hint`;
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-4">
+      <p className="text-xs leading-relaxed text-fg-muted">Enter the WhatsApp number you want to connect to Lam13.</p>
       <div className="flex flex-col gap-1.5">
         <label htmlFor={id} className="text-xs font-bold">
           WhatsApp number
@@ -109,7 +142,7 @@ function PhoneStep({
           aria-busy={request.isPending || undefined}
           leadingIcon={request.isPending ? <Spinner size={14} state="active" /> : undefined}
         >
-          {request.isPending ? 'Sending code…' : 'Send verification code'}
+          {request.isPending ? 'Sending code…' : 'Continue'}
         </Button>
       </div>
     </form>
@@ -174,9 +207,10 @@ function VerifyStep({
           Verify your WhatsApp number
         </h3>
         <p className="text-xs leading-relaxed text-fg-muted">
-          We sent a 6-digit code to <span className="font-bold tabular-nums text-fg">{formatPhone(verification.phone_number)}</span> on
-          WhatsApp.
+          Check WhatsApp for the code. A 6-digit verification code should have arrived on WhatsApp at{' '}
+          <span className="font-bold tabular-nums text-fg">{formatPhone(verification.phone_number)}</span>. Enter it below.
         </p>
+        {/* Development previews only: the service leaves it empty in production. */}
         {verification.notice && <p className="text-2xs text-fg-muted">{verification.notice}</p>}
       </div>
 
@@ -238,7 +272,7 @@ function VerifyStep({
   );
 }
 
-function Connected({ phoneNumber }: { phoneNumber: string }) {
+function Connected({ phoneNumber, viaWhatsApp }: { phoneNumber: string; viaWhatsApp: boolean }) {
   const { disconnect } = useWhatsApp();
   const [confirming, setConfirming] = useState(false);
   const titleId = useId();
@@ -248,6 +282,7 @@ function Connected({ phoneNumber }: { phoneNumber: string }) {
     <div className="flex flex-col gap-3">
       <div>
         <p className="text-sm font-bold tabular-nums">{formatPhone(phoneNumber)}</p>
+        {viaWhatsApp && <p className="text-2xs text-fg-muted">Connected via WhatsApp</p>}
         <p className="text-xs leading-relaxed text-fg-muted">Lam13 can now receive your WhatsApp messages and voice notes.</p>
       </div>
       {confirming ? (
@@ -303,7 +338,9 @@ function Connected({ phoneNumber }: { phoneNumber: string }) {
 type Step = { kind: 'intro' } | { kind: 'phone' } | { kind: 'verify'; verification: WhatsAppVerification & { sentAt: number } };
 
 /**
- * WhatsApp on the Integrations page: connect a number (number → code → verify), see it, disconnect it.
+ * WhatsApp on the Integrations page: connect a number from Lam13 (number → code on WhatsApp → verify), or
+ * learn how to start from WhatsApp instead; see the link, disconnect it. Either way it is the same link —
+ * a link made in WhatsApp shows up here via the status (refetched when you come back to the tab).
  * Everything goes through `api.whatsapp` (a local mock until the backend integration exists).
  */
 export function WhatsAppIntegration() {
@@ -334,13 +371,14 @@ export function WhatsAppIntegration() {
     );
   } else if (connected) {
     action = <ConnectedDot />;
-    body = <Connected phoneNumber={connected} />;
+    body = <Connected phoneNumber={connected} viaWhatsApp={status.data?.method === 'whatsapp_to_lam13'} />;
   } else if (step.kind === 'intro') {
     action = (
       <Button variant="outline" size="sm" onClick={() => setStep({ kind: 'phone' })}>
         Connect WhatsApp
       </Button>
     );
+    body = <StartFromWhatsApp link={whatsAppLink(status.data?.contact_link)} />;
   } else if (step.kind === 'phone') {
     body = (
       <PhoneStep

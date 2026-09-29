@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError, type ApiAdapter } from '@/api';
 import { DEMO_CODE, EXPIRED_DEMO_CODE } from '@/api/mock/whatsapp';
@@ -26,7 +26,7 @@ async function toVerification(number = '0300 1234567') {
   fireEvent.click(within(whatsapp()).getByRole('button', { name: 'Connect WhatsApp' }));
   fireEvent.change(within(whatsapp()).getByRole('combobox', { name: 'Country code' }), { target: { value: 'PK' } });
   fireEvent.change(within(whatsapp()).getByLabelText('WhatsApp number'), { target: { value: number } });
-  await act(async () => fireEvent.click(within(whatsapp()).getByRole('button', { name: 'Send verification code' })));
+  await act(async () => fireEvent.click(within(whatsapp()).getByRole('button', { name: 'Continue' })));
   await within(whatsapp()).findByRole('heading', { name: 'Verify your WhatsApp number' });
 }
 
@@ -52,15 +52,15 @@ describe('WhatsApp connection', () => {
     fireEvent.change(within(whatsapp()).getByRole('combobox', { name: 'Country code' }), { target: { value: 'PK' } });
     const input = within(whatsapp()).getByLabelText('WhatsApp number');
     fireEvent.change(input, { target: { value: '300 12' } });
-    fireEvent.click(within(whatsapp()).getByRole('button', { name: 'Send verification code' }));
+    fireEvent.click(within(whatsapp()).getByRole('button', { name: 'Continue' }));
     expect(within(whatsapp()).getByText(/Enter a valid Pakistan number/)).toBeTruthy();
     expect(input.getAttribute('aria-invalid')).toBe('true');
 
     fireEvent.change(input, { target: { value: '0300 123 4567' } });
-    await act(async () => fireEvent.click(within(whatsapp()).getByRole('button', { name: 'Send verification code' })));
+    await act(async () => fireEvent.click(within(whatsapp()).getByRole('button', { name: 'Continue' })));
     await within(whatsapp()).findByRole('heading', { name: 'Verify your WhatsApp number' });
     expect(within(whatsapp()).getByText('+92 300 1234567')).toBeTruthy();
-    expect(within(whatsapp()).getByText(/Preview: no WhatsApp message is sent yet/)).toBeTruthy(); // the mock says so
+    expect(within(whatsapp()).getByText(/Development preview: no WhatsApp message is sent/)).toBeTruthy(); // development builds only
   });
 
   it('code input: six digits, paste fills all, non-digits ignored, Verify disabled until complete', async () => {
@@ -155,12 +155,12 @@ describe('WhatsApp connection', () => {
     fireEvent.click(within(whatsapp()).getByRole('button', { name: 'Connect WhatsApp' }));
     fireEvent.change(within(whatsapp()).getByRole('combobox', { name: 'Country code' }), { target: { value: 'PK' } });
     fireEvent.change(within(whatsapp()).getByLabelText('WhatsApp number'), { target: { value: '3001234567' } });
-    await act(async () => fireEvent.click(within(whatsapp()).getByRole('button', { name: 'Send verification code' })));
+    await act(async () => fireEvent.click(within(whatsapp()).getByRole('button', { name: 'Continue' })));
     expect(await within(whatsapp()).findByText("Couldn't send a verification code. Try again.")).toBeTruthy();
     expect((within(whatsapp()).getByLabelText('WhatsApp number') as HTMLInputElement).value).toBe('3001234567');
 
     request.mockRestore();
-    await act(async () => fireEvent.click(within(whatsapp()).getByRole('button', { name: 'Send verification code' })));
+    await act(async () => fireEvent.click(within(whatsapp()).getByRole('button', { name: 'Continue' })));
     await within(whatsapp()).findByRole('heading', { name: 'Verify your WhatsApp number' });
     vi.spyOn(api.whatsapp, 'verifyCode').mockRejectedValueOnce(new ApiError(503, 'unavailable', 'down'));
     type(DEMO_CODE);
@@ -186,5 +186,73 @@ describe('WhatsApp connection', () => {
     status.mockRestore();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await within(whatsapp()).findByRole('button', { name: 'Connect WhatsApp' });
+  });
+});
+
+describe('WhatsApp: two ways to make the same link', () => {
+  it('the verification step says the code arrives on WhatsApp (not email)', async () => {
+    await open();
+    await toVerification();
+    const text = whatsapp().textContent ?? '';
+    expect(text).toContain('Check WhatsApp for the code.');
+    expect(text).toMatch(/should have arrived on WhatsApp at \+92 300 1234567/);
+    expect(text.toLowerCase()).not.toContain('email');
+  });
+
+  it('while disconnected, explains starting from WhatsApp — no fake WhatsApp conversation, no link until one is configured', async () => {
+    await open();
+    expect(within(whatsapp()).getByText('Prefer to start from WhatsApp?')).toBeTruthy();
+    expect(within(whatsapp()).getByText(/message the Lam13 WhatsApp number and follow the verification steps there/)).toBeTruthy();
+    expect(within(whatsapp()).queryByRole('button', { name: /Open WhatsApp/ })).toBeNull(); // the mock has no Lam13 number
+    expect(within(whatsapp()).queryByRole('log')).toBeNull();
+    expect(within(whatsapp()).queryByRole('textbox')).toBeNull();
+  });
+
+  it('offers "Open WhatsApp" only for a real WhatsApp link from the service', async () => {
+    const opened = vi.spyOn(window, 'open').mockReturnValue(null);
+    const app = renderApp('/integrations');
+    const status = vi.spyOn(app.api.whatsapp, 'status');
+    status.mockResolvedValue({ status: 'disconnected', phone_number: null, contact_link: 'https://wa.me/15550000000' });
+    const button = await within(await screen.findByRole('region', { name: 'WhatsApp' }, { timeout: 8000 })).findByRole('button', {
+      name: /Open WhatsApp/,
+    });
+    fireEvent.click(button);
+    expect(opened).toHaveBeenCalledWith('https://wa.me/15550000000', '_blank', 'noopener,noreferrer');
+    cleanup();
+
+    const other = renderApp('/integrations');
+    vi.spyOn(other.api.whatsapp, 'status').mockResolvedValue({
+      status: 'disconnected',
+      phone_number: null,
+      contact_link: 'https://example.com/not-whatsapp',
+    });
+    await within(await screen.findByRole('region', { name: 'WhatsApp' }, { timeout: 8000 })).findByText('Prefer to start from WhatsApp?');
+    expect(within(whatsapp()).queryByRole('button', { name: /Open WhatsApp/ })).toBeNull();
+  });
+
+  it('a link made from WhatsApp shows as the same connection, and disconnects the same way', async () => {
+    const app = renderApp('/integrations');
+    vi.spyOn(app.api.whatsapp, 'status').mockResolvedValueOnce({
+      status: 'connected',
+      phone_number: '+966501234567',
+      method: 'whatsapp_to_lam13',
+    });
+    expect(await within(await screen.findByRole('region', { name: 'WhatsApp' }, { timeout: 8000 })).findByText('Connected')).toBeTruthy();
+    expect(within(whatsapp()).getByText('+966 501 234567')).toBeTruthy();
+    expect(within(whatsapp()).getByText('Connected via WhatsApp')).toBeTruthy();
+    expect(within(whatsapp()).queryByText('Prefer to start from WhatsApp?')).toBeNull();
+
+    fireEvent.click(within(whatsapp()).getByRole('button', { name: 'Disconnect' }));
+    await act(async () =>
+      fireEvent.click(within(within(whatsapp()).getByRole('alertdialog')).getByRole('button', { name: 'Disconnect' })),
+    );
+    expect(await within(whatsapp()).findByRole('button', { name: 'Connect WhatsApp' })).toBeTruthy();
+    expect(within(whatsapp()).getByText('Prefer to start from WhatsApp?')).toBeTruthy();
+  });
+
+  it('Granola stays listed and unchanged beside WhatsApp', async () => {
+    await open();
+    const granola = screen.getByRole('region', { name: 'Granola' });
+    expect(await within(granola).findByRole('button', { name: /Granola connected/ })).toBeTruthy();
   });
 });

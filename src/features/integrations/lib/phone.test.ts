@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createMockWhatsApp, DEMO_CODE, EXPIRED_DEMO_CODE } from '@/api/mock/whatsapp';
 import { countryByCode, defaultCountryCode, formatPhone, nationalDigits, toE164 } from './phone';
 
@@ -34,7 +34,7 @@ describe('mock WhatsAppService', () => {
 
   it('requests, resends and verifies with the demo code; other codes are incorrect or expired', async () => {
     const api = service();
-    expect(await api.status()).toEqual({ status: 'disconnected', phone_number: null });
+    expect(await api.status()).toMatchObject({ status: 'disconnected', phone_number: null });
     await expect(api.verifyCode(DEMO_CODE)).rejects.toMatchObject({ status: 409, code: 'no_pending_verification' });
     await expect(api.requestVerification('923001234567')).rejects.toMatchObject({ status: 422, code: 'invalid_phone' });
 
@@ -42,10 +42,25 @@ describe('mock WhatsAppService', () => {
     expect((await api.resendCode()).phone_number).toBe('+923001234567');
     await expect(api.verifyCode('111111')).rejects.toMatchObject({ status: 422, message: 'That verification code is incorrect.' });
     await expect(api.verifyCode(EXPIRED_DEMO_CODE)).rejects.toMatchObject({ status: 410, code: 'code_expired' });
-    expect(await api.verifyCode(DEMO_CODE)).toEqual({ status: 'connected', phone_number: '+923001234567' });
+    expect(await api.verifyCode(DEMO_CODE)).toMatchObject({ status: 'connected', phone_number: '+923001234567' });
     expect((await api.status()).status).toBe('connected');
 
-    expect(await api.disconnect()).toEqual({ status: 'disconnected', phone_number: null });
+    expect(await api.disconnect()).toMatchObject({ status: 'disconnected', phone_number: null, method: null });
     await expect(api.resendCode()).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('records the Lam13-started method, has no Lam13 WhatsApp link, and never hints the demo code in production', async () => {
+    const api = service();
+    expect((await api.status()).contact_link).toBeNull();
+    expect((await api.requestVerification('+923001234567')).notice).toContain(DEMO_CODE); // development / tests
+    expect((await api.verifyCode(DEMO_CODE)).method).toBe('lam13_to_whatsapp');
+
+    vi.stubEnv('DEV', false);
+    try {
+      const prod = service();
+      expect((await prod.requestVerification('+923001234567')).notice).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

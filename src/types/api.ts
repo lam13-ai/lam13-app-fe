@@ -240,10 +240,17 @@ export interface MeetingSourceConnection {
 
 // ── WhatsApp (frontend-only for now: no backend routes yet) ──────────────────
 
-/** Whether a WhatsApp number is connected. `phone_number` is E.164 ("+923001234567"). */
+/**
+ * The Lam13 account ↔ WhatsApp number link, however it was made: from Lam13 (number → code on WhatsApp)
+ * or from WhatsApp (message Lam13 → email → code). One link either way. `phone_number` is E.164.
+ */
 export interface WhatsAppConnection {
   status: 'disconnected' | 'connected';
   phone_number: string | null;
+  /** Where the link was started; null when unknown or disconnected. */
+  method?: 'lam13_to_whatsapp' | 'whatsapp_to_lam13' | null;
+  /** Deep link to Lam13's WhatsApp conversation (e.g. https://wa.me/…), for starting from WhatsApp; null until configured. */
+  contact_link?: string | null;
 }
 
 /** A verification code was requested for `phone_number`. */
@@ -251,6 +258,6 @@ export interface WhatsAppVerification {
   phone_number: string;
   /** Seconds before another code may be requested. */
   resend_after_seconds: number;
-  /** Shown under the code input when set (e.g. a preview backend that sends nothing). */
+  /** Shown under the code input when set — development previews only (e.g. a mock that sends nothing). */
   notice?: string | null;
 }

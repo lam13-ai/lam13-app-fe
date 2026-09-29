@@ -209,6 +209,10 @@ export interface MeetingsService {
  * 422 `invalid_phone` · 422 `invalid_code` · 410 `code_expired` · 409 `no_pending_verification`.
  */
 export interface WhatsAppService {
+  /**
+   * The link and what the page needs about it (method, the Lam13 WhatsApp contact link). A link made from
+   * WhatsApp happens entirely there (backend); the page learns about it here.
+   */
   status(): Promise<WhatsAppConnection>;
   /** `phoneNumber` in E.164. Replaces any pending verification. */
   requestVerification(phoneNumber: string): Promise<WhatsAppVerification>;
