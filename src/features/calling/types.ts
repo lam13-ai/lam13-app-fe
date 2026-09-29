@@ -1,3 +1,4 @@
+import type { PreparedCall } from './rtc';
 /**
  * Provider-neutral calling contract. UI and hooks depend only on these types; Vapi specifics live in
  * `providers/vapiProvider.ts`.
@@ -72,6 +73,9 @@ export interface CallProvider {
 export interface CallingConfig {
   publicKey: string;
   assistantId: string;
+  prepare?: () => Promise<PreparedCall>;
+  abandon?: (id: string) => Promise<unknown>;
+  register?: (id: string, providerCallId: string) => Promise<unknown>;
 }
 
 export type CreateCallProvider = (config: CallingConfig) => CallProvider;

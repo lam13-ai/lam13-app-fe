@@ -10,3 +10,5 @@ export { CallButton } from './components/CallButton';
 export { CallPanel } from './components/CallPanel';
 export { createMockCallFactory, type MockCall, type MockCallOptions } from './providers/mockProvider';
 export type { CallError, CallErrorCode, CallProvider, CallStatus, CreateCallProvider, TranscriptUpdate } from './types';
+
+export { VoiceRequests } from './components/VoiceRequests';

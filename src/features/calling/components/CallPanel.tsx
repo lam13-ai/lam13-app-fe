@@ -36,11 +36,10 @@ function statusLine(state: CallState, elapsedMs: number): string {
 
 /**
  * Live voice-call panel (desktop: floating card under the chat header; mobile: bottom sheet).
- * Shows state, duration, a level meter, the live transcript (this call only — not saved, not added to
- * chat history) and End Call. Rendered only while a call exists or has just failed.
+ * Shows state, duration, a level meter, the live transcript (with persistence status for the conversation) and End Call. Rendered only while a call exists or has just failed.
  */
 export function CallPanel() {
-  const { state, transcript, missingConfig, end, start, dismiss, getLevel } = useCall();
+  const { state, transcript, missingConfig, end, start, dismiss, getLevel, persistence } = useCall();
   const startedAt = state.status === 'active' || state.status === 'ending' ? (state.startedAt ?? null) : null;
   const elapsed = useElapsed(startedAt);
   const logRef = useRef<HTMLDivElement>(null);
@@ -132,7 +131,7 @@ export function CallPanel() {
           </>
         ) : (
           <>
-            <p className="min-w-0 flex-1 text-2xs text-fg-muted">Transcript isn&apos;t saved.</p>
+            <p className="min-w-0 flex-1 text-2xs text-fg-muted">{persistence}</p>
             <Button
               variant="danger"
               size="sm"

@@ -84,6 +84,7 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
   let hangingUp = false;
   /** Latest reason Vapi reported for the call ending, if any. */
   let endedReason: string | undefined;
+  let reservationId: string | undefined;
 
   /** Terminal: report the end once and drop the SDK instance. */
   const finish = (state: 'ended' | 'completed' = 'ended') => {
@@ -180,7 +181,15 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
       starting = true;
       let call: unknown;
       try {
-        call = await instance.start(config.assistantId);
+        const prepared = await config.prepare?.();
+        reservationId = prepared?.id;
+        if (finished) {
+          if (reservationId) await config.abandon?.(reservationId);
+          return;
+        }
+        call = prepared
+          ? await instance.start(prepared.assistant_id, prepared.assistant_overrides)
+          : await instance.start(config.assistantId);
       } catch (error) {
         logDev('start rejected', error, config);
         call = null;
@@ -188,11 +197,18 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
         starting = false;
       }
 
+      const providerCallId = (call as { id?: string } | null)?.id;
+      if (reservationId && providerCallId) {
+        // Independent of callbacks: lets the backend recover even if the first webhook is lost.
+        void config.register?.(reservationId, providerCallId).catch(() => {});
+      }
+
       if (finished) {
         await stopInstance(instance);
         return;
       }
       if (!call || startFailed) {
+        if (reservationId) await config.abandon?.(reservationId).catch(() => {});
         instance.removeAllListeners();
         vapi = null;
         await stopInstance(instance);

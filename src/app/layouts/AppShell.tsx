@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { Outlet } from 'react-router';
 import { Drawer } from '@/components/ui';
 import { useAuth } from '@/features/auth';
-import { CallingProvider, CallPanel } from '@/features/calling';
+import { CallingProvider, CallPanel, VoiceRequests } from '@/features/calling';
 import { Sidebar } from '@/features/conversations';
 import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/cn';
@@ -56,6 +56,7 @@ export function AppShell() {
         )}
 
         <main className="relative flex min-w-0 flex-1 flex-col md:py-2 md:pr-2 lg:py-3 lg:pr-3">
+          <VoiceRequests />
           <Outlet />
           <CallPanel />
         </main>

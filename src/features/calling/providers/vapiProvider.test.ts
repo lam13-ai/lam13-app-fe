@@ -1,3 +1,4 @@
+import type { PreparedCall } from '../rtc';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installFakeMedia } from '@/test/fakeMedia';
 import { createVapiProvider, resolveVapiClass } from './vapiProvider';
@@ -185,5 +186,52 @@ describe('createVapiProvider call endings', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     await expect(createVapiProvider(CONFIG).start()).rejects.toMatchObject({ code: 'connection-failed' });
     vi.mocked(console.warn).mockRestore();
+  });
+});
+
+describe('persistent call preparation', () => {
+  it('uses backend context and assistant selection when starting Vapi', async () => {
+    sdk.module.default = FakeVapi;
+    media = installFakeMedia();
+    const start = vi.spyOn(FakeVapi.prototype, 'start');
+    const prepared = { id: 'local-call', session_id: 'chat', assistant_id: 'server-assistant',
+      assistant_overrides: { variableValues: { rtc_binding: 'scoped-binding', rtc_context: 'known context' } } };
+    const register = vi.fn().mockResolvedValue(undefined);
+    const provider = createVapiProvider({ ...CONFIG, prepare: vi.fn().mockResolvedValue(prepared), register });
+    await provider.start();
+    expect(start).toHaveBeenCalledWith('server-assistant', prepared.assistant_overrides);
+    expect(register).toHaveBeenCalledWith('local-call', 'call');
+    await provider.end();
+    start.mockRestore();
+  });
+
+  it('does not start an unlinked call if backend preparation fails', async () => {
+    sdk.module.default = FakeVapi;
+    media = installFakeMedia();
+    const start = vi.spyOn(FakeVapi.prototype, 'start');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const provider = createVapiProvider({ ...CONFIG, prepare: vi.fn().mockRejectedValue(new Error('Unavailable')) });
+    await expect(provider.start()).rejects.toMatchObject({ code: 'connection-failed' });
+    expect(start).not.toHaveBeenCalled();
+    start.mockRestore();
+    warn.mockRestore();
+  });
+
+  it('abandons a prepared reservation if the user ends while preparation is pending', async () => {
+    sdk.module.default = FakeVapi;
+    media = installFakeMedia();
+    let resolve!: (value: PreparedCall) => void;
+    const prepare = vi.fn(() => new Promise<PreparedCall>((done) => { resolve = done; }));
+    const abandon = vi.fn().mockResolvedValue(undefined);
+    const start = vi.spyOn(FakeVapi.prototype, 'start');
+    const provider = createVapiProvider({ ...CONFIG, prepare, abandon });
+    const starting = provider.start();
+    await vi.waitFor(() => expect(prepare).toHaveBeenCalled());
+    await provider.end();
+    resolve({ id: 'reservation', session_id: 'chat', assistant_id: 'assistant', assistant_overrides: { variableValues: {} } });
+    await starting;
+    expect(start).not.toHaveBeenCalled();
+    expect(abandon).toHaveBeenCalledWith('reservation');
+    start.mockRestore();
   });
 });

@@ -1,4 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useReducer, useRef, type ReactNode } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocation, useNavigate } from 'react-router';
+import { queryKeys } from '@/api/queryKeys';
+import { abandonRtc, getRtcStatus, prepareRtc, registerRtc, type RecordedAction } from './rtc';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { audioFocus } from '@/features/voice';
 import { env as defaultEnv, type Env } from '@/lib/env';
 import { resolveCallingConfig } from './config';
@@ -13,9 +17,13 @@ const END_TIMEOUT_MS = 5_000;
 
 export interface CallContextValue {
   state: CallState;
-  /** Live, in-memory transcript of the current call only (never persisted). */
+  /** Live browser view; committed messages are saved by server callbacks. */
   transcript: TranscriptEntry[];
   enabled: boolean;
+  persistence: string;
+  actions: RecordedAction[];
+  summaries: string[];
+  refreshActions: () => void;
   /** Missing public configuration variable NAMES (empty when configured). */
   missingConfig: string[];
   start: () => void;
@@ -66,7 +74,35 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
   const createProvider = props.createProvider ?? deps.createProvider ?? createVapiProvider;
   const env = props.env ?? deps.env ?? defaultEnv;
   const focusId = useId();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const sessionId = /^\/c\/([^/]+)$/.exec(location.pathname)?.[1] ?? '';
+  const persistent = createProvider === createVapiProvider && defaultEnv.apiMode === 'http';
+  const [callSessionId, setCallSessionId] = useState('');
+  const [currentCallId, setCurrentCallId] = useState('');
   const [state, dispatch] = useReducer(callReducer, initialCallState);
+  const syncSessionId = state.status === 'idle' || state.status === 'error' ? sessionId : callSessionId || sessionId;
+  const rtc = useQuery({
+    queryKey: ['rtc', syncSessionId],
+    queryFn: () => getRtcStatus(syncSessionId),
+    enabled: persistent && Boolean(syncSessionId),
+    refetchInterval: 4000,
+    retry: 1,
+  });
+  useEffect(() => {
+    if (!persistent || !syncSessionId || !rtc.data) return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.messages(syncSessionId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+  }, [rtc.data, persistent, syncSessionId, queryClient]); // refresh when server state changes
+  const prepare = useCallback(async () => {
+    const prepared = await prepareRtc(sessionId);
+    setCallSessionId(prepared.session_id);
+    setCurrentCallId(prepared.id);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+    if (!sessionId) navigate(`/c/${prepared.session_id}`);
+    return prepared;
+  }, [sessionId, navigate, queryClient]);
   const [transcript, dispatchTranscript] = useReducer(transcriptReducer, []);
   const providerRef = useRef<CallProvider | null>(null);
   const unsubscribeRef = useRef<Unsubscribe[]>([]);
@@ -121,9 +157,12 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
       return;
     }
 
+    setCurrentCallId('');
     dispatchTranscript({ type: 'clear' });
     dispatch({ type: 'START' });
-    const provider = createProvider(configResult.config);
+    const provider = createProvider({ ...configResult.config,
+      ...(persistent ? { prepare, abandon: abandonRtc, register: registerRtc } : {}),
+    });
     providerRef.current = provider;
 
     const fail = (error: CallError) => {
@@ -160,7 +199,7 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
 
     // Anything that isn't a CallError is a client-side fault, not a connection problem.
     provider.start().catch((error: unknown) => fail(isCallError(error) ? error : callError('provider-error')));
-  }, [configResult, createProvider, end, focusId, release]);
+  }, [configResult, createProvider, end, focusId, release, persistent, prepare]);
 
   const dismiss = useCallback(() => dispatch({ type: 'RESET' }), []);
   const getLevel = useCallback(() => levelRef.current, []);
@@ -180,13 +219,19 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
       state,
       transcript,
       enabled,
+      persistence: !persistent ? 'Preview call: transcript is not saved.' : rtc.isError
+        ? 'Could not check transcript saving.' : rtc.data?.calls.some((c) => c.id === currentCallId && c.saved_messages > 0)
+          ? 'Conversation saved to chat.' : 'Waiting for transcript to save…',
+      actions: syncSessionId === sessionId ? rtc.data?.actions ?? [] : [],
+      summaries: syncSessionId === sessionId ? rtc.data?.calls.map((c) => c.summary).filter(Boolean) ?? [] : [],
+      refreshActions: () => { void rtc.refetch(); },
       missingConfig: configResult.ok ? [] : configResult.missing,
       start,
       end,
       dismiss,
       getLevel,
     }),
-    [state, transcript, enabled, configResult, start, end, dismiss, getLevel],
+    [state, transcript, enabled, configResult, start, end, dismiss, getLevel, persistent, rtc, syncSessionId, sessionId, currentCallId],
   );
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
