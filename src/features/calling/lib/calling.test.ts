@@ -3,6 +3,7 @@ import { resolveCallingConfig } from '../config';
 import { callError } from '../types';
 import { callReducer, initialCallState, isInCall, type CallEvent, type CallState } from './callMachine';
 import { transcriptReducer, type TranscriptEntry } from './transcript';
+import { rtcBusy } from '../CallingProvider';
 
 const run = (events: CallEvent[], from: CallState = initialCallState) => events.reduce(callReducer, from);
 
@@ -77,5 +78,17 @@ describe('resolveCallingConfig', () => {
     expect(partial).toEqual({ ok: false, missing: ['VITE_VAPI_ASSISTANT_ID'] });
     expect(JSON.stringify(partial)).not.toContain('pk-secretish-value');
     expect(resolveCallingConfig({ publicKey: 'pk', assistantId: 'a1' })).toEqual({ ok: true, config: { publicKey: 'pk', assistantId: 'a1' } });
+  });
+});
+
+describe('rtcBusy', () => {
+  const call = (status: string, finalized = false) => ({ id: 'c', status, finalized, saved_messages: 0, summary: '' });
+  const action = (status: string) => ({ id: 'a', title: '', request: '', status, missing: [], error: '' });
+  it('polls only while voice work is in flight', () => {
+    expect(rtcBusy(undefined)).toBe(false);
+    expect(rtcBusy({ calls: [call('ended', true), call('failed')], actions: [action('completed'), action('recorded')] })).toBe(false);
+    expect(rtcBusy({ calls: [call('active')], actions: [] })).toBe(true);
+    expect(rtcBusy({ calls: [call('ended')], actions: [] })).toBe(true);
+    expect(rtcBusy({ calls: [], actions: [action('queued')] })).toBe(true);
   });
 });

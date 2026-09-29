@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router';
 import { queryKeys } from '@/api/queryKeys';
-import { abandonRtc, getRtcStatus, prepareRtc, registerRtc, type RecordedAction } from './rtc';
+import { abandonRtc, getRtcStatus, prepareRtc, registerRtc, type RecordedAction, type RtcStatus } from './rtc';
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { audioFocus } from '@/features/voice';
 import { env as defaultEnv, type Env } from '@/lib/env';
@@ -16,6 +16,14 @@ const CONNECT_TIMEOUT_MS = 30_000;
 const END_TIMEOUT_MS = 5_000;
 /** After a saved call ends, how long to wait for the server to finalize it before reloading the chat anyway. */
 const SAVE_TIMEOUT_MS = 15_000;
+const RTC_POLL_MS = 4_000;
+
+/** Server-side voice work still in flight: a call not yet saved, or a handoff queued/running. */
+export function rtcBusy(data: RtcStatus | undefined): boolean {
+  return Boolean(data && (
+    data.calls.some((c) => c.status === 'prepared' || c.status === 'active' || (c.status === 'ended' && !c.finalized)) ||
+    data.actions.some((a) => a.status === 'queued' || a.status === 'running')));
+}
 
 export interface CallContextValue {
   state: CallState;
@@ -99,7 +107,8 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
     queryKey: ['rtc', syncSessionId],
     queryFn: () => getRtcStatus(syncSessionId),
     enabled: persistent && Boolean(syncSessionId),
-    refetchInterval: 4000,
+    // Only while there is voice work; an idle thread is fetched once (and on focus).
+    refetchInterval: (query) => (inCall || saving || rtcBusy(query.state.data) ? RTC_POLL_MS : false),
     retry: 1,
   });
   useEffect(() => {
