@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { audioFocus } from '@/features/voice';
 import { createMockCallFactory } from '@/features/calling';
 import { installFakeMedia } from '@/test/fakeMedia';
@@ -7,6 +7,7 @@ import { renderApp, TEST_CALLING_ENV } from './testUtils';
 
 let media: ReturnType<typeof installFakeMedia> | undefined;
 afterEach(() => {
+  vi.useRealTimers();
   media?.uninstall();
   media = undefined;
 });
@@ -108,6 +109,58 @@ describe('voice calling (mock provider)', () => {
     expect(calls.calls).toHaveLength(2);
     fireEvent.click(within(panel()).getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByRole('region', { name: 'Voice call' })).toBeNull();
+  });
+
+  it('allows 60 seconds for microphone permission and restarts the clock when granted', async () => {
+    const calls = createMockCallFactory();
+    const baseCreate = calls.create;
+    let stage: 'microphone' | 'sdk' = 'microphone';
+    let microphoneReady = () => {};
+    calls.create = (config) => {
+      const provider = baseCreate(config);
+      provider.getStartStage = () => stage;
+      provider.onMicrophoneReady = (listener) => {
+        microphoneReady = listener;
+        return () => { microphoneReady = () => {}; };
+      };
+      return provider;
+    };
+    renderApp('/', { calls });
+    const button = await screen.findByRole('button', { name: 'Start voice call' });
+    vi.useFakeTimers();
+    act(() => fireEvent.click(button));
+
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(within(panel()).getByText('Connecting…')).toBeTruthy();
+    act(() => vi.advanceTimersByTime(15_000));
+    stage = 'sdk';
+    act(() => microphoneReady());
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(within(panel()).getByText('Connecting…')).toBeTruthy();
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(within(panel()).getByText("Voice calling couldn't start. Refresh the page and try again.")).toBeTruthy();
+    expect(audioFocus.active).toBeNull();
+  });
+
+  it('identifies a microphone prompt left unanswered for 60 seconds', async () => {
+    const calls = createMockCallFactory();
+    const baseCreate = calls.create;
+    calls.create = (config) => {
+      const provider = baseCreate(config);
+      provider.getStartStage = () => 'microphone';
+      provider.onMicrophoneReady = () => () => {};
+      return provider;
+    };
+    renderApp('/', { calls });
+    const button = await screen.findByRole('button', { name: 'Start voice call' });
+    vi.useFakeTimers();
+    act(() => fireEvent.click(button));
+
+    act(() => vi.advanceTimersByTime(59_000));
+    expect(within(panel()).getByText('Connecting…')).toBeTruthy();
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(within(panel()).getByText("Microphone access wasn't confirmed. Click Allow in your browser's prompt, then try again.")).toBeTruthy();
+    expect(audioFocus.active).toBeNull();
   });
 
   it('unexpected termination or a mid-call error ends in a recoverable error state', async () => {

@@ -1,5 +1,6 @@
 import type Vapi from '@vapi-ai/web';
-import { callError, type CallingConfig, type CallProvider, type CallRole } from '../types';
+import { isApiError } from '@/api/errors';
+import { callError, type CallingConfig, type CallProvider, type CallRole, type ProviderStartStage } from '../types';
 import { createProviderEvents } from './emitter';
 
 /**
@@ -44,6 +45,20 @@ function logDev(stage: string, error: unknown, config: CallingConfig) {
   console.warn(`[calling] ${stage}: ${name}${message ? ` — ${message}` : ''}`);
 }
 
+/** Safe production diagnostic: stage and error kind only, never provider payloads or credentials. */
+function logStartFailure(stage: 'microphone' | 'preparation' | 'provider', error: unknown) {
+  const detail = typeof error === 'object' && error !== null
+    ? error as { type?: unknown; status?: unknown; response?: { status?: unknown } }
+    : undefined;
+  const type = detail?.type;
+  const status = detail?.response?.status ?? detail?.status;
+  const kind = isApiError(error) ? `http_${error.status}`
+    : error instanceof Error ? error.name
+    : typeof type === 'string' && /^[a-z0-9_.-]{1,48}$/i.test(type) ? type
+    : typeof error;
+  console.warn(`[calling] ${stage} failed: ${kind}${typeof status === 'number' ? ` status=${status}` : ''}`);
+}
+
 /** Vapi `status-update` → `ended` carries why the call ended (e.g. `assistant-ended-call`). */
 function endedReasonOf(message: unknown): string | undefined {
   const m = message as { type?: unknown; status?: unknown; endedReason?: unknown } | null;
@@ -85,6 +100,8 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
   /** Latest reason Vapi reported for the call ending, if any. */
   let endedReason: string | undefined;
   let reservationId: string | undefined;
+  let startStage: ProviderStartStage = 'microphone';
+  const microphoneReadyListeners = new Set<() => void>();
 
   /** Terminal: report the end once and drop the SDK instance. */
   const finish = (state: 'ended' | 'completed' = 'ended') => {
@@ -129,9 +146,12 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
         const probe = await media.getUserMedia({ audio: true });
         probe.getTracks().forEach((track) => track.stop());
       } catch (error) {
+        logStartFailure('microphone', error);
         throw callError(microphoneErrorCode(error));
       }
       if (finished) return; // hung up while the permission prompt was open
+      startStage = 'sdk';
+      microphoneReadyListeners.forEach((listener) => listener());
 
       // SDK load/initialisation failures are client runtime faults, reported as such — not as a
       // connection problem.
@@ -148,6 +168,7 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
       vapi = instance;
       instance.on('call-start', () => {
         active = true;
+        startStage = 'active';
         events.emitState('active');
       });
       instance.on('call-end', () => (hangingUp ? finish() : remoteEnd()));
@@ -168,6 +189,7 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
           return;
         }
         logDev(active ? 'call error' : 'connect error', error, config);
+        if (!active) logStartFailure('provider', error);
         if (starting) {
           startFailed = true; // reported by start() below
           return;
@@ -180,18 +202,28 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
 
       starting = true;
       let call: unknown;
+      let preparationFailure: ReturnType<typeof callError> | null = null;
       try {
-        const prepared = await config.prepare?.();
+        startStage = config.prepare ? 'preparation' : 'provider';
+        const prepared = await config.prepare?.().catch((error: unknown) => {
+          logStartFailure('preparation', error);
+          preparationFailure = isApiError(error) && error.status > 0 && error.status < 500
+            ? { code: 'preparation-failed', message: error.message }
+            : callError('preparation-failed');
+          throw error;
+        });
         reservationId = prepared?.id;
         if (finished) {
           if (reservationId) await config.abandon?.(reservationId);
           return;
         }
+        startStage = 'provider';
         call = prepared
           ? await instance.start(prepared.assistant_id, prepared.assistant_overrides)
           : await instance.start(config.assistantId);
       } catch (error) {
         logDev('start rejected', error, config);
+        if (!preparationFailure) logStartFailure('provider', error);
         call = null;
       } finally {
         starting = false;
@@ -208,11 +240,12 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
         return;
       }
       if (!call || startFailed) {
+        if (!call && !startFailed && !preparationFailure) console.warn('[calling] provider returned no call');
         if (reservationId) await config.abandon?.(reservationId).catch(() => {});
         instance.removeAllListeners();
         vapi = null;
         await stopInstance(instance);
-        throw callError('connection-failed');
+        throw preparationFailure ?? callError('connection-failed');
       }
     },
 
@@ -224,6 +257,11 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
     },
 
     isActive: () => active,
+    onMicrophoneReady(listener) {
+      microphoneReadyListeners.add(listener);
+      return () => { microphoneReadyListeners.delete(listener); };
+    },
+    getStartStage: () => startStage,
     onStateChange: events.onStateChange,
     onTranscript: events.onTranscript,
     onError: events.onError,
@@ -231,6 +269,7 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
 
     dispose() {
       events.clear();
+      microphoneReadyListeners.clear();
       const instance = vapi;
       finished = true;
       active = false;

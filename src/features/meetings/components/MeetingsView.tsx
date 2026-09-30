@@ -35,8 +35,12 @@ function MeetingRow({ meeting }: { meeting: MeetingSummary }) {
         <span className="shrink-0 text-xs tabular-nums text-fg-muted">{formatMeetingTime(meeting.started_at)}</span>
       </span>
       <span className="truncate text-xs text-fg-muted">
-        {formatMeetingDuration(meeting.duration_seconds)}
-        {meeting.participants.length > 0 && ` · ${participantsLabel(meeting.participants)}`}
+        {[
+          meeting.duration_seconds > 0 && formatMeetingDuration(meeting.duration_seconds),
+          meeting.participants.length > 0 && participantsLabel(meeting.participants),
+        ]
+          .filter(Boolean)
+          .join(' · ')}
       </span>
     </Link>
   );

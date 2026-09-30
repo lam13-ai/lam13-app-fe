@@ -12,7 +12,7 @@ export function useMeeting(id: string) {
   return useQuery({ queryKey: queryKeys.meetings.detail(id), queryFn: () => api.meetings.get(id) });
 }
 
-/** Granola's connection (UI-only for now; see MeetingsService). */
+/** Granola's connection (see MeetingsService). */
 export function useMeetingSource() {
   const api = useApi();
   return useQuery({ queryKey: queryKeys.meetings.connection(), queryFn: () => api.meetings.connection() });

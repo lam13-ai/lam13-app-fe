@@ -10,6 +10,8 @@ export type CallErrorCode =
   | 'not-configured'
   | 'unsupported'
   | 'permission-denied'
+  | 'permission-timeout'
+  | 'preparation-failed'
   | 'connection-failed'
   | 'call-failed'
   /** The calling SDK failed to load/initialise (a client runtime fault, not the network or the account). */
@@ -27,6 +29,8 @@ export const CALL_ERROR_MESSAGES: Record<CallErrorCode, string> = {
   'not-configured': "Voice calling isn't configured for this environment.",
   unsupported: "Voice calling isn't supported in this browser.",
   'permission-denied': 'Microphone access was blocked. Allow it in your browser settings to call.',
+  'permission-timeout': "Microphone access wasn't confirmed. Click Allow in your browser's prompt, then try again.",
+  'preparation-failed': "Couldn't prepare the call on the server. Please try again.",
   'connection-failed': "Couldn't connect the call. Check your connection and try again.",
   'call-failed': 'The call ran into a problem and ended.',
   'provider-error': "Voice calling couldn't start. Refresh the page and try again.",
@@ -52,6 +56,7 @@ export interface TranscriptUpdate {
  * the call normally. `ended`: the call went away — expected after our own hang-up, otherwise abrupt.
  */
 export type ProviderState = 'connecting' | 'active' | 'completed' | 'ended';
+export type ProviderStartStage = 'microphone' | 'sdk' | 'preparation' | 'provider' | 'active';
 
 export type Unsubscribe = () => void;
 
@@ -61,6 +66,10 @@ export interface CallProvider {
   /** Ends the call (idempotent) and releases microphone/audio resources. */
   end(): Promise<void>;
   isActive(): boolean;
+  /** The connection timer starts only after the browser resolves microphone permission. */
+  onMicrophoneReady?(listener: () => void): Unsubscribe;
+  /** A safe stage label for diagnostics when startup fails or times out. */
+  getStartStage?(): ProviderStartStage;
   onStateChange(listener: (state: ProviderState) => void): Unsubscribe;
   onTranscript(listener: (update: TranscriptUpdate) => void): Unsubscribe;
   onError(listener: (error: CallError) => void): Unsubscribe;

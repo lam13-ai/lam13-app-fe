@@ -12,7 +12,7 @@ import { createVapiProvider } from './providers/vapiProvider';
 import { callError, type CallError, type CallProvider, type CreateCallProvider, type Unsubscribe } from './types';
 
 /** Give up on a call that never connects, and never wait forever for a hang-up to confirm. */
-const CONNECT_TIMEOUT_MS = 30_000;
+const CONNECT_TIMEOUT_MS = 60_000;
 const END_TIMEOUT_MS = 5_000;
 /** After a saved call ends, how long to wait for the server to finalize it before reloading the chat anyway. */
 const SAVE_TIMEOUT_MS = 15_000;
@@ -231,7 +231,22 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
       release();
     };
 
+    const armStartTimeout = () => {
+      clearTimer();
+      timerRef.current = setTimeout(() => {
+        if (providerRef.current !== provider || provider.isActive()) return;
+        const stage = provider.getStartStage?.() ?? 'provider';
+        console.warn(`[calling] connection timed out at ${stage} stage`);
+        fail(callError(stage === 'microphone' ? 'permission-timeout'
+          : stage === 'sdk' ? 'provider-error'
+            : stage === 'preparation' ? 'preparation-failed' : 'connection-failed'));
+      }, CONNECT_TIMEOUT_MS);
+    };
+
     unsubscribeRef.current = [
+      ...(provider.onMicrophoneReady ? [provider.onMicrophoneReady(() => {
+        if (providerRef.current === provider) armStartTimeout();
+      })] : []),
       provider.onStateChange((providerState) => {
         if (providerRef.current !== provider) return;
         if (providerState === 'active') {
@@ -250,11 +265,8 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
       ...(provider.onVolume ? [provider.onVolume((level) => (levelRef.current = level))] : []),
     ];
 
-    timerRef.current = setTimeout(() => {
-      if (providerRef.current !== provider || provider.isActive()) return;
-      void provider.end().catch(() => {});
-      fail(callError('connection-failed'));
-    }, CONNECT_TIMEOUT_MS);
+    // Give the browser prompt its own full timeout, then restart the clock after permission is granted.
+    armStartTimeout();
 
     // Anything that isn't a CallError is a client-side fault, not a connection problem.
     provider.start().catch((error: unknown) => fail(isCallError(error) ? error : callError('provider-error')));

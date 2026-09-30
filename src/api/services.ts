@@ -189,15 +189,15 @@ export interface TestSuggestionBody {
 }
 
 /**
- * Meetings from the user's meeting source (Granola). Frontend-only for now: both adapters serve local
- * fixtures until the backend has meeting routes; the UI depends only on this interface.
+ * Meetings from the user's meeting source (Granola). The HTTP adapter calls the backend; the mock
+ * adapter serves local fixtures. The UI depends only on this interface.
  */
 export interface MeetingsService {
   /** Newest first. */
   list(): Promise<MeetingSummary[]>;
   /** 404 `not_found` for an unknown id. */
   get(id: string): Promise<Meeting>;
-  /** The meeting source's connection. Connecting is UI-only for now: no OAuth, tokens or Granola calls. */
+  /** The meeting source's connection. Connecting over HTTP leaves the app for Granola's sign-in page. */
   connection(): Promise<MeetingSourceConnection>;
   setConnected(connected: boolean): Promise<MeetingSourceConnection>;
 }

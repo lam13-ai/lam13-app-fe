@@ -3,6 +3,9 @@ import type {
   Artifact,
   AttachmentRef,
   Conversation,
+  Meeting,
+  MeetingSourceConnection,
+  MeetingSummary,
   Message,
   Profile,
   ProfileField,
@@ -12,7 +15,6 @@ import type {
 } from '@/types/api';
 import { getAccessToken } from './auth';
 import { abortError, ApiError } from './errors';
-import { createMockMeetings } from './mock/meetings';
 import { createMockWhatsApp } from './mock/whatsapp';
 import type { ApiAdapter, SendMessageBody } from './services';
 import { readSseMessages, type SseMessage, type StreamEvent } from './stream';
@@ -577,9 +579,25 @@ export function createHttpAdapter(): ApiAdapter {
       },
     },
 
-    // TODO(backend): no meeting routes yet — local fixtures behind the same interface until the backend
-    // (Granola via Lam13) serves them. Replace with requests here; the UI does not change.
-    meetings: createMockMeetings(),
+    // Meetings: /meetings, and the Granola connection under /integrations/granola.
+    meetings: {
+      async list() {
+        return requestJson<MeetingSummary[]>('/meetings');
+      },
+      async get(id) {
+        return requestJson<Meeting>(`/meetings/${encodeURIComponent(id)}`);
+      },
+      async connection() {
+        return requestJson<MeetingSourceConnection>('/integrations/granola');
+      },
+      async setConnected(connected) {
+        if (!connected) return requestJson<MeetingSourceConnection>('/integrations/granola', { method: 'DELETE' });
+        const { authorization_url } = await requestJson<{ authorization_url: string }>('/integrations/granola/connect', { method: 'POST' });
+        // Granola sign-in; the backend sends the browser back to /integrations when it is done.
+        window.location.assign(authorization_url);
+        return { provider: 'granola', status: 'disconnected' };
+      },
+    },
     // TODO(backend): WhatsApp connection is not on the backend yet — a local mock that sends nothing. Replace
     // with the real integration here (OTP, Meta embedded signup, …); the UI only uses WhatsAppService.
     whatsapp: createMockWhatsApp(),

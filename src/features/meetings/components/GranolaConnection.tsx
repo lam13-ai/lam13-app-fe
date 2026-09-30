@@ -2,10 +2,7 @@ import { toErrorInfo } from '@/api';
 import { Button, Menu, MenuItem, Popover, Spinner, useToast } from '@/components/ui';
 import { useMeetingSource, useSetMeetingSourceConnected } from '../hooks/useMeetings';
 
-/**
- * Granola connection controls. UI only for now: they flip the adapter's connection flag — no OAuth,
- * tokens or Granola calls until the backend integration replaces `MeetingsService.setConnected`.
- */
+/** Granola connection controls; connecting sends the browser to Granola's sign-in page. */
 export function ConnectGranolaButton({ variant = 'outline', size = 'sm' }: { variant?: 'primary' | 'outline'; size?: 'sm' | 'md' }) {
   const toast = useToast();
   const connect = useSetMeetingSourceConnected();

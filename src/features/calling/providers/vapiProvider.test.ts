@@ -1,6 +1,7 @@
 import type { PreparedCall } from '../rtc';
+import { ApiError } from '@/api/errors';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { installFakeMedia } from '@/test/fakeMedia';
+import { FakeStream, installFakeMedia } from '@/test/fakeMedia';
 import { createVapiProvider, resolveVapiClass } from './vapiProvider';
 
 /** Minimal stand-in for the Vapi SDK class: `start()` resolves and the call connects. */
@@ -72,6 +73,25 @@ describe('createVapiProvider', () => {
     await provider.end();
     expect(FakeVapi.instances[0]!.stop).toHaveBeenCalled();
     expect(states.at(-1)).toBe('ended');
+  });
+
+  it('waits for microphone permission before reporting readiness or preparing the call', async () => {
+    sdk.module.default = FakeVapi;
+    media = installFakeMedia();
+    let grant!: (stream: FakeStream) => void;
+    media.getUserMedia.mockImplementationOnce(() => new Promise<FakeStream>((resolve) => { grant = resolve; }));
+    const prepare = vi.fn().mockResolvedValue({ id: 'reserved', session_id: 'chat', assistant_id: 'assistant', assistant_overrides: { variableValues: {} } });
+    const provider = createVapiProvider({ ...CONFIG, prepare });
+    const ready = vi.fn();
+    provider.onMicrophoneReady?.(ready);
+    const starting = provider.start();
+    expect(provider.getStartStage?.()).toBe('microphone');
+    expect(prepare).not.toHaveBeenCalled();
+    grant(new FakeStream());
+    await starting;
+    expect(ready).toHaveBeenCalledOnce();
+    expect(prepare).toHaveBeenCalledOnce();
+    await provider.end();
   });
 
   it('reports an unusable SDK export as a provider error, not a connection failure, without leaking config', async () => {
@@ -211,9 +231,24 @@ describe('persistent call preparation', () => {
     const start = vi.spyOn(FakeVapi.prototype, 'start');
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const provider = createVapiProvider({ ...CONFIG, prepare: vi.fn().mockRejectedValue(new Error('Unavailable')) });
-    await expect(provider.start()).rejects.toMatchObject({ code: 'connection-failed' });
+    await expect(provider.start()).rejects.toMatchObject({ code: 'preparation-failed' });
     expect(start).not.toHaveBeenCalled();
     start.mockRestore();
+    warn.mockRestore();
+  });
+
+  it('shows a safe backend preparation refusal instead of a call connection error', async () => {
+    sdk.module.default = FakeVapi;
+    media = installFakeMedia();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const provider = createVapiProvider({ ...CONFIG,
+      prepare: vi.fn().mockRejectedValue(new ApiError(409, 'http_409', 'Previous call is still saving.')),
+    });
+
+    await expect(provider.start()).rejects.toMatchObject({
+      code: 'preparation-failed', message: 'Previous call is still saving.',
+    });
+    expect(warn.mock.calls.flat().join(' ')).toContain('preparation failed: http_409');
     warn.mockRestore();
   });
 

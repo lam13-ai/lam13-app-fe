@@ -1,6 +1,8 @@
 import { Menu as MenuIcon } from 'lucide-react';
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router';
 import { ScrollArea } from '@/components/ScrollArea';
-import { IconButton, iconProps } from '@/components/ui';
+import { IconButton, iconProps, useToast } from '@/components/ui';
 import { GranolaConnectionControl } from '@/features/meetings';
 import { useUiStore } from '@/stores/uiStore';
 import { IntegrationRow } from './IntegrationRow';
@@ -9,6 +11,14 @@ import { WhatsAppIntegration } from './WhatsAppIntegration';
 /** `/integrations`: the outside services Lam13 connects to (same page frame as My Contacts and Meetings). */
 export function IntegrationsView() {
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
+  const toast = useToast();
+  const [params, setParams] = useSearchParams();
+  // The backend returns here after Granola sign-in with ?granola=connected|error.
+  useEffect(() => {
+    if (!params.has('granola')) return;
+    if (params.get('granola') === 'error') toast.show("Couldn't connect Granola. Please try again.", { tone: 'danger' });
+    setParams({}, { replace: true });
+  }, [params, setParams, toast]);
   return (
     <section
       aria-labelledby="integrations-heading"

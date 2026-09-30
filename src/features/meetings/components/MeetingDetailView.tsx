@@ -68,8 +68,7 @@ function MeetingDocument({ meeting }: { meeting: Meeting }) {
           <time dateTime={meeting.started_at}>
             {formatMeetingDate(meeting.started_at)}, {formatMeetingTime(meeting.started_at)}
           </time>
-          {' · '}
-          {formatMeetingDuration(meeting.duration_seconds)}
+          {meeting.duration_seconds > 0 && ` · ${formatMeetingDuration(meeting.duration_seconds)}`}
         </p>
       </header>
 
