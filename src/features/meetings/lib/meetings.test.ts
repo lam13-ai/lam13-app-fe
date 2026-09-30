@@ -59,4 +59,14 @@ describe('mock MeetingsService', () => {
     expect(await api.setConnected(false)).toEqual({ provider: 'granola', status: 'disconnected' });
     expect((await api.connection()).status).toBe('disconnected');
   });
+
+  it('ticks an action item and keeps it ticked', async () => {
+    const api = createMockMeetings({ now: () => NOW.getTime() });
+    const meeting = await api.get('mtg_product_strategy');
+    const item = meeting.action_items![0]!;
+    const updated = await api.setActionItemCompleted(meeting.id, item.id, !item.completed);
+    expect(updated.action_items![0]!.completed).toBe(!item.completed);
+    expect((await api.get(meeting.id)).action_items![0]!.completed).toBe(!item.completed);
+    await expect(api.setActionItemCompleted(meeting.id, 'missing', true)).rejects.toMatchObject({ status: 404 });
+  });
 });

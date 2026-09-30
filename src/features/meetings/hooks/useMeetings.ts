@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys, useApi } from '@/api';
+import type { Meeting } from '@/types/api';
 
 /** The user's meetings, newest first. Only fetched once the meeting source is connected. */
 export function useMeetings({ enabled = true } = {}) {
@@ -10,6 +11,32 @@ export function useMeetings({ enabled = true } = {}) {
 export function useMeeting(id: string) {
   const api = useApi();
   return useQuery({ queryKey: queryKeys.meetings.detail(id), queryFn: () => api.meetings.get(id) });
+}
+
+/** Ticks an action item: shown at once, saved on the backend, rolled back if saving fails. */
+export function useSetActionItemCompleted(meetingId: string) {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  const key = queryKeys.meetings.detail(meetingId);
+  return useMutation({
+    mutationFn: ({ itemId, completed }: { itemId: string; completed: boolean }) =>
+      api.meetings.setActionItemCompleted(meetingId, itemId, completed),
+    onMutate: async ({ itemId, completed }) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<Meeting>(key);
+      if (previous) {
+        queryClient.setQueryData<Meeting>(key, {
+          ...previous,
+          action_items: previous.action_items?.map((a) => (a.id === itemId ? { ...a, completed } : a)),
+        });
+      }
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(key, context.previous);
+    },
+    onSuccess: (meeting) => queryClient.setQueryData(key, meeting),
+  });
 }
 
 /** Granola's connection (see MeetingsService). */

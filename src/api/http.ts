@@ -519,7 +519,7 @@ export function createHttpAdapter(): ApiAdapter {
             message_id: body.client_message_id,
             user_message: body.content,
             ...(body.attachment_ids?.length && { users_document_ids: body.attachment_ids }),
-            // TODO(backend): `body.meeting_ids` (meeting context) is not sent — /chat/stream has no field for it yet.
+            ...(body.meeting_ids?.length && { meeting_ids: body.meeting_ids }),
           },
         });
         if (!response.body) throw new ApiError(0, 'network_error', 'The response could not be read.');
@@ -586,6 +586,10 @@ export function createHttpAdapter(): ApiAdapter {
       },
       async get(id) {
         return requestJson<Meeting>(`/meetings/${encodeURIComponent(id)}`);
+      },
+      async setActionItemCompleted(meetingId, itemId, completed) {
+        const path = `/meetings/${encodeURIComponent(meetingId)}/action-items/${encodeURIComponent(itemId)}`;
+        return requestJson<Meeting>(path, { method: 'PATCH', body: { completed } });
       },
       async connection() {
         return requestJson<MeetingSourceConnection>('/integrations/granola');

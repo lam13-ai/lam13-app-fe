@@ -1,15 +1,15 @@
 import { ArrowLeft, ArrowUp, Check, Menu as MenuIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ApiError } from '@/api';
+import { ApiError, toErrorInfo } from '@/api';
 import { ErrorState } from '@/components/ErrorState';
 import { Markdown } from '@/components/Markdown';
 import { ScrollArea } from '@/components/ScrollArea';
-import { IconButton, Skeleton, iconProps, smallIconProps } from '@/components/ui';
+import { IconButton, Skeleton, iconProps, smallIconProps, useToast } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { useUiStore } from '@/stores/uiStore';
 import type { Meeting } from '@/types/api';
-import { useMeeting } from '../hooks/useMeetings';
+import { useMeeting, useSetActionItemCompleted } from '../hooks/useMeetings';
 import { formatMeetingDate, formatMeetingDuration, formatMeetingTime } from '../lib/meetings';
 
 /** Router state that opens a new chat with a meeting as context (read by the chat view). */
@@ -60,6 +60,8 @@ function DetailSkeleton() {
 function MeetingDocument({ meeting }: { meeting: Meeting }) {
   const actions = meeting.action_items ?? [];
   const decisions = meeting.decisions ?? [];
+  const toast = useToast();
+  const setCompleted = useSetActionItemCompleted(meeting.id);
   return (
     <article className="flex flex-col gap-8">
       <header className="flex flex-col gap-2">
@@ -108,15 +110,24 @@ function MeetingDocument({ meeting }: { meeting: Meeting }) {
           <ul className="flex flex-col gap-2 text-sm leading-relaxed">
             {actions.map((a) => (
               <li key={a.id} className="flex gap-2.5">
-                <span
-                  aria-hidden
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={Boolean(a.completed)}
+                  aria-label={a.text}
+                  onClick={() =>
+                    setCompleted.mutate(
+                      { itemId: a.id, completed: !a.completed },
+                      { onError: (error) => toast.show(`Couldn't save that. ${toErrorInfo(error).message}`, { tone: 'danger' }) },
+                    )
+                  }
                   className={cn(
-                    'mt-[3px] flex size-4 shrink-0 items-center justify-center border',
-                    a.completed ? 'border-fg bg-fg text-bg' : 'border-hairline-strong',
+                    'mt-[3px] flex size-4 shrink-0 items-center justify-center border outline-offset-2',
+                    a.completed ? 'border-fg bg-fg text-bg' : 'border-hairline-strong hover:border-fg',
                   )}
                 >
                   {a.completed && <Check {...smallIconProps} size={12} />}
-                </span>
+                </button>
                 <span className="min-w-0">
                   <span className={cn(a.completed && 'text-fg-muted line-through')}>{a.text}</span>
                   {a.completed && <span className="sr-only"> (done)</span>}

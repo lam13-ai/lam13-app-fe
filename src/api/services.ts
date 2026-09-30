@@ -47,7 +47,7 @@ interface SendMessageBase {
 export type SendMessageBody =
   /**
    * `attachment_ids`: images previously uploaded via `attachments.upload` (api-contract.md §4.7).
-   * `meeting_ids`: meetings added as context. [BACKEND] Not sent yet: the chat endpoint has no field for it.
+   * `meeting_ids`: meetings added as context for this message.
    */
   | (SendMessageBase & { kind: 'text'; content: string; attachment_ids?: string[]; meeting_ids?: string[] })
   | (SendMessageBase & { kind: 'voice'; audio_id: string });
@@ -197,6 +197,8 @@ export interface MeetingsService {
   list(): Promise<MeetingSummary[]>;
   /** 404 `not_found` for an unknown id. */
   get(id: string): Promise<Meeting>;
+  /** Tick or untick one action item; returns the updated meeting. 404 for an unknown meeting or item. */
+  setActionItemCompleted(meetingId: string, itemId: string, completed: boolean): Promise<Meeting>;
   /** The meeting source's connection. Connecting over HTTP leaves the app for Granola's sign-in page. */
   connection(): Promise<MeetingSourceConnection>;
   setConnected(connected: boolean): Promise<MeetingSourceConnection>;

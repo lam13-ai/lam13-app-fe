@@ -5,9 +5,8 @@ import { createMeetingSeed } from './meetingFixtures';
 import { clone } from './utils';
 
 /**
- * Local meetings behind `MeetingsService`. Used by BOTH adapters until the backend has meeting routes
- * (Granola via the Lam13 backend); swap this for HTTP calls then — the UI does not change. The Granola
- * connection is only a flag here: no OAuth, tokens or Granola calls.
+ * Local meetings behind `MeetingsService` for the mock adapter and tests. The Granola connection is
+ * only a flag here: no OAuth, tokens or Granola calls.
  */
 export function createMockMeetings({ now = Date.now, respond = () => Promise.resolve() } = {}): MeetingsService {
   const meetings = createMeetingSeed(now()).sort((a, b) => b.started_at.localeCompare(a.started_at));
@@ -25,6 +24,13 @@ export function createMockMeetings({ now = Date.now, respond = () => Promise.res
       const meeting = meetings.find((m) => m.id === id);
       if (!meeting) throw new ApiError(404, 'not_found', 'This meeting does not exist.');
       return clone(meeting);
+    },
+    async setActionItemCompleted(meetingId, itemId, completed) {
+      await respond();
+      const item = meetings.find((m) => m.id === meetingId)?.action_items?.find((a) => a.id === itemId);
+      if (!item) throw new ApiError(404, 'not_found', 'This action item does not exist.');
+      item.completed = completed;
+      return clone(meetings.find((m) => m.id === meetingId)!);
     },
     async connection() {
       await respond();
