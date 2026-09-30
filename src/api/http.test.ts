@@ -45,7 +45,9 @@ describe('translateStream (backend SSE → app events)', () => {
       'conversation.created',
       'message.created',
       'status', // response_started: generating
-      'status', // thinking: one status, never its text (post-processing adds nothing more)
+      'status', // thinking: one status (post-processing adds nothing more)…
+      'reasoning', // …and its text, chunk by chunk
+      'reasoning',
       'delta',
       'delta',
       'conversation.updated', // done: the title…
@@ -56,14 +58,17 @@ describe('translateStream (backend SSE → app events)', () => {
     expect(events[0]!.data.id).toBe('s1');
     expect(events[2]!.data).toEqual({ state: 'generating' });
     expect(events[3]!.data).toEqual({ state: 'thinking' });
-    expect(JSON.stringify(events)).not.toContain('hmm');
+    expect([events[4]!.data, events[5]!.data]).toEqual([
+      { message_id: 'a1', text: 'hmm' },
+      { message_id: 'a1', text: 'more' },
+    ]);
     const created = events[1]!.data as { user_message: { id: string; client_message_id: string }; assistant_message: { id: string } };
     expect(created.user_message).toMatchObject({ id: 'c1', client_message_id: 'c1' });
     expect(created.assistant_message.id).toBe('a1');
-    expect(events[6]!.data).toEqual({ id: 's1', title: 'Growth plan' });
-    expect((events[7]!.data.message as { content: string; status: string })).toMatchObject({ content: 'Hello world', status: 'complete' });
-    expect(events[8]!.data).toMatchObject({ type: 'pptx', status: 'ready', download: { url: 'https://blob/deck.pptx' } });
-    expect(events[9]!.data).toMatchObject({ type: 'report', status: 'processing', download: null });
+    expect(events[8]!.data).toEqual({ id: 's1', title: 'Growth plan' });
+    expect((events[9]!.data.message as { content: string; status: string })).toMatchObject({ content: 'Hello world', status: 'complete' });
+    expect(events[10]!.data).toMatchObject({ type: 'pptx', status: 'ready', download: { url: 'https://blob/deck.pptx' } });
+    expect(events[11]!.data).toMatchObject({ type: 'report', status: 'processing', download: null });
   });
 
   it('the answer is complete at `done`, not `response_completed`: post-processing statuses add nothing, agent output joins the answer', async () => {

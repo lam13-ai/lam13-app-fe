@@ -9,12 +9,13 @@ import { separateDocumentLinks } from '../lib/documentLinks';
 import { ActivityStatus } from './ActivityStatus';
 import { MessageActions } from './MessageActions';
 import { MessageNotice } from './MessageNotice';
+import { Reasoning } from './Reasoning';
 
 /**
  * Full-width document-style answer: no bubble, no avatar (reference §4).
- * While the answer is generating only a quiet, rotating status box is shown (ActivityStatus): no partial
- * text, never the model's reasoning; the complete answer replaces it at once. A stopped or failed answer
- * shows what arrived.
+ * While generating: the model's reasoning streams in a collapsible window (Reasoning), then the answer
+ * streams in as progressive Markdown. Before either arrives, a quiet rotating status box stands in
+ * (ActivityStatus).
  */
 export function AssistantMessage({
   message,
@@ -48,9 +49,11 @@ export function AssistantMessage({
       className={cn('group/message w-full self-start py-1', animate && 'animate-fade')}
     >
       <VisuallyHidden>Lam13 replied:</VisuallyHidden>
-      {/* Never a partial answer while generating: the status stands in until the whole answer is there. */}
-      {content && !streaming && <Markdown content={content} />}
-      {streaming && <ActivityStatus label={activity ?? 'Putting the answer together…'} />}
+      {message.reasoning?.text.trim() && <Reasoning reasoning={message.reasoning} streaming={streaming} />}
+      {content && <Markdown content={content} />}
+      {streaming && !hasContent && !message.reasoning?.text.trim() && (
+        <ActivityStatus label={activity ?? 'Putting the answer together…'} />
+      )}
       {artifacts.length > 0 && <Artifacts artifacts={artifacts} />}
       {message.status === 'complete' && hasContent && (
         <MessageActions createdAt={message.created_at} copyText={message.content} onRegenerate={onRegenerate} />

@@ -12,6 +12,8 @@ export type StreamEvent =
    */
   | { event: 'status'; data: { state: 'thinking' | 'generating' | 'solving' | 'answering' | 'tool'; label?: string } }
   | { event: 'delta'; data: { message_id: string; text: string } }
+  /** A chunk of the model's reasoning, in whole sentences (shown live, collapsible; not persisted). */
+  | { event: 'reasoning'; data: { message_id: string; text: string } }
   | { event: 'conversation.updated'; data: { id: string; title: string } }
   /** A generated deliverable was created or changed (progress, ready, error): the full artifact, upserted by id. */
   | { event: 'artifact'; data: Artifact }
@@ -29,6 +31,7 @@ export const STREAM_EVENT_NAMES: ReadonlySet<string> = new Set<StreamEventName>(
   'transcript',
   'status',
   'delta',
+  'reasoning',
   'conversation.updated',
   'artifact',
   'done',

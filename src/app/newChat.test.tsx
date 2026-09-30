@@ -239,11 +239,11 @@ describe('New chat: optimistic sidebar row', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe(`/c/${post.sessionId}`));
     expect(sidebar()).toEqual([{ title: 'Explain artificial intelligence and its…', href: `/c/${post.sessionId}`, current: true }]);
 
-    // Delayed tokens while the answer is buffered: the sidebar doesn't change.
+    // Delayed tokens stream into the answer: the sidebar doesn't change.
     await pause(200);
     await post.push(frame('token', { content: ' More.', source: 'chatbot' }));
-    await pause(200);
-    expect(statusBoxes()).toBe(1);
+    await screen.findByText('AI changes fintech. More.');
+    expect(statusBoxes()).toBe(0);
     expect(sidebar()).toHaveLength(1);
 
     // E/I: completion with the backend's own title: the same single row, retitled.

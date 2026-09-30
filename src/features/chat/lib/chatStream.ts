@@ -50,8 +50,8 @@ export interface SendOptions {
 
 /**
  * Stream lifecycle for one exchange:
- * optimistic user message → assistant draft → typed events (answer text buffered in the draft; other updates
- * rAF-batched into the cache) → done (the whole answer at once) / error / cancelled (what arrived so far).
+ * optimistic user message → assistant draft → typed events (reasoning and answer text rAF-batched into the
+ * cache as they stream) → done / error / cancelled (what arrived so far is kept).
  * Runs outside React so a stream survives route changes (e.g. `/` → `/c/:id` after lazy creation).
  */
 export function createChatActions({ api, queryClient }: Deps) {
@@ -183,6 +183,7 @@ export function createChatActions({ api, queryClient }: Deps) {
             break;
           }
           case 'artifact':
+          case 'reasoning':
             batcher.schedule();
             break;
           case 'transcript': {
@@ -191,9 +192,9 @@ export function createChatActions({ api, queryClient }: Deps) {
             break;
           }
           case 'delta':
-            // Buffered: the text accumulates in `draft` only. The answer is written (and shown) whole at
-            // `done`; Stop or a failure writes what arrived so far.
+            // The answer streams in as it arrives (Markdown renders progressively).
             store().setPhase(key, 'answering');
+            batcher.schedule();
             break;
           case 'conversation.updated':
             patchConversation(queryClient, event.data.id, { title: event.data.title });

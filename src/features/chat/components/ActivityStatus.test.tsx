@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '@/components/ui';
 import type { MessageView } from '@/types/chat';
@@ -107,15 +107,36 @@ describe('AssistantMessage status box', () => {
     </ToastProvider>
   );
 
-  it('tokens arriving (content buffered) keep the box and show no partial text', () => {
+  it('the first streamed words replace the box and stop its timer', () => {
     const { rerender, container } = render(renderMessage({}));
     advance(ACTIVITY_STEP_MS);
     expect(label()).toBe('Preparing your answer…');
-    // Even if a streaming message carries text (e.g. a server copy while it generates), none of it shows.
     rerender(renderMessage({ content: 'Great q' }));
-    expect(container.querySelector('[data-activity]')).not.toBeNull();
-    expect(container.textContent).not.toContain('Great q');
-    expect(vi.getTimerCount()).toBe(1);
+    expect(container.querySelector('[data-activity]')).toBeNull();
+    expect(container.textContent).toContain('Great q');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('reasoning replaces the box with its window: open while thinking, "Thought for Ns" and collapsed once the answer starts', () => {
+    const reasoning = { text: 'Scoping a beta version. Narrowing the hypothesis.\n\nCutting scope for city.', startedAt: Date.now() };
+    const { rerender, container } = render(renderMessage({ reasoning }));
+    const toggle = () => container.querySelector('[data-reasoning] button')!;
+    expect(container.querySelector('[data-activity]')).toBeNull();
+    expect([...container.querySelectorAll('[data-reasoning] li')].map((li) => li.textContent)).toEqual([
+      'Scoping a beta version.',
+      'Narrowing the hypothesis.',
+      'Cutting scope for city.',
+    ]);
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(toggle().textContent).toContain('Cutting scope for city.'); // the latest step is the title
+
+    advance(3000);
+    rerender(renderMessage({ content: 'Great q', reasoning: { ...reasoning, endedAt: Date.now() } }));
+    expect(toggle().textContent).toBe('Thought for 3s');
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle());
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it.each([
