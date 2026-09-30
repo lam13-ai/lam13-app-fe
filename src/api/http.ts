@@ -109,9 +109,12 @@ interface MessageDto {
   /** 'running' | 'completed' | 'failed' | null */
   kothar_status?: string | null;
   kothar_pptx_url?: string | null;
+  voice_action_id?: string | null;
+  report_url?: string | null;
+  report_status?: string | null;
 }
 
-interface SessionDetailDto {
+export interface SessionDetailDto {
   sessionId: string;
   title: string | null;
   messages: MessageDto[];
@@ -147,7 +150,7 @@ function artifact(
 ): Artifact | null {
   const state: Artifact['status'] | null =
     url ? 'ready'
-    : status === 'running' || status === 'in_progress' ? 'processing'
+    : status === 'queued' || status === 'running' || status === 'in_progress' ? 'processing'
     : status === 'failed' ? 'error'
     : null;
   if (!state) return null;
@@ -171,11 +174,12 @@ function artifact(
 function artifactsFor(detail: SessionDetailDto, m: MessageDto, isLastAssistant: boolean): Artifact[] {
   return [
     artifact(detail.sessionId, m.id, 'pptx', m.kothar_status, m.kothar_pptx_url),
-    isLastAssistant ? artifact(detail.sessionId, m.id, 'report', detail.eshmunReportGeneratingStatus, detail.reportUrl) : null,
+    m.voice_action_id || m.report_url || m.report_status ? artifact(detail.sessionId, m.id, 'report', m.report_status, m.report_url)
+      : isLastAssistant && !detail.messages.some((row) => (row.report_url && row.report_url === detail.reportUrl) || (row.voice_action_id && row.status === 'generating')) ? artifact(detail.sessionId, m.id, 'report', detail.eshmunReportGeneratingStatus, detail.reportUrl) : null,
   ].filter((a): a is Artifact => a !== null);
 }
 
-function toMessages(detail: SessionDetailDto): Message[] {
+export function toMessages(detail: SessionDetailDto): Message[] {
   const lastAssistant = detail.messages.findLast((m) => m.role === 'assistant');
   return detail.messages.map((m) => {
     const artifacts = m.role === 'assistant' ? artifactsFor(detail, m, m === lastAssistant) : [];
@@ -189,6 +193,7 @@ function toMessages(detail: SessionDetailDto): Message[] {
       role: m.role,
       kind: 'text',
       content: m.content ?? '',
+      ...(m.voice_action_id && m.status === 'generating' ? { progress_label: m.content } : {}),
       audio: null,
       call: null,
       status: m.status === 'generating' ? 'streaming' : m.status === 'error' ? 'error' : 'complete',

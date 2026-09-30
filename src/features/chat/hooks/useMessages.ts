@@ -1,6 +1,7 @@
 import { useInfiniteQuery, type QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { queryKeys, useApi } from '@/api';
+import { useRtcStreamStore } from '@/stores/rtcStreamStore';
 import { useStreamStore } from '@/stores/streamStore';
 import type { Page } from '@/types/api';
 import type { MessageView } from '@/types/chat';
@@ -25,6 +26,7 @@ export function useMessages(key: string, conversationId: string | undefined) {
   const api = useApi();
   // Subscribed (not read once) so polling re-evaluates when this client's stream ends.
   const streaming = useStreamStore((s) => Boolean(conversationId && s.active[conversationId]));
+  const rtcStreaming = useRtcStreamStore((s) => Boolean(conversationId && s.sessions[conversationId]));
   const query = useInfiniteQuery<Page<MessageView>, Error, MessagesData, QueryKey, string | null>({
     queryKey: queryKeys.messages(key),
     queryFn: ({ pageParam }) => api.messages.list(conversationId!, { before: pageParam, limit: PAGE_SIZE }),
@@ -34,9 +36,9 @@ export function useMessages(key: string, conversationId: string | undefined) {
     // Unchanged messages keep their objects across writes and refetches (see shareMessages).
     structuralSharing: shareMessages,
     // Never while this client streams: a refetch would overwrite the live draft.
-    refetchInterval: (query) => (!streaming && hasPendingWork(query.state.data) ? POLL_MS : false),
+    refetchInterval: (query) => (!streaming && !rtcStreaming && hasPendingWork(query.state.data) ? POLL_MS : false),
     // Back on the tab: catch up at once on work the server finished meanwhile (polling pauses while hidden).
-    refetchOnWindowFocus: (query) => !streaming && hasPendingWork(query.state.data),
+    refetchOnWindowFocus: (query) => !streaming && !rtcStreaming && hasPendingWork(query.state.data),
   });
   const messages = useMemo(() => toChronological(query.data), [query.data]);
   return { ...query, messages };

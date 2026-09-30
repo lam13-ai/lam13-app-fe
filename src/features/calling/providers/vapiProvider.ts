@@ -85,11 +85,24 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
   /** Latest reason Vapi reported for the call ending, if any. */
   let endedReason: string | undefined;
   let reservationId: string | undefined;
+  let closingTimer: ReturnType<typeof setTimeout> | undefined;
+  let closing = false;
+  let onClosingAttempt: (() => void) | undefined;
+  let closingSpeechStarted = false;
+  const closeAfterSpeech = () => {
+    if (!closing || finished) return;
+    closing = false;
+    onClosingAttempt?.();
+    clearTimeout(closingTimer);
+    hangingUp = true;
+    if (vapi) void stopInstance(vapi).then(() => finish());
+  };
 
   /** Terminal: report the end once and drop the SDK instance. */
   const finish = (state: 'ended' | 'completed' = 'ended') => {
     if (finished) return;
     finished = true;
+    clearTimeout(closingTimer);
     active = false;
     vapi?.removeAllListeners();
     vapi = null;
@@ -150,6 +163,8 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
         active = true;
         events.emitState('active');
       });
+      instance.on('speech-start', () => { if (closing) closingSpeechStarted = true; });
+      instance.on('speech-end', () => { if (closingSpeechStarted) closeAfterSpeech(); });
       instance.on('call-end', () => (hangingUp ? finish() : remoteEnd()));
       instance.on('message', (message: unknown) => {
         endedReason = endedReasonOf(message) ?? endedReason;
@@ -223,6 +238,13 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
       finish();
     },
 
+    endAfterSpeech(onAttempt) {
+      onClosingAttempt = onAttempt;
+      closing = true;
+      closingSpeechStarted = false;
+      closingTimer = setTimeout(closeAfterSpeech, 15_000);
+      return () => { closing = false; clearTimeout(closingTimer); };
+    },
     isActive: () => active,
     onStateChange: events.onStateChange,
     onTranscript: events.onTranscript,
@@ -230,6 +252,7 @@ export function createVapiProvider(config: CallingConfig): CallProvider {
     onVolume: events.onVolume,
 
     dispose() {
+      clearTimeout(closingTimer);
       events.clear();
       const instance = vapi;
       finished = true;

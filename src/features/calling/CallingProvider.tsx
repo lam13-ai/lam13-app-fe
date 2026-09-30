@@ -1,7 +1,11 @@
+import { requestJson, toMessages, type SessionDetailDto } from '@/api/http';
+import { useRtcStreamStore } from '@/stores/rtcStreamStore';
+import { useStreamStore } from '@/stores/streamStore';
+import { toChronological, type MessagesData } from '@/features/chat';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router';
 import { queryKeys } from '@/api/queryKeys';
-import { abandonRtc, getRtcStatus, prepareRtc, registerRtc, type RecordedAction, type RtcStatus } from './rtc';
+import { abandonRtc, noteHandoffTermination, watchRtc, getRtcStatus, prepareRtc, registerRtc, type RecordedAction, type RtcStatus } from './rtc';
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { audioFocus } from '@/features/voice';
 import { env as defaultEnv, type Env } from '@/lib/env';
@@ -16,7 +20,6 @@ const CONNECT_TIMEOUT_MS = 30_000;
 const END_TIMEOUT_MS = 5_000;
 /** After a saved call ends, how long to wait for the server to finalize it before reloading the chat anyway. */
 const SAVE_TIMEOUT_MS = 15_000;
-const RTC_POLL_MS = 4_000;
 
 /** Server-side voice work still in flight: a call not yet saved, or a handoff queued/running. */
 export function rtcBusy(data: RtcStatus | undefined): boolean {
@@ -95,6 +98,7 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
   const sessionId = /^\/c\/([^/]+)$/.exec(location.pathname)?.[1] ?? '';
   const persistent = createProvider === createVapiProvider && defaultEnv.apiMode === 'http';
   const [callSessionId, setCallSessionId] = useState('');
+  const [currentCallId, setCurrentCallId] = useState('');
   // The server's record of the current call (set by `prepare`; read from provider callbacks, hence a ref).
   const callRef = useRef<{ id: string; sessionId: string } | null>(null);
   // An ended, saved call whose conversation the chat hasn't reloaded yet.
@@ -103,22 +107,71 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
   const [transcript, dispatchTranscript] = useReducer(transcriptReducer, []);
   const inCall = isInCall(state);
   const syncSessionId = saving?.sessionId ?? (inCall ? callSessionId || sessionId : sessionId);
+  const [streamFailed, setStreamFailed] = useState(false);
   const rtc = useQuery({
     queryKey: ['rtc', syncSessionId],
     queryFn: () => getRtcStatus(syncSessionId),
     enabled: persistent && Boolean(syncSessionId),
     // Only while there is voice work; an idle thread is fetched once (and on focus).
-    refetchInterval: (query) => (inCall || saving || rtcBusy(query.state.data) ? RTC_POLL_MS : false),
+    refetchInterval: false,
     retry: 1,
   });
+  const voiceBusy = inCall || Boolean(saving) || rtcBusy(rtc.data);
   useEffect(() => {
-    if (!persistent || !syncSessionId || !rtc.data) return;
-    void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
-    // A running (or just-ended) call's turns show only in the call panel: the chat behind it stays as it
-    // was, and reloads once the call is saved (finishSaving) — never two live copies.
-    if (inCall || saving) return;
-    void queryClient.invalidateQueries({ queryKey: queryKeys.messages(syncSessionId) });
-  }, [rtc.data, persistent, syncSessionId, queryClient, inCall, saving]); // refresh when server state changes
+    if (!persistent || !syncSessionId || !voiceBusy) return;
+    const controller = new AbortController();
+    let cursor = '';
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let delay = 2_000;
+    useRtcStreamStore.getState().set(syncSessionId, true);
+    const applySnapshot = (snapshot: { status: RtcStatus; conversation: SessionDetailDto }) => {
+      if (controller.signal.aborted) return;
+      queryClient.setQueryData(['rtc', syncSessionId], snapshot.status);
+      const activeCall = callRef.current?.id;
+      const incoming = toMessages(snapshot.conversation).filter((m) => !activeCall || !m.id.startsWith(`voice-${activeCall}-`));
+      queryClient.setQueryData<MessagesData>(queryKeys.messages(syncSessionId), (previous) => {
+        // Preserve a concurrent typed answer's local draft and optimistic messages.
+        const old = toChronological(previous);
+        const typing = Boolean(useStreamStore.getState().active[syncSessionId]);
+        const byId = new Map(old.map((m) => [m.id, m]));
+        const merged = incoming.map((m) => typing && !m.id.startsWith('voice-') && byId.has(m.id) ? byId.get(m.id)! : m);
+        const ids = new Set(merged.map((m) => m.id));
+        if (typing) merged.push(...old.filter((m) => !ids.has(m.id)));
+        return { pages: [{ items: merged.reverse(), next_cursor: null }], pageParams: [null] };
+      });
+    };
+    const connect = async () => {
+      try {
+        await watchRtc(syncSessionId, cursor, controller.signal, (snapshot, nextCursor) => {
+          cursor = nextCursor || cursor;
+          delay = 2_000;
+          setStreamFailed(false);
+          applySnapshot(snapshot);
+        });
+        if (controller.signal.aborted) return;
+      } catch {
+        if (controller.signal.aborted) return;
+      }
+      setStreamFailed(true);
+      // If a proxy cannot stream, recover both status and report content with bounded backoff.
+      try {
+        const [status, conversation] = await Promise.all([
+          getRtcStatus(syncSessionId),
+          requestJson<SessionDetailDto>(`/chat/sessions/${encodeURIComponent(syncSessionId)}`, { signal: controller.signal }),
+        ]);
+        applySnapshot({ status, conversation });
+      } catch { /* Reconnect will retry; keep the last saved report visible. */ }
+      if (controller.signal.aborted) return;
+      retryTimer = setTimeout(() => { void connect(); }, delay);
+      delay = Math.min(delay * 2, 30_000);
+    };
+    void connect();
+    return () => {
+      controller.abort();
+      clearTimeout(retryTimer);
+      useRtcStreamStore.getState().set(syncSessionId, false);
+    };
+  }, [persistent, syncSessionId, voiceBusy, queryClient]);
 
   /** Shows the saved conversation in the chat (one reload of the server's copy), then closes the panel. */
   const finishingRef = useRef<object | null>(null);
@@ -146,6 +199,7 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
   const prepare = useCallback(async () => {
     const prepared = await prepareRtc(sessionId);
     setCallSessionId(prepared.session_id);
+    setCurrentCallId(prepared.id);
     callRef.current = { id: prepared.id, sessionId: prepared.session_id };
     void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
     if (!sessionId) navigate(`/c/${prepared.session_id}`);
@@ -199,6 +253,16 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
     }, END_TIMEOUT_MS);
     void provider.end().catch(() => {});
   }, [release, settle]);
+
+  const handoffRequested = Boolean(inCall && currentCallId && rtc.data?.calls.some((c) => c.id === currentCallId && c.handoff_requested));
+  useEffect(() => {
+    if (!handoffRequested) return;
+    // The provider waits for closing speech, with a timeout if the agent fails to end.
+    const callId = callRef.current?.id;
+    return providerRef.current?.endAfterSpeech?.(() => {
+      if (callId) void noteHandoffTermination(callId).catch(() => {});
+    });
+  }, [handoffRequested]);
 
   const start = useCallback(() => {
     if (providerRef.current) return; // one call at a time
@@ -281,7 +345,7 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
       enabled,
       persistence: !persistent
         ? 'Preview call: transcript is not saved.'
-        : rtc.isError
+        : rtc.isError || streamFailed
           ? 'Could not check transcript saving.'
           : 'Saved to this chat when the call ends.',
       actions: syncSessionId === sessionId ? rtc.data?.actions ?? [] : [],
@@ -293,7 +357,7 @@ export function CallingProvider({ children, ...props }: CallingProviderProps) {
       dismiss,
       getLevel,
     }),
-    [state, transcript, saving, enabled, configResult, start, end, dismiss, getLevel, persistent, rtc, syncSessionId, sessionId],
+    [state, transcript, saving, enabled, configResult, start, end, dismiss, getLevel, persistent, rtc, streamFailed, syncSessionId, sessionId],
   );
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;

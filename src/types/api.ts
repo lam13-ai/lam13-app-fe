@@ -82,6 +82,7 @@ export interface Artifact {
 }
 
 export interface Message {
+  progress_label?: string;
   id: Id;
   conversation_id: Id;
   client_message_id: string | null;

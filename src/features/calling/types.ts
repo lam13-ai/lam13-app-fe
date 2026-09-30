@@ -60,6 +60,7 @@ export interface CallProvider {
   start(): Promise<void>;
   /** Ends the call (idempotent) and releases microphone/audio resources. */
   end(): Promise<void>;
+  endAfterSpeech?(onAttempt?: () => void): Unsubscribe;
   isActive(): boolean;
   onStateChange(listener: (state: ProviderState) => void): Unsubscribe;
   onTranscript(listener: (update: TranscriptUpdate) => void): Unsubscribe;

@@ -50,7 +50,7 @@ export function AssistantMessage({
       <VisuallyHidden>Lam13 replied:</VisuallyHidden>
       {/* Never a partial answer while generating: the status stands in until the whole answer is there. */}
       {content && !streaming && <Markdown content={content} />}
-      {streaming && <ActivityStatus label={activity ?? 'Putting the answer together…'} />}
+      {streaming && <ActivityStatus label={message.progress_label ?? activity ?? 'Putting the answer together…'} />}
       {artifacts.length > 0 && <Artifacts artifacts={artifacts} />}
       {message.status === 'complete' && hasContent && (
         <MessageActions createdAt={message.created_at} copyText={message.content} onRegenerate={onRegenerate} />

@@ -235,3 +235,38 @@ describe('persistent call preparation', () => {
     start.mockRestore();
   });
 });
+
+
+describe('accepted handoff fallback', () => {
+  it('waits for closing speech and stops once', async () => {
+    const { provider, vapi } = await liveCall();
+    const cancel = provider.endAfterSpeech?.();
+    vapi.emit('speech-end');
+    expect(vapi.stop).not.toHaveBeenCalled();
+    vapi.emit('speech-start');
+    vapi.emit('speech-end');
+    await settle();
+    expect(vapi.stop).toHaveBeenCalledTimes(1);
+    cancel?.();
+  });
+
+  it('can disarm a cancelled handoff without ending the call', async () => {
+    const { provider, vapi } = await liveCall();
+    const cancel = provider.endAfterSpeech?.();
+    cancel?.();
+    vapi.emit('speech-start');
+    vapi.emit('speech-end');
+    expect(vapi.stop).not.toHaveBeenCalled();
+    provider.dispose();
+  });
+
+  it('ends after the bounded timeout when closing speech never arrives', async () => {
+    const { provider, vapi } = await liveCall();
+    vi.useFakeTimers();
+    try {
+      provider.endAfterSpeech?.();
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(vapi.stop).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); provider.dispose(); }
+  });
+});
