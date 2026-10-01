@@ -169,13 +169,15 @@ export function createChatActions({ api, queryClient }: Deps) {
             const transcribing = /^transcrib/i.test(event.data.label ?? '');
             const current = store().active[key]?.phase;
             // Never backwards: once generating/answering (or preparing), a late `thinking` changes nothing.
+            // `solving` is not backwards: work resumed (an agent runs after the answer's text; its output
+            // follows as more deltas, which bring `answering` back).
             const phase =
-              draft.status === 'answering' || draft.status === 'generating'
-                ? draft.status
-                : transcribing
-                  ? 'transcribing'
-                  : event.data.state === 'solving'
-                    ? 'solving'
+              event.data.state === 'solving'
+                ? 'solving'
+                : draft.status === 'answering' || draft.status === 'generating'
+                  ? draft.status
+                  : transcribing
+                    ? 'transcribing'
                     : current === 'preparing' || current === 'solving'
                       ? current
                       : 'thinking';

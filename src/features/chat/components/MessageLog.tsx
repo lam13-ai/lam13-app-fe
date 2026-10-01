@@ -29,6 +29,8 @@ export interface MessageLogProps {
   streaming?: boolean;
   /** What the streaming response is doing before its first words ("Generating response…"). */
   activity?: string;
+  /** More work is running after the answer's text so far (an agent): its status shows under the text. */
+  working?: boolean;
 }
 
 interface MessageRowProps {
@@ -40,13 +42,23 @@ interface MessageRowProps {
   animate: boolean;
   sending: boolean;
   activity: string | undefined;
+  working: boolean;
 }
 
 /**
  * One message. Memoized: a finished message keeps the same props (the same cached object, no callbacks),
  * so a long history doesn't re-render while a new answer is generating — only the rows that change do.
  */
-const MessageRow = memo(function MessageRow({ message, failure, onRetry, regenerate, animate, sending, activity }: MessageRowProps) {
+const MessageRow = memo(function MessageRow({
+  message,
+  failure,
+  onRetry,
+  regenerate,
+  animate,
+  sending,
+  activity,
+  working,
+}: MessageRowProps) {
   const key = messageKey(message);
   const retry = onRetry && (() => onRetry(message));
   return message.role === 'user' ? (
@@ -60,6 +72,7 @@ const MessageRow = memo(function MessageRow({ message, failure, onRetry, regener
       onRegenerate={regenerate ? retry : undefined}
       animate={animate}
       activity={activity}
+      working={working}
     />
   );
 });
@@ -85,7 +98,7 @@ function groupTurns(messages: MessageView[]): Turn[] {
   return turns;
 }
 
-export function MessageLog({ messages, failures, older, onRetry, streaming = false, activity }: MessageLogProps) {
+export function MessageLog({ messages, failures, older, onRetry, streaming = false, activity, working = false }: MessageLogProps) {
   const logRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -127,6 +140,7 @@ export function MessageLog({ messages, failures, older, onRetry, streaming = fal
           animate={Boolean(message.local_key) || isLocalId(message.id)}
           sending={streaming && message === lastUser}
           activity={message === last ? activity : undefined}
+          working={working && message === last}
         />
       );
     });

@@ -144,6 +144,56 @@ describe('real backend stream (HTTP adapter)', () => {
     await screen.findByRole('heading', { level: 1, name: 'Water Strategy Outline' });
   });
 
+  it('each token is visible as it arrives ("Hello", " world", "!"), not only the final text', async () => {
+    const backend = fakeBackend();
+    renderApp('/', { api: backend.api });
+    await send('Say hello');
+    await backend.push(START + frame('response_started', { content: 'Generating response...' }));
+
+    await backend.push(frame('token', { content: 'Hello', source: 'chatbot' }));
+    await waitFor(() => expect(answerText()).toBe('Hello'));
+    expect(answer().getAttribute('aria-busy')).toBe('true'); // still generating: this is not the final text
+    await backend.push(frame('token', { content: ' world', source: 'chatbot' }));
+    await waitFor(() => expect(answerText()).toBe('Hello world'));
+    await backend.push(frame('token', { content: '!', source: 'chatbot' }));
+    await waitFor(() => expect(answerText()).toBe('Hello world!'));
+    expect(within(header()).getByText('Answering…')).toBeTruthy();
+
+    await backend.push(frame('response_completed', { content: 'Response completed.' }) + frame('done', { session_id: 'sess-1', assistantMessageId: 'a-1', title: 'Hello' }));
+    await screen.findByText('Online');
+    expect(answerText()).toBe('Hello world!');
+    expect(within(log()).getAllByRole('article')).toHaveLength(1); // one assistant message
+    await backend.close();
+  });
+
+  it('an agent working after the text shows "Solving…" (header + status under the text), never the backend’s progress text', async () => {
+    const backend = fakeBackend();
+    renderApp('/', { api: backend.api });
+    await send('Review my framework');
+    await backend.push(START + frame('token', { content: 'Here is the framework.', source: 'chatbot' }));
+    await waitFor(() => expect(answerText()).toBe('Here is the framework.'));
+    await backend.push(frame('response_completed', { content: 'Response completed.' }) + frame('postprocess_started', { content: 'Running post-processing...' }));
+    expect(within(header()).getByText('Answering…')).toBeTruthy(); // plain post-processing changes nothing
+
+    await backend.push(frame('progress', { content: 'Running eshmun analysis...', source: 'eshmun' }));
+    await waitFor(() => expect(within(header()).getByText('Solving…')).toBeTruthy());
+    expect(activity(answer())).toBe('Solving…'); // under the text that already streamed
+    expect(answerText()).toBe('Here is the framework.');
+    expect(document.body.textContent).not.toMatch(/eshmun|Running .* analysis/i);
+
+    // The agent's output is more of the same answer: Answering again, the status box gone.
+    await backend.push(frame('token', { content: 'Agent findings.', source: 'eshmun' }));
+    await within(answer()).findByText('Agent findings.');
+    expect(within(header()).getByText('Answering…')).toBeTruthy();
+    expect(answer().querySelector('[data-activity]')).toBeNull();
+
+    await backend.push(frame('postprocess_completed', {}) + frame('done', { session_id: 'sess-1', assistantMessageId: 'a-1', title: 'Framework' }));
+    await screen.findByText('Online');
+    expect(answerText()).toMatch(/^Here is the framework\.\s*Agent findings\.$/);
+    expect(within(log()).getAllByRole('article')).toHaveLength(1);
+    await backend.close();
+  });
+
   it('turns a backend stream error into the retryable error state, keeping the partial answer', async () => {
     const backend = fakeBackend();
     renderApp('/', { api: backend.api });

@@ -337,7 +337,8 @@ const str = (value: unknown) => (typeof value === 'string' ? value : '');
 /**
  * Backend SSE (`start, response_started, thinking, token, response_completed, postprocess_*, done, error`, see
  * routers/chat.py) → app events. `token` text streams into the answer; `thinking` (the model's reasoning, in
- * whole sentences) becomes `reasoning`; `progress` only ever produces a status. The answer is complete at the backend's `done`, after post-processing
+ * whole sentences, redacted by the backend for display) becomes `reasoning`; `progress` (an agent working) only
+ * ever produces the `solving` status, never text. The answer is complete at the backend's `done`, after post-processing
  * (which may append agent output as more `token`s); `response_completed` only marks the text final, so a
  * later post-processing failure — or the stream closing before `done` — still completes it. `loadDetail`
  * fetches the saved session afterwards so generated files (report / PPTX) arrive as trailing `artifact` events.
@@ -411,11 +412,15 @@ export async function* translateStream(
       case 'response_started':
         if (!content) yield { event: 'status', data: { state: 'generating' } };
         break;
-      case 'thinking':
       case 'progress':
+        // An agent is working (typically after the chatbot's text, before its own output is appended). The
+        // backend's text names internal agents, so only the state is passed on — never the content.
+        yield { event: 'status', data: { state: 'solving' } };
+        break;
+      case 'thinking':
       case 'postprocess_started':
       case 'postprocess_completed': {
-        // `progress` (internal steps) is a status only; `thinking` also carries the model's reasoning.
+        // Post-processing is a status only; `thinking` also carries the model's reasoning.
         if (!thinking) yield { event: 'status', data: { state: 'thinking' } };
         thinking = true;
         const text = message.event === 'thinking' ? str(data.content) : '';

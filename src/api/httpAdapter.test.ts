@@ -215,10 +215,11 @@ describe('HTTP adapter — POST /chat/stream (real backend SSE)', () => {
       'conversation.created',
       'message.created',
       'status', // response_started: generating
-      'status', // thinking (progress adds nothing)…
+      'status', // thinking…
       'reasoning', // …and its text
       'delta',
       'delta',
+      'status', // progress: an agent is working (solving) — the state only, never its text
       'delta', // post-processing: agent output appended after a blank line
       'conversation.updated', // done: the generated title…
       'done', // …and the whole answer
@@ -226,9 +227,10 @@ describe('HTTP adapter — POST /chat/stream (real backend SSE)', () => {
     expect(events[0]).toMatchObject({ data: { id: 'sess-1', title: 'New conversation' } });
     expect(events[4]).toEqual({ event: 'reasoning', data: { message_id: 'a-1', text: 'Let me think' } });
     expect(JSON.stringify(events)).not.toContain('Drafting');
-    expect(events[7]).toEqual({ event: 'delta', data: { message_id: 'a-1', text: '\n\nAgent report' } });
-    expect(events[8]).toEqual({ event: 'conversation.updated', data: { id: 'sess-1', title: 'Greeting' } });
-    expect(events[9]).toMatchObject({ data: { message: { id: 'a-1', status: 'complete', content: 'Hello world\n\nAgent report' } } });
+    expect(events[7]).toEqual({ event: 'status', data: { state: 'solving' } });
+    expect(events[8]).toEqual({ event: 'delta', data: { message_id: 'a-1', text: '\n\nAgent report' } });
+    expect(events[9]).toEqual({ event: 'conversation.updated', data: { id: 'sess-1', title: 'Greeting' } });
+    expect(events[10]).toMatchObject({ data: { message: { id: 'a-1', status: 'complete', content: 'Hello world\n\nAgent report' } } });
   });
 
   it('continues an existing session with document ids, across fragmented CRLF frames', async () => {

@@ -183,6 +183,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
         onRetry={active ? undefined : (message) => void actions.retry(key, message, history.messages, { origin })}
         streaming={Boolean(active)}
         activity={activity}
+        working={active?.phase === 'solving'}
       />
     );
   }

@@ -25,6 +25,7 @@ export function AssistantMessage({
   onRegenerate,
   animate,
   activity,
+  working,
 }: {
   message: MessageView;
   anchorKey: string;
@@ -36,6 +37,8 @@ export function AssistantMessage({
   animate?: boolean;
   /** High-level status while this answer has no text yet. */
   activity?: string;
+  /** More work is running after the text so far (an agent): the status shows under it. */
+  working?: boolean;
 }) {
   const streaming = message.status === 'streaming';
   const hasContent = message.content.length > 0;
@@ -51,7 +54,7 @@ export function AssistantMessage({
       <VisuallyHidden>Lam13 replied:</VisuallyHidden>
       {message.reasoning?.text.trim() && <Reasoning reasoning={message.reasoning} streaming={streaming} />}
       {content && <Markdown content={content} />}
-      {streaming && !hasContent && !message.reasoning?.text.trim() && (
+      {streaming && (working || (!hasContent && !message.reasoning?.text.trim())) && (
         <ActivityStatus label={activity ?? 'Putting the answer together…'} />
       )}
       {artifacts.length > 0 && <Artifacts artifacts={artifacts} />}
