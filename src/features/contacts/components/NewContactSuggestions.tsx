@@ -5,7 +5,7 @@ import { Button, smallIconProps, useToast } from '@/components/ui';
 import { describeMessageTime, formatRelativeTime } from '@/lib/format';
 import type { ProfileField, ProfileUpdateSuggestion } from '@/types/api';
 import { useApproveSuggestion, useRejectSuggestion } from '../hooks/useContacts';
-import { FIELD_LABELS, linkedinHref } from '../lib/contacts';
+import { FIELD_LABELS, linkedinHref, mergedSourcesText, sourceText } from '../lib/contacts';
 import { ContactAvatar } from './ContactAvatar';
 import { FieldIcon } from './FieldIcon';
 
@@ -72,12 +72,12 @@ function NewContactCard({
         {fields.description && <p className="line-clamp-3 text-xs leading-relaxed text-fg-muted">{fields.description}</p>}
         {suggestion.reason && <p className="text-xs leading-relaxed">{suggestion.reason}</p>}
         <p className="text-2xs text-fg-muted">
-          From meeting
-          {suggestion.source_title && ` · ${suggestion.source_title}`} ·{' '}
+          {sourceText(suggestion)} ·{' '}
           <time dateTime={suggestion.created_at} title={describeMessageTime(suggestion.created_at)}>
             {formatRelativeTime(suggestion.created_at)}
           </time>
         </p>
+        {mergedSourcesText(suggestion) && <p className="text-2xs text-fg-muted">{mergedSourcesText(suggestion)}</p>}
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-2 border-t border-hairline px-4 py-2">
@@ -107,7 +107,7 @@ function NewContactCard({
 }
 
 /**
- * Pending new-contact (`create`) suggestions from meetings, above the contact grid — visibly proposals
+ * Pending new-contact (`create`) suggestions from meetings, chats and calls, above the contact grid — visibly proposals
  * (dashed, tinted), not contacts. Nothing is added until the user chooses "Add to contacts".
  */
 export function NewContactSuggestions({ suggestions }: { suggestions: ProfileUpdateSuggestion[] }) {
@@ -130,7 +130,7 @@ export function NewContactSuggestions({ suggestions }: { suggestions: ProfileUpd
           <Sparkles {...smallIconProps} className="shrink-0 text-accent" />
           Suggested new {suggestions.length === 1 ? 'contact' : `contacts (${suggestions.length})`}
         </h2>
-        <p className="text-2xs text-fg-muted">From your meetings. Nothing is added until you approve.</p>
+        <p className="text-2xs text-fg-muted">From your meetings, chats and calls. Nothing is added until you approve.</p>
       </div>
       <ul aria-label="Suggested new contacts" className="grid grid-cols-1 gap-3 @lg:grid-cols-2 @4xl:grid-cols-3">
         {suggestions.map((s) => (

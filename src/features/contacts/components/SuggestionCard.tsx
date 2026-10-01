@@ -4,7 +4,7 @@ import { Button, smallIconProps } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { describeMessageTime, formatRelativeTime } from '@/lib/format';
 import type { Profile, ProfileFieldChange, ProfileUpdateSuggestion } from '@/types/api';
-import { FIELD_LABELS } from '../lib/contacts';
+import { FIELD_LABELS, lineDiff, mergedSourcesText, sourceText } from '../lib/contacts';
 import { FieldIcon } from './FieldIcon';
 
 /**
@@ -31,24 +31,60 @@ function Side({ kind, value }: { kind: 'current' | 'suggested'; value: string | 
   );
 }
 
+const DIFF_MARKS = { same: '', added: '+', removed: '−' } as const;
+const DIFF_NAMES = { same: '', added: 'Added: ', removed: 'Removed: ' } as const;
+
+/**
+ * A rewritten text (the profile) as one list of lines: added lines "+", removed lines "−", the rest
+ * unchanged. Told apart by the marks and screen-reader labels, not by colour alone.
+ */
+function LineChanges({ before, after }: { before: string; after: string }) {
+  return (
+    <ul className="border border-hairline">
+      {lineDiff(before, after).map((line, i) => (
+        <li
+          key={i}
+          className={cn(
+            'grid grid-cols-[1rem_minmax(0,1fr)] items-baseline px-2 py-0.5 text-xs leading-relaxed',
+            line.kind === 'added' && 'bg-accent-wash font-bold text-fg',
+            line.kind === 'removed' && 'bg-fg/[0.03] text-fg-muted line-through',
+            line.kind === 'same' && 'text-fg-muted',
+          )}
+        >
+          <span aria-hidden="true">{DIFF_MARKS[line.kind]}</span>
+          <span className="whitespace-pre-wrap break-words">
+            <span className="sr-only">{DIFF_NAMES[line.kind]}</span>
+            {line.text || '\u00a0'}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function FieldChange({ change, current }: { change: ProfileFieldChange; current: string | null }) {
   const label = FIELD_LABELS[change.field];
+  const asLines = change.field === 'description' && Boolean(current) && Boolean(change.to);
   return (
-    <div role="group" aria-label={`${label}: current and suggested`}>
+    <div role="group" aria-label={`${label}: ${asLines ? 'changed lines' : 'current and suggested'}`}>
       <p className="mb-1 flex items-center gap-1.5 text-xs text-fg-muted">
         <FieldIcon field={change.field} />
         {label}
       </p>
-      <div className="flex flex-col gap-1">
-        <Side kind="current" value={current} />
-        <Side kind="suggested" value={change.to} />
-      </div>
+      {asLines ? (
+        <LineChanges before={current!} after={change.to!} />
+      ) : (
+        <div className="flex flex-col gap-1">
+          <Side kind="current" value={current} />
+          <Side kind="suggested" value={change.to} />
+        </div>
+      )}
     </div>
   );
 }
 
 /**
- * A meeting-derived suggestion awaiting review. It compares against the profile as it is now, so the
+ * A suggestion (from a meeting, chat or voice call) awaiting review. It compares against the profile as it is now, so the
  * user sees exactly what Approve would change. Nothing changes until they choose.
  */
 export function SuggestionCard({
@@ -64,6 +100,7 @@ export function SuggestionCard({
 }) {
   const titleId = useId();
   const fields = suggestion.changes.map((c) => FIELD_LABELS[c.field]).join(', ');
+  const merged = mergedSourcesText(suggestion);
 
   return (
     <article aria-labelledby={titleId} className="border border-hairline-strong bg-bg">
@@ -73,13 +110,14 @@ export function SuggestionCard({
           Suggested update
         </h4>
         <p className="text-2xs text-fg-muted">
-          From meeting
-          {suggestion.source_title && ` · ${suggestion.source_title}`} ·{' '}
+          {sourceText(suggestion)} ·{' '}
           <time dateTime={suggestion.created_at} title={describeMessageTime(suggestion.created_at)}>
             {formatRelativeTime(suggestion.created_at)}
           </time>
         </p>
+        {merged && <p className="basis-full text-2xs text-fg-muted">{merged}</p>}
       </header>
+      {suggestion.reason && <p className="border-b border-hairline px-3 py-2 text-xs leading-relaxed">{suggestion.reason}</p>}
 
       <div className="flex flex-col gap-3 p-3">
         {suggestion.changes.map((change) => (

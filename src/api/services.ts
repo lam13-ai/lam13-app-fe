@@ -202,6 +202,8 @@ export interface MeetingsService {
   /** The meeting source's connection. Connecting over HTTP leaves the app for Granola's sign-in page. */
   connection(): Promise<MeetingSourceConnection>;
   setConnected(connected: boolean): Promise<MeetingSourceConnection>;
+  /** Finish the Granola sign-in with what Granola returned to /integrations/granola/callback. 400 if it failed. */
+  finishGranolaSignIn(code: string, state: string): Promise<MeetingSourceConnection>;
 }
 
 /**

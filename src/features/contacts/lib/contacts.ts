@@ -1,4 +1,11 @@
-import type { Profile, ProfileField, ProfileFieldChange, ProfileInput, ProfileUpdateSuggestion } from '@/types/api';
+import type {
+  Profile,
+  ProfileField,
+  ProfileFieldChange,
+  ProfileInput,
+  ProfileSuggestionSource,
+  ProfileUpdateSuggestion,
+} from '@/types/api';
 
 export const FIELD_LABELS: Record<ProfileField, string> = {
   full_name: 'Full name',
@@ -86,8 +93,11 @@ export function linkedinHref(value: string): string {
   return /^https?:\/\//i.test(value) ? value : `https://${value}`;
 }
 
-/** New-contact suggestions form one group; update suggestions one group per existing contact. */
-const suggestionGroup = (s: ProfileUpdateSuggestion) => (s.kind === 'create' ? 'create' : `profile:${s.profile_id}`);
+/**
+ * One group per existing contact. Each new-contact suggestion is its own group: the server keeps one
+ * pending suggestion per person (newer ones merge and supersede the older).
+ */
+const suggestionGroup = (s: ProfileUpdateSuggestion) => (s.kind === 'create' ? `create:${s.id}` : `profile:${s.profile_id}`);
 
 /** Newer first by `created_at` (the server timestamp); a timestamp that doesn't parse counts as oldest, id breaks ties. */
 function compareNewest(a: ProfileUpdateSuggestion, b: ProfileUpdateSuggestion): number {
@@ -111,4 +121,47 @@ export function currentSuggestions(all: readonly ProfileUpdateSuggestion[]): Pro
     if (!current || compareNewest(s, current) < 0) newest.set(group, s);
   }
   return [...newest.values()].filter((s) => s.status === 'pending').sort(compareNewest);
+}
+
+const SOURCE_LABELS: Record<ProfileSuggestionSource, string> = { meeting: 'meeting', chat: 'chat', voice_call: 'voice call' };
+
+/** "From meeting · Steering committee", "From chat". */
+export function sourceText(s: Pick<ProfileUpdateSuggestion, 'source_type' | 'source_title'>): string {
+  return `From ${SOURCE_LABELS[s.source_type]}${s.source_title ? ` · ${s.source_title}` : ''}`;
+}
+
+/** "Also includes: Steering committee · voice call" for a suggestion that merged earlier ones; '' otherwise. */
+export function mergedSourcesText(s: ProfileUpdateSuggestion): string {
+  const names = [...new Set((s.merged_sources ?? []).map((m) => m.title || SOURCE_LABELS[m.type]))];
+  return names.length ? `Also includes: ${names.join(' · ')}` : '';
+}
+
+export interface DiffLine {
+  kind: 'same' | 'added' | 'removed';
+  text: string;
+}
+
+/** Line-by-line diff (longest common subsequence), to read a rewritten profile as added and removed lines. */
+export function lineDiff(before: string, after: string): DiffLine[] {
+  const a = before ? before.split('\n') : [];
+  const b = after ? after.split('\n') : [];
+  // common[i][j] = common lines of a[i..] and b[j..]; a profile is a few dozen lines, so O(n·m) is fine
+  const common = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  const at = (i: number, j: number) => common[i]![j]!;
+  for (let i = a.length - 1; i >= 0; i--)
+    for (let j = b.length - 1; j >= 0; j--) common[i]![j] = a[i] === b[j] ? at(i + 1, j + 1) + 1 : Math.max(at(i + 1, j), at(i, j + 1));
+  const lines: DiffLine[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      lines.push({ kind: 'same', text: a[i++]! });
+      j++;
+    } else if (j < b.length && (i === a.length || at(i, j + 1) >= at(i + 1, j))) {
+      lines.push({ kind: 'added', text: b[j++]! });
+    } else {
+      lines.push({ kind: 'removed', text: a[i++]! });
+    }
+  }
+  return lines;
 }

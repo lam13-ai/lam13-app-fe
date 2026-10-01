@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { Profile, ProfileUpdateSuggestion } from '@/types/api';
-import { applyChanges, currentSuggestions, EMPTY_FORM, filterContacts, linkedinHref, toProfileInput, validateContact } from './contacts';
+import {
+  applyChanges,
+  currentSuggestions,
+  EMPTY_FORM,
+  filterContacts,
+  lineDiff,
+  linkedinHref,
+  mergedSourcesText,
+  sourceText,
+  toProfileInput,
+  validateContact,
+} from './contacts';
 
 const profile = (full_name: string, extra: Partial<Profile> = {}): Profile => ({
   id: full_name,
@@ -75,12 +86,13 @@ describe('currentSuggestions (only the newest suggestion per group, while pendin
   });
   const ids = (list: ProfileUpdateSuggestion[]) => list.map((x) => x.id);
 
-  it('new-contact suggestions: only the newest of all of them, by created_at — not by array order', () => {
+  it('new-contact suggestions: every pending person shows, newest first (the server merges revisions of one person)', () => {
     const omar = s('omar', { kind: 'create', profile_id: '', created_at: '2026-09-28T10:00:00Z' });
     const ali = s('ali', { kind: 'create', profile_id: '', created_at: '2026-09-28T10:05:00Z' });
     const usman = s('usman', { kind: 'create', profile_id: '', created_at: '2026-09-28T10:10:00Z' });
-    expect(ids(currentSuggestions([omar, ali, usman]))).toEqual(['usman']);
-    expect(ids(currentSuggestions([usman, omar, ali]))).toEqual(['usman']);
+    const merged = s('omar-old', { kind: 'create', profile_id: '', created_at: '2026-09-28T09:00:00Z', status: 'superseded' });
+    expect(ids(currentSuggestions([omar, ali, usman, merged]))).toEqual(['usman', 'ali', 'omar']);
+    expect(ids(currentSuggestions([usman, omar, ali]))).toEqual(['usman', 'ali', 'omar']);
   });
 
   it('updates: the newest per contact, and every contact keeps its own', () => {
@@ -99,7 +111,7 @@ describe('currentSuggestions (only the newest suggestion per group, while pendin
     const list = [
       s('daniel-1', { created_at: '2026-09-28T09:00:00Z' }),
       s('daniel-2', { created_at: '2026-09-28T10:00:00Z', status: 'approved' }),
-      s('new-old', { kind: 'create', profile_id: '', created_at: '2026-09-28T09:00:00Z' }),
+      s('new-old', { kind: 'create', profile_id: '', created_at: '2026-09-28T09:00:00Z', status: 'superseded' }),
       s('new-newest', { kind: 'create', profile_id: '', created_at: '2026-09-28T10:00:00Z', status: 'rejected' }),
     ];
     expect(currentSuggestions(list)).toEqual([]);
@@ -146,5 +158,34 @@ describe('currentSuggestions — update revisions for one contact', () => {
       '66f00000000000000000000b',
     ]);
     expect(shown([rev(1, '2026-09-28T10:00:00Z'), rev(2, '2026-09-28T10:01:00Z', { status: 'approved' })])).toEqual([]);
+  });
+});
+
+describe('suggestion sources and profile changes', () => {
+  const base = { source_type: 'meeting' as const, source_title: 'Steering committee' };
+
+  it('labels the source by type, and lists merged sources once each', () => {
+    expect(sourceText(base)).toBe('From meeting · Steering committee');
+    expect(sourceText({ source_type: 'voice_call', source_title: null })).toBe('From voice call');
+    const suggestion = {
+      id: 'x', kind: 'update' as const, profile_id: 'p', source_id: '', created_at: '', status: 'pending' as const, changes: [],
+      source_type: 'chat' as const, source_title: null,
+      merged_sources: [{ type: 'meeting' as const, title: 'Steering committee' }, { type: 'voice_call' as const, title: null }, { type: 'meeting' as const, title: 'Steering committee' }],
+    };
+    expect(mergedSourcesText(suggestion)).toBe('Also includes: Steering committee · voice call');
+    expect(mergedSourcesText({ ...suggestion, merged_sources: undefined })).toBe('');
+  });
+
+  it('diffs a rewritten profile line by line', () => {
+    const before = 'Likes\n- One-pagers\n- Benchmarks';
+    const after = 'Likes\n- One-pagers\nDislikes\n- Long decks';
+    expect(lineDiff(before, after)).toEqual([
+      { kind: 'same', text: 'Likes' },
+      { kind: 'same', text: '- One-pagers' },
+      { kind: 'added', text: 'Dislikes' },
+      { kind: 'added', text: '- Long decks' },
+      { kind: 'removed', text: '- Benchmarks' },
+    ]);
+    expect(lineDiff('', 'a')).toEqual([{ kind: 'added', text: 'a' }]);
   });
 });

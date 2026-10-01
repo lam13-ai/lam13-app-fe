@@ -140,9 +140,10 @@ export interface ProfileFieldChange {
   to: string | null;
 }
 
-export type ProfileSuggestionStatus = 'pending' | 'approved' | 'rejected';
-/** Where a suggestion came from; meetings for now. */
-export type ProfileSuggestionSource = 'meeting';
+/** `superseded`: merged into a newer suggestion for the same person. */
+export type ProfileSuggestionStatus = 'pending' | 'approved' | 'rejected' | 'superseded';
+/** Where a suggestion came from. */
+export type ProfileSuggestionSource = 'meeting' | 'chat' | 'voice_call';
 
 /**
  * A proposed profile change derived from a meeting (api-contract.md §4.11). It never changes the
@@ -161,6 +162,8 @@ export interface ProfileUpdateSuggestion {
   source_id: Id;
   /** Human-readable source, e.g. the meeting title. */
   source_title: string | null;
+  /** Earlier suggestions for the same person that this one merges. */
+  merged_sources?: { type: ProfileSuggestionSource; title: string | null }[];
   created_at: IsoDateTime;
   status: ProfileSuggestionStatus;
   /** Applied together on approval; unrelated changes arrive as separate suggestions. */

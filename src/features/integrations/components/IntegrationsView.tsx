@@ -13,7 +13,7 @@ export function IntegrationsView() {
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const toast = useToast();
   const [params, setParams] = useSearchParams();
-  // The backend returns here after Granola sign-in with ?granola=connected|error.
+  // The Granola callback page returns here with ?granola=connected|cancelled|error.
   useEffect(() => {
     if (!params.has('granola')) return;
     if (params.get('granola') === 'error') toast.show("Couldn't connect Granola. Please try again.", { tone: 'danger' });

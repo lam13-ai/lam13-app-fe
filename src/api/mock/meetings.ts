@@ -41,5 +41,10 @@ export function createMockMeetings({ now = Date.now, respond = () => Promise.res
       connection = { provider: 'granola', status: connected ? 'connected' : 'disconnected' };
       return { ...connection };
     },
+    async finishGranolaSignIn() {
+      await respond();
+      connection = { provider: 'granola', status: 'connected' };
+      return { ...connection };
+    },
   };
 }

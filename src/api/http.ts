@@ -10,6 +10,7 @@ import type {
   Profile,
   ProfileField,
   ProfileInput,
+  ProfileSuggestionSource,
   ProfileSuggestionStatus,
   ProfileUpdateSuggestion,
 } from '@/types/api';
@@ -265,8 +266,12 @@ interface ContactSuggestionDto {
   suggested: Record<string, unknown>;
   reason?: string;
   source: { type: string; ref_id: string | null; title: string | null } | null;
+  merged_sources?: { type: string; title: string | null }[];
   created_at: string;
 }
+
+const SOURCE_TYPES: ReadonlySet<string> = new Set<ProfileSuggestionSource>(['meeting', 'chat', 'voice_call']);
+const toSourceType = (type?: string | null) => (SOURCE_TYPES.has(type ?? '') ? type : 'meeting') as ProfileSuggestionSource;
 
 const PROFILE_FIELDS: ReadonlySet<string> = new Set<ProfileField>([
   'full_name',
@@ -305,9 +310,12 @@ function toSuggestion(dto: ContactSuggestionDto): ProfileUpdateSuggestion {
     id: dto.id,
     kind: dto.kind === 'create' ? 'create' : 'update',
     profile_id: dto.contact_id ?? '',
-    source_type: 'meeting',
+    source_type: toSourceType(dto.source?.type),
     source_id: dto.source?.ref_id ?? '',
     source_title: dto.source?.title ?? null,
+    ...(dto.merged_sources?.length && {
+      merged_sources: dto.merged_sources.map((m) => ({ type: toSourceType(m.type), title: m.title })),
+    }),
     created_at: asUtc(dto.created_at),
     status: dto.status as ProfileSuggestionStatus,
     // `suggested` maps field → proposed value; null clears an optional field.
@@ -600,9 +608,12 @@ export function createHttpAdapter(): ApiAdapter {
       async setConnected(connected) {
         if (!connected) return requestJson<MeetingSourceConnection>('/integrations/granola', { method: 'DELETE' });
         const { authorization_url } = await requestJson<{ authorization_url: string }>('/integrations/granola/connect', { method: 'POST' });
-        // Granola sign-in; the backend sends the browser back to /integrations when it is done.
+        // Granola sign-in; Granola sends the browser back to /integrations/granola/callback.
         window.location.assign(authorization_url);
         return { provider: 'granola', status: 'disconnected' };
+      },
+      async finishGranolaSignIn(code, state) {
+        return requestJson<MeetingSourceConnection>('/integrations/granola/callback', { method: 'POST', body: { code, state } });
       },
     },
     // TODO(backend): WhatsApp connection is not on the backend yet — a local mock that sends nothing. Replace

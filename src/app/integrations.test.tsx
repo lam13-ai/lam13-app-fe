@@ -256,3 +256,31 @@ describe('WhatsApp: two ways to make the same link', () => {
     expect(await within(granola).findByRole('button', { name: /Granola connected/ })).toBeTruthy();
   });
 });
+
+describe('Granola sign-in callback (/integrations/granola/callback)', () => {
+  it('sends the code once, then shows Integrations with Granola connected', async () => {
+    const app = renderApp('/integrations/granola/callback?code=c1&state=s1');
+    const finish = vi.spyOn(app.api.meetings, 'finishGranolaSignIn');
+    await waitFor(() => expect(app.router.state.location.pathname).toBe('/integrations'), { timeout: 8000 });
+    expect(finish).toHaveBeenCalledTimes(1);
+    expect(finish).toHaveBeenCalledWith('c1', 's1');
+    expect(await screen.findByText('Granola connected', {}, { timeout: 8000 })).toBeTruthy();
+    expect(app.router.state.location.search).toBe('');
+  });
+
+  it('cancelled on Granola: nothing is sent and no error is shown', async () => {
+    const app = renderApp('/integrations/granola/callback?error=access_denied&state=s1');
+    const finish = vi.spyOn(app.api.meetings, 'finishGranolaSignIn');
+    await waitFor(() => expect(app.router.state.location.pathname).toBe('/integrations'), { timeout: 8000 });
+    await screen.findByRole('heading', { level: 1, name: 'Integrations' });
+    expect(finish).not.toHaveBeenCalled();
+    expect(screen.queryByText("Couldn't connect Granola. Please try again.")).toBeNull();
+  });
+
+  it('a failed sign-in shows the error on Integrations', async () => {
+    const app = renderApp('/integrations/granola/callback?code=c1&state=old');
+    vi.spyOn(app.api.meetings, 'finishGranolaSignIn').mockRejectedValue(new ApiError(400, 'bad_request', 'Granola sign-in failed.'));
+    expect(await screen.findByText("Couldn't connect Granola. Please try again.", {}, { timeout: 8000 })).toBeTruthy();
+    expect(app.router.state.location.pathname).toBe('/integrations');
+  });
+});

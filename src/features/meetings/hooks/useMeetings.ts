@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys, useApi } from '@/api';
-import type { Meeting } from '@/types/api';
+import type { Meeting, MeetingSourceConnection } from '@/types/api';
 
 /** The user's meetings, newest first. Only fetched once the meeting source is connected. */
 export function useMeetings({ enabled = true } = {}) {
@@ -45,14 +45,26 @@ export function useMeetingSource() {
   return useQuery({ queryKey: queryKeys.meetings.connection(), queryFn: () => api.meetings.connection() });
 }
 
+const storeConnection = (queryClient: QueryClient) => (connection: MeetingSourceConnection) => {
+  queryClient.setQueryData(queryKeys.meetings.connection(), connection);
+  void queryClient.invalidateQueries({ queryKey: queryKeys.meetings.list() });
+};
+
 export function useSetMeetingSourceConnected() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (connected: boolean) => api.meetings.setConnected(connected),
-    onSuccess: (connection) => {
-      queryClient.setQueryData(queryKeys.meetings.connection(), connection);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.meetings.list() });
-    },
+    onSuccess: storeConnection(queryClient),
+  });
+}
+
+/** The /integrations/granola/callback page finishing Granola's sign-in. */
+export function useFinishGranolaSignIn() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ code, state }: { code: string; state: string }) => api.meetings.finishGranolaSignIn(code, state),
+    onSuccess: storeConnection(queryClient),
   });
 }
