@@ -53,7 +53,7 @@ export function AssistantMessage({
     >
       <VisuallyHidden>Lam13 replied:</VisuallyHidden>
       {message.reasoning?.text.trim() && <Reasoning reasoning={message.reasoning} streaming={streaming} />}
-      {content && <Markdown content={content} />}
+      {content && <Markdown content={content} streaming={streaming} />}
       {streaming && (working || (!hasContent && !message.reasoning?.text.trim())) && (
         <ActivityStatus label={activity ?? 'Putting the answer together…'} />
       )}
