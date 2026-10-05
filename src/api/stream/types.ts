@@ -10,7 +10,7 @@ export type StreamEvent =
    * never simulates phases. `generating`: the server started writing the answer (no text yet).
    * Unknown states are treated as `thinking` (forward compatible).
    */
-  | { event: 'status'; data: { state: 'thinking' | 'generating' | 'solving' | 'answering' | 'tool'; label?: string } }
+  | { event: 'status'; data: { state: 'thinking' | 'generating' | 'solving' | 'finishing' | 'answering' | 'tool'; label?: string } }
   | { event: 'delta'; data: { message_id: string; text: string } }
   /** A chunk of the model's reasoning, in whole sentences (shown live, collapsible; not persisted). */
   | { event: 'reasoning'; data: { message_id: string; text: string } }

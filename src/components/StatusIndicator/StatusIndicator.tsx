@@ -7,6 +7,7 @@ const labels: Record<AgentStatus, string> = {
   transcribing: 'Transcribing…',
   thinking: 'Thinking…',
   solving: 'Solving…',
+  finishing: 'Finishing…',
   answering: 'Answering…',
 };
 

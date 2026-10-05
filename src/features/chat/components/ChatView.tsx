@@ -31,6 +31,7 @@ const ACTIVITY_LABELS: Record<StreamPhase, string> = {
   preparing: 'Thinking…', // start
   transcribing: 'Transcribing…',
   solving: 'Solving…',
+  finishing: 'Finishing up…', // response_completed: the text is final, post-processing runs
   generating: 'Generating response…', // response_started
   answering: 'Putting the answer together…', // tokens arriving
 };
@@ -97,7 +98,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
 
   const status: AgentStatus = !active
     ? 'online'
-    : active.phase === 'answering' || active.phase === 'transcribing' || active.phase === 'solving'
+    : active.phase === 'answering' || active.phase === 'transcribing' || active.phase === 'solving' || active.phase === 'finishing'
       ? active.phase
       : 'thinking';
   const activity = active && ACTIVITY_LABELS[active.phase];
@@ -207,6 +208,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
           <Composer
             draftKey={draftKey}
             streaming={Boolean(active)}
+            finishing={active?.phase === 'finishing'}
             disabled={loadingHistory || (history.isError && history.messages.length === 0)}
             onSend={send}
             onStop={() => actions.stop(key)}

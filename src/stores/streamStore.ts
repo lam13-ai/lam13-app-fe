@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { ErrorInfo } from '@/types/api';
 
 /** sending → (transcribing) → thinking → preparing → generating → answering; `solving` when a server reports it. */
-export type StreamPhase = 'sending' | 'transcribing' | 'thinking' | 'preparing' | 'generating' | 'solving' | 'answering';
+export type StreamPhase = 'sending' | 'transcribing' | 'thinking' | 'preparing' | 'generating' | 'solving' | 'finishing' | 'answering';
 
 export interface ActiveStream {
   phase: StreamPhase;

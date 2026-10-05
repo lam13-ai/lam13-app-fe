@@ -219,6 +219,7 @@ describe('HTTP adapter — POST /chat/stream (real backend SSE)', () => {
       'reasoning', // …and its text
       'delta',
       'delta',
+      'status', // response_completed: finishing (no more answer text)
       'status', // progress: an agent is working (solving) — the state only, never its text
       'delta', // post-processing: agent output appended after a blank line
       'conversation.updated', // done: the generated title…
@@ -227,10 +228,11 @@ describe('HTTP adapter — POST /chat/stream (real backend SSE)', () => {
     expect(events[0]).toMatchObject({ data: { id: 'sess-1', title: 'New conversation' } });
     expect(events[4]).toEqual({ event: 'reasoning', data: { message_id: 'a-1', text: 'Let me think' } });
     expect(JSON.stringify(events)).not.toContain('Drafting');
-    expect(events[7]).toEqual({ event: 'status', data: { state: 'solving' } });
-    expect(events[8]).toEqual({ event: 'delta', data: { message_id: 'a-1', text: '\n\nAgent report' } });
-    expect(events[9]).toEqual({ event: 'conversation.updated', data: { id: 'sess-1', title: 'Greeting' } });
-    expect(events[10]).toMatchObject({ data: { message: { id: 'a-1', status: 'complete', content: 'Hello world\n\nAgent report' } } });
+    expect(events[7]).toEqual({ event: 'status', data: { state: 'finishing' } });
+    expect(events[8]).toEqual({ event: 'status', data: { state: 'solving' } });
+    expect(events[9]).toEqual({ event: 'delta', data: { message_id: 'a-1', text: '\n\nAgent report' } });
+    expect(events[10]).toEqual({ event: 'conversation.updated', data: { id: 'sess-1', title: 'Greeting' } });
+    expect(events[11]).toMatchObject({ data: { message: { id: 'a-1', status: 'complete', content: 'Hello world\n\nAgent report' } } });
   });
 
   it('continues an existing session with document ids, across fragmented CRLF frames', async () => {
@@ -238,7 +240,7 @@ describe('HTTP adapter — POST /chat/stream (real backend SSE)', () => {
     const { calls } = streamBackend([whole.slice(0, 7), whole.slice(7, 60), whole.slice(60, 61), whole.slice(61)]);
     const events = await collect(await createHttpAdapter().messages.send('s9', { ...sendBody('Next'), attachment_ids: ['doc1'] }));
     expect(JSON.parse(calls[0]!.body as string)).toEqual({ session_id: 's9', message_id: 'client-1', user_message: 'Next', users_document_ids: ['doc1'] });
-    expect(events.map((e) => e.event)).toEqual(['message.created', 'delta', 'done']);
+    expect(events.map((e) => e.event)).toEqual(['message.created', 'delta', 'status', 'done']);
     expect(events.at(-1)).toMatchObject({ data: { message: { content: 'Hé' } } });
   });
 
@@ -264,7 +266,7 @@ describe('HTTP adapter — POST /chat/stream (real backend SSE)', () => {
       frame('error', { content: 'We encountered an issue processing your request.' }),
     ]);
     const events = await collect(await createHttpAdapter().messages.send('sess-1', sendBody('x')));
-    expect(events.map((e) => e.event)).toEqual(['message.created', 'delta', 'done']);
+    expect(events.map((e) => e.event)).toEqual(['message.created', 'delta', 'status', 'done']);
   });
 
   it('hides unsafe error text, skips malformed data and unknown events', async () => {

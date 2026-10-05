@@ -15,6 +15,8 @@ export interface ComposerProps {
   draftKey: string;
   /** A response is being generated: input disabled, button becomes Stop. */
   streaming: boolean;
+  /** The answer's text is complete; the turn is still finishing (post-processing). */
+  finishing?: boolean;
   /** Not ready to send (e.g. history still loading). */
   disabled?: boolean;
   onSend: (text: string) => void;
@@ -42,6 +44,7 @@ export interface ComposerProps {
 export function Composer({
   draftKey,
   streaming,
+  finishing,
   disabled,
   onSend,
   onStop,
@@ -206,7 +209,7 @@ export function Composer({
                   rows={1}
                   value={draft}
                   disabled={streaming}
-                  placeholder={streaming ? 'Lam13 is responding…' : PLACEHOLDER}
+                  placeholder={finishing ? 'Lam13 is finishing up…' : streaming ? 'Lam13 is responding…' : PLACEHOLDER}
                   enterKeyHint="send"
                   onChange={(e) => setDraft(draftKey, e.target.value)}
                   onKeyDown={onKeyDown}

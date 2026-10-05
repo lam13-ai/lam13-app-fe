@@ -109,7 +109,7 @@ describe('real backend SSE → visible assistant message', () => {
     h.push('postprocess_started', { content: 'Running post-processing...' });
     await tick(150);
     expect(h.assistant()).toMatchObject({ content: answer, status: 'streaming' });
-    expect(h.phase()).toBe('answering');
+    expect(h.phase()).toBe('finishing'); // no longer "answering": no text is arriving
     // An agent starts working after the text: the phase says so ("Solving…") and its internal text never shows.
     h.push('progress', { content: 'SECRET internal step', source: 'eshmun' });
     await waitFor(() => expect(h.phase()).toBe('solving'));

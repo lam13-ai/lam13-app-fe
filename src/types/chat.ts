@@ -6,7 +6,7 @@ import type { Message } from './api';
  * Header status label — reference §3 ("Online" / "Thinking…" / "Answering…"). "Solving…" appears only
  * when the server's stream reports that state.
  */
-export type AgentStatus = 'online' | 'transcribing' | 'thinking' | 'solving' | 'answering';
+export type AgentStatus = 'online' | 'transcribing' | 'thinking' | 'solving' | 'finishing' | 'answering';
 
 /**
  * A message as held in the client cache. `local_key` keeps a stable React key / scroll anchor

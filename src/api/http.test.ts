@@ -89,7 +89,7 @@ describe('translateStream (backend SSE → app events)', () => {
       ),
     );
     expect(events.map((e) => e.event)).toEqual(['message.created', 'delta', 'status', 'status', 'delta', 'conversation.updated', 'done']);
-    expect(events[2]!.data).toEqual({ state: 'thinking' }); // postprocess_started
+    expect(events[2]!.data).toEqual({ state: 'finishing' }); // response_completed: no more text is arriving
     expect(events[3]!.data).toEqual({ state: 'solving' }); // progress: an agent is working — the state only…
     expect(JSON.stringify(events)).not.toContain('Drafting'); // …never the backend's internal progress text
     expect((events[6]!.data.message as { content: string })).toMatchObject({ content: 'Answer.\n\nAgent addendum' });
@@ -110,8 +110,8 @@ describe('translateStream (backend SSE → app events)', () => {
         async () => null,
       ),
     );
-    expect(events.map((e) => e.event)).toEqual(['message.created', 'delta', 'done']);
-    expect((events[2]!.data.message as { content: string; status: string })).toMatchObject({ content: 'Answer.', status: 'complete' });
+    expect(events.map((e) => e.event)).toEqual(['message.created', 'delta', 'status', 'done']);
+    expect((events[3]!.data.message as { content: string; status: string })).toMatchObject({ content: 'Answer.', status: 'complete' });
   });
 
   it('a stream that closes after `response_completed` but before `done` still completes the answer', async () => {
@@ -126,7 +126,7 @@ describe('translateStream (backend SSE → app events)', () => {
         async () => null,
       ),
     );
-    expect(events.map((e) => e.event)).toEqual(['message.created', 'delta', 'done']);
+    expect(events.map((e) => e.event)).toEqual(['message.created', 'delta', 'status', 'done']);
   });
 
   // Retryable: with no regenerate endpoint, Retry asks again as a new turn (chatStream `retry`).
@@ -186,9 +186,9 @@ describe('translateStream — the current backend contract (routers/chat.py)', (
         async () => null,
       ),
     );
-    expect(events.map((e) => e.event)).toEqual(['message.created', 'status', 'reasoning', 'delta', 'conversation.updated', 'done']);
+    expect(events.map((e) => e.event)).toEqual(['message.created', 'status', 'reasoning', 'delta', 'status', 'conversation.updated', 'done']);
     expect(events[2]!.data).toEqual({ message_id: 'a1', text: 'Define the baseline first. ' });
-    expect(events[5]!.data.message).toMatchObject({ content: 'A baseline is…', status: 'complete' });
+    expect(events[6]!.data.message).toMatchObject({ content: 'A baseline is…', status: 'complete' });
     expect(JSON.stringify(events)).not.toContain('Late thought');
   });
 

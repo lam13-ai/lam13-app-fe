@@ -421,7 +421,7 @@ export async function* translateStream(
       case 'postprocess_started':
       case 'postprocess_completed': {
         // Post-processing is a status only; `thinking` also carries the model's reasoning.
-        if (!thinking) yield { event: 'status', data: { state: 'thinking' } };
+        if (!thinking && !completed) yield { event: 'status', data: { state: 'thinking' } };
         thinking = true;
         const text = message.event === 'thinking' ? str(data.content) : '';
         if (text && assistantId && !completed) yield { event: 'reasoning', data: { message_id: assistantId, text } };
@@ -440,6 +440,8 @@ export async function* translateStream(
       case 'response_completed':
         // The chatbot's text is final, but post-processing may still append agent output: keep going to `done`.
         completed = Boolean(assistantId);
+        // No more answer text is arriving: the turn is finishing (saving, title, a possible agent), not answering.
+        if (completed) yield { event: 'status', data: { state: 'finishing' } };
         break;
 
       case 'done': {

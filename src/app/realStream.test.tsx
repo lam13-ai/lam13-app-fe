@@ -166,6 +166,40 @@ describe('real backend stream (HTTP adapter)', () => {
     await backend.close();
   });
 
+  it('post-processing after the answer is "Finishing…", not "Answering…"; done returns the chat to Online and idle', async () => {
+    const backend = fakeBackend();
+    renderApp('/', { api: backend.api });
+    await send('What date is tomorrow?');
+    await backend.push(START + frame('thinking', { content: 'Considering. ', source: 'chatbot', mode: 'sentence' }));
+    await backend.push(frame('token', { content: 'Check your', source: 'chatbot' }) + frame('token', { content: ' calendar.', source: 'chatbot' }));
+    await waitFor(() => expect(answerText()).toBe('Check your calendar.'));
+    expect(within(header()).getByText('Answering…')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Lam13 is responding…')).toBeTruthy();
+
+    // The text is final; the stream stays open while the backend post-processes.
+    await backend.push(frame('response_completed', { content: 'Response completed.' }) + frame('postprocess_started', { content: 'Running post-processing...' }));
+    await waitFor(() => expect(within(header()).getByText('Finishing…')).toBeTruthy());
+    expect(within(header()).queryByText('Answering…')).toBeNull();
+    expect(screen.getByPlaceholderText('Lam13 is finishing up…')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Stop generating' })).toBeTruthy(); // still one turn: not terminated
+    expect(answerText()).toBe('Check your calendar.');
+
+    await backend.push(frame('postprocess_completed', { content: 'Post-processing complete.' }));
+    await backend.push(frame('done', { content: '', session_id: 'sess-1', assistantMessageId: 'a-1', title: 'Date', totalCost: 0 }));
+    await within(header()).findByText('Online');
+    expect(answerText()).toBe('Check your calendar.');
+    expect(screen.queryByRole('button', { name: 'Stop generating' })).toBeNull();
+    expect(screen.queryByPlaceholderText(/Lam13 is (responding|finishing up)…/)).toBeNull();
+    expect((screen.getByLabelText('Message Lam13') as HTMLTextAreaElement).disabled).toBe(false);
+    expect(answer().getAttribute('aria-busy')).toBe('false');
+
+    // Nothing arriving late (the stream closing, the saved session loading) brings the busy state back.
+    await backend.close();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(within(header()).getByText('Online')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Stop generating' })).toBeNull();
+  });
+
   it('an agent working after the text shows "Solving…" (header + status under the text), never the backend’s progress text', async () => {
     const backend = fakeBackend();
     renderApp('/', { api: backend.api });
@@ -173,7 +207,7 @@ describe('real backend stream (HTTP adapter)', () => {
     await backend.push(START + frame('token', { content: 'Here is the framework.', source: 'chatbot' }));
     await waitFor(() => expect(answerText()).toBe('Here is the framework.'));
     await backend.push(frame('response_completed', { content: 'Response completed.' }) + frame('postprocess_started', { content: 'Running post-processing...' }));
-    expect(within(header()).getByText('Answering…')).toBeTruthy(); // plain post-processing changes nothing
+    await waitFor(() => expect(within(header()).getByText('Finishing…')).toBeTruthy()); // the text is final: not "Answering…"
 
     await backend.push(frame('progress', { content: 'Running eshmun analysis...', source: 'eshmun' }));
     await waitFor(() => expect(within(header()).getByText('Solving…')).toBeTruthy());

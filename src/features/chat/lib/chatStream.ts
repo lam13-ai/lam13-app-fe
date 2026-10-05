@@ -170,10 +170,10 @@ export function createChatActions({ api, queryClient }: Deps) {
             const current = store().active[key]?.phase;
             // Never backwards: once generating/answering (or preparing), a late `thinking` changes nothing.
             // `solving` is not backwards: work resumed (an agent runs after the answer's text; its output
-            // follows as more deltas, which bring `answering` back).
+            // follows as more deltas, which bring `answering` back). Nor is `finishing`: the text is final, the turn is not.
             const phase =
-              event.data.state === 'solving'
-                ? 'solving'
+              event.data.state === 'solving' || event.data.state === 'finishing'
+                ? event.data.state
                 : draft.status === 'answering' || draft.status === 'generating'
                   ? draft.status
                   : transcribing
