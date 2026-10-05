@@ -2,7 +2,7 @@ import { ArrowUpRight } from 'lucide-react';
 import { useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
 import { LegalLinks } from '@/components/LegalLinks';
-import { Button, iconProps } from '@/components/ui';
+import { Button, smallIconProps } from '@/components/ui';
 import { useAuth } from '../context';
 import { sanitizeReturnTo } from '../returnTo';
 import { AuthLayout, Eyebrow } from './AuthLayout';
@@ -80,7 +80,7 @@ export function LoginScreen() {
           size="lg"
           disabled={pending}
           onClick={() => void start(variant === 'sign-in' ? 'login' : 'register')}
-          trailingIcon={<ArrowUpRight {...iconProps} />}
+          trailingIcon={<ArrowUpRight {...smallIconProps} />}
           className="w-full"
         >
           {pending ? 'Redirecting…' : text.primary}

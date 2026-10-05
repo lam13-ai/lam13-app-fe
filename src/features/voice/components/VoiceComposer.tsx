@@ -52,7 +52,7 @@ function PrimaryRound({
       disabled={disabled}
       onClick={onClick}
       autoFocus={autoFocus}
-      className="hit-area relative flex size-8 shrink-0 items-center justify-center rounded-full bg-fg text-bg transition-opacity duration-200 ease-standard hover:opacity-90 disabled:opacity-60"
+      className="hit-area relative flex size-9 shrink-0 items-center justify-center rounded-full bg-fg text-bg transition-opacity duration-200 ease-standard hover:opacity-90 disabled:opacity-60"
     >
       {children}
     </button>
@@ -93,7 +93,7 @@ function RecordingBar({
   const stopping = state.status === 'stopping';
 
   return (
-    <div className="flex h-12 items-center gap-1 px-2">
+    <div className="flex h-12 items-center gap-1 px-1.5">
       <Tooltip content="Delete recording">
         <IconButton label="Delete recording" size="md" icon={<Trash2 {...iconProps} />} onClick={recorder.discard} />
       </Tooltip>
@@ -122,7 +122,7 @@ function RecordingBar({
           label="Stop recording"
           size="md"
           disabled={stopping}
-          icon={<Square {...iconProps} size={14} />}
+          icon={<Square {...iconProps} size={16} />}
           onClick={() => void (onReview ? recorder.stopAndSend(onReview, 'review') : recorder.stop())}
           autoFocus
         />
@@ -133,7 +133,7 @@ function RecordingBar({
           disabled={stopping}
           onClick={() => void recorder.stopAndSend(onSend, 'send')}
         >
-          <ArrowUp size={14} strokeWidth={1.75} aria-hidden />
+          <ArrowUp {...iconProps} strokeWidth={2} />
         </PrimaryRound>
       )}
     </div>
@@ -212,7 +212,7 @@ function PreviewBar({
 
   return (
     <div>
-      <div className="flex h-12 items-center gap-1 px-2">
+      <div className="flex h-12 items-center gap-1 px-1.5">
         <Tooltip content={uploading ? 'Cancel' : 'Delete recording'}>
           <IconButton
             label={uploading ? (onReview ? 'Cancel transcription' : 'Cancel sending') : 'Delete recording'}
@@ -240,7 +240,7 @@ function PreviewBar({
           autoFocus={!uploading}
           onClick={() => void recorder.send(onReview ?? onSend, intent)}
         >
-          {uploading ? <Spinner size={16} state="active" /> : <ArrowUp size={14} strokeWidth={1.75} aria-hidden />}
+          {uploading ? <Spinner size={16} state="active" /> : <ArrowUp {...iconProps} strokeWidth={2} />}
         </PrimaryRound>
       </div>
       {state.status === 'preview' && state.limitReached && (
@@ -263,7 +263,7 @@ function TranscribingBar({ recorder, intent }: { recorder: VoiceRecorderApi; int
   return (
     // Cancel sits on the left like Delete on the other bars — never under the Stop / Send just clicked,
     // so a double click can't cancel.
-    <div className="flex h-12 animate-fade select-none items-center gap-1 px-2 text-xs text-fg-muted">
+    <div className="flex h-12 animate-fade select-none items-center gap-1 px-1.5 text-xs text-fg-muted">
       <Tooltip content="Cancel">
         <IconButton label="Cancel transcription" size="md" icon={<X {...iconProps} />} onClick={recorder.discard} />
       </Tooltip>
@@ -296,7 +296,7 @@ function ErrorBar({
   const canRetryRecording = !['unsupported', 'insecure-context'].includes(state.error.code);
 
   return (
-    <div role="alert" className="flex min-h-12 flex-wrap items-center gap-x-2 gap-y-1 py-1.5 pl-4 pr-2">
+    <div role="alert" className="flex min-h-12 flex-wrap items-center gap-x-2 gap-y-1 py-1.5 pl-4 pr-1.5">
       <p className="min-w-0 flex-1 text-xs text-danger">{state.error.message}</p>
       <div className="flex items-center gap-1">
         {canRetryUpload ? (
@@ -353,7 +353,7 @@ export function VoiceComposer({
         {announcement(state, mode)}
       </p>
       {state.status === 'requesting' && (
-        <div className="flex h-12 items-center gap-3 pl-4 pr-2 text-xs text-fg-muted">
+        <div className="flex h-12 items-center gap-3 pl-4 pr-1.5 text-xs text-fg-muted">
           <Spinner size={16} state="active" />
           <span className="min-w-0 flex-1 truncate">Allow microphone access to record…</span>
           <IconButton label="Cancel recording" size="md" icon={<X {...iconProps} />} onClick={recorder.discard} />

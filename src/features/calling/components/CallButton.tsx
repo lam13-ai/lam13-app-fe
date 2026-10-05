@@ -3,7 +3,7 @@ import { IconButton, Spinner, Tooltip, iconProps } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { useCall } from '../CallingProvider';
 
-/** Round 32px action with a ≥44px hit area, matching the header's icon buttons. */
+/** Round 36px action with a ≥44px hit area, matching the header's icon buttons. */
 function RoundAction({
   label,
   onClick,
@@ -24,7 +24,7 @@ function RoundAction({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'hit-area relative inline-flex size-8 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ease-standard',
+        'hit-area relative inline-flex size-9 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ease-standard',
         'focus-visible:outline-accent/60 disabled:cursor-default',
         tone === 'accent' ? 'bg-accent text-white hover:bg-accent-deep' : 'bg-accent-wash text-accent',
       )}
@@ -46,7 +46,7 @@ export function CallButton() {
       return (
         <Tooltip content="Cancel call" side="bottom" align="end">
           <RoundAction label="Cancel call" tone="wash" onClick={end}>
-            <Spinner size={18} state="active" />
+            <Spinner size={20} state="active" />
           </RoundAction>
         </Tooltip>
       );
@@ -54,14 +54,14 @@ export function CallButton() {
       return (
         <Tooltip content="End call" side="bottom" align="end">
           <RoundAction label="End call" tone="accent" onClick={end}>
-            <PhoneOff {...iconProps} size={15} />
+            <PhoneOff {...iconProps} />
           </RoundAction>
         </Tooltip>
       );
     case 'ending':
       return (
         <RoundAction label="Ending call" tone="wash" disabled>
-          <Spinner size={18} state="active" />
+          <Spinner size={20} state="active" />
         </RoundAction>
       );
     case 'error':

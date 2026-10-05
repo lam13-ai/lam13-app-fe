@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowUpRight } from 'lucide-react';
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { isApiError } from '@/api';
-import { Button, Skeleton, Spinner, iconProps } from '@/components/ui';
+import { Button, Skeleton, Spinner, smallIconProps } from '@/components/ui';
 import type { WhatsAppVerification } from '@/types/api';
 import { useWhatsApp } from '../hooks/useWhatsApp';
 import { countryByCode, defaultCountryCode, formatPhone, toE164 } from '../lib/phone';
@@ -32,7 +32,7 @@ function StartFromWhatsApp({ link }: { link: string | null }) {
           <Button
             variant="ghost"
             size="sm"
-            trailingIcon={<ArrowUpRight {...iconProps} size={14} />}
+            trailingIcon={<ArrowUpRight {...smallIconProps} />}
             onClick={() => window.open(link, '_blank', 'noopener,noreferrer')}
           >
             Open WhatsApp
@@ -251,7 +251,7 @@ function VerifyStep({
       </p>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Button type="button" variant="ghost" size="sm" leadingIcon={<ArrowLeft {...iconProps} />} onClick={onChangeNumber} disabled={busy}>
+        <Button type="button" variant="ghost" size="sm" leadingIcon={<ArrowLeft {...smallIconProps} />} onClick={onChangeNumber} disabled={busy}>
           Change number
         </Button>
         <Button

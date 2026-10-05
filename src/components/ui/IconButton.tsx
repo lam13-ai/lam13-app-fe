@@ -13,17 +13,16 @@ export interface IconButtonProps extends Omit<ComponentProps<'button'>, 'aria-la
 }
 
 const variants: Record<Variant, string> = {
-  // `fg-muted`, not the fainter `fg-soft`: a 1.5px stroke needs the stronger tone to read on a light surface.
-  ghost: 'text-fg-muted hover:bg-accent-wash hover:text-fg aria-expanded:bg-accent-wash aria-expanded:text-fg',
+  ghost: 'text-icon hover:bg-accent-wash hover:text-fg aria-expanded:bg-accent-wash aria-expanded:text-fg',
   solid: 'bg-fg text-bg hover:opacity-90',
 };
 
 const sizes: Record<Size, string> = {
-  sm: 'size-7',
-  md: 'size-8',
+  sm: 'size-8',
+  md: 'size-9',
 };
 
-/** Round icon button (reference §8). Visual 28/32px, hit area ≥ 44px. */
+/** Round icon button (reference §8). Visual 32/36px, hit area ≥ 44px. */
 export function IconButton({
   label,
   icon,

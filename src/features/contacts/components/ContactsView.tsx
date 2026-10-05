@@ -108,7 +108,7 @@ export function ContactsView() {
         <p className="max-w-[40ch] text-sm leading-relaxed text-fg-muted">
           Add people you work with and keep approved notes about them in one place.
         </p>
-        <Button variant="primary" size="md" leadingIcon={<Plus {...iconProps} />} onClick={openCreate} className="mt-1">
+        <Button variant="primary" size="md" leadingIcon={<Plus {...smallIconProps} />} onClick={openCreate} className="mt-1">
           Add contact
         </Button>
       </div>
@@ -119,7 +119,7 @@ export function ContactsView() {
         <div className="mb-4 flex items-center gap-2">
           <label className="relative flex min-w-0 flex-1 items-center">
             <VisuallyHidden>Search contacts</VisuallyHidden>
-            <Search {...iconProps} className="pointer-events-none absolute left-3 text-fg-muted" />
+            <Search {...smallIconProps} className="pointer-events-none absolute left-3 text-fg-muted" />
             <input
               type="search"
               value={query}

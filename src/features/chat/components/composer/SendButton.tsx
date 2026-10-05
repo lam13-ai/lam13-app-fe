@@ -1,5 +1,6 @@
 import type { ReactNode, RefObject } from 'react';
 import { ArrowUp, Mic } from 'lucide-react';
+import { iconProps } from '@/components/ui';
 import { cn } from '@/lib/cn';
 
 export type SendButtonMode = 'voice' | 'send' | 'stop';
@@ -14,14 +15,14 @@ const labels: Record<SendButtonMode, string> = {
 };
 
 const icons: Record<SendButtonMode, ReactNode> = {
-  send: <ArrowUp size={14} strokeWidth={1.75} aria-hidden />,
-  voice: <Mic size={14} strokeWidth={1.75} aria-hidden />,
+  send: <ArrowUp {...iconProps} strokeWidth={2} />,
+  voice: <Mic {...iconProps} strokeWidth={2} />,
   // Square stop glyph — echoes the reference's square geometry.
-  stop: <span aria-hidden="true" className="size-2.5 bg-current" />,
+  stop: <span aria-hidden="true" className="size-3 bg-current" />,
 };
 
 /**
- * 32px black round button whose icon morphs (reference §6):
+ * 36px black round button whose icon morphs (reference §6):
  * empty → mic, has text → arrow, streaming → stop.
  */
 export function SendButton({
@@ -49,7 +50,7 @@ export function SendButton({
       aria-label={labels[mode]}
       disabled={disabled && mode !== 'stop'}
       className={cn(
-        'hit-area relative flex size-8 items-center justify-center rounded-full',
+        'hit-area relative flex size-9 items-center justify-center rounded-full',
         'transition-[opacity,background-color] duration-300 ease-spring disabled:opacity-40',
         // Idle mic uses the product blue; send/stop stay near-black.
         mode === 'voice'

@@ -1,7 +1,7 @@
 import { ArrowLeft, Database, KeyRound } from 'lucide-react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router';
 import { ErrorState } from '@/components/ErrorState';
-import { Spinner, iconProps } from '@/components/ui';
+import { Spinner, smallIconProps } from '@/components/ui';
 import { useAuth } from '@/features/auth';
 import { cn } from '@/lib/cn';
 import { useIsAdmin } from './access';
@@ -41,15 +41,15 @@ export function AdminLayout() {
       <header className="border-b border-hairline bg-bg">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-3 px-4 py-3">
           <Link to="/" className="inline-flex items-center gap-1.5 text-nav text-fg-muted hover:text-fg">
-            <ArrowLeft {...iconProps} /> Chat
+            <ArrowLeft {...smallIconProps} /> Chat
           </Link>
           <span className="font-bold">Admin</span>
           <nav className="flex items-center gap-1">
             <NavLink to="/admin" end className={navClass}>
-              <Database {...iconProps} /> Knowledge base
+              <Database {...smallIconProps} /> Knowledge base
             </NavLink>
             <NavLink to="/admin/api-keys" className={navClass}>
-              <KeyRound {...iconProps} /> API keys
+              <KeyRound {...smallIconProps} /> API keys
             </NavLink>
           </nav>
           <span className="ml-auto hidden text-2xs text-fg-muted sm:inline">{user?.email}</span>

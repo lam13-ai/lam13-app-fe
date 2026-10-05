@@ -50,7 +50,7 @@ export function Spinner({ size = 20, state = 'idle', label, className }: Spinner
         className,
       )}
     >
-      {ring(OUTER, 13, large ? 1.1 : 1.7, (i) => (active ? 0.15 + 0.85 * (i / (OUTER - 1)) : 0.55))}
+      {ring(OUTER, 13, large ? 1.1 : 2, (i) => (active ? 0.2 + 0.8 * (i / (OUTER - 1)) : 0.8))}
       {large && ring(INNER, 7, 0.9, () => 0.3)}
     </svg>
   );

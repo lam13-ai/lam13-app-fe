@@ -2,7 +2,7 @@ import { Database, ExternalLink, FileText, RefreshCw, Search, Upload, X } from '
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
 import { requestJson, toErrorInfo } from '@/api';
-import { Button, Spinner, iconProps, smallIconProps, useToast } from '@/components/ui';
+import { Button, Spinner, smallIconProps, useToast } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { Badge, Section, fieldClass, labelClass } from './ui';
 
@@ -214,7 +214,7 @@ export function KnowledgeBasePage() {
         <p className="mt-1 font-sans text-sm text-fg-muted">Upload PDF, PPT or PPTX files, vectorize slide templates, and test retrieval.</p>
       </div>
 
-      <Section title={<><Upload {...iconProps} /> Step 1 — Upload files</>} description="Select one or several files.">
+      <Section title={<><Upload {...smallIconProps} /> Step 1 — Upload files</>} description="Select one or several files.">
         <input
           ref={inputRef}
           type="file"
@@ -232,18 +232,18 @@ export function KnowledgeBasePage() {
             {files.map((file) => (
               <li key={file.name} className="flex items-center justify-between border border-hairline px-3 py-2 text-sm">
                 <span className="flex min-w-0 items-center gap-2">
-                  <FileText {...iconProps} className="shrink-0 text-fg-muted" />
+                  <FileText {...smallIconProps} className="shrink-0 text-fg-muted" />
                   <span className="truncate">{file.name}</span>
                 </span>
                 <button type="button" aria-label={`Remove ${file.name}`} disabled={uploading} onClick={() => setFiles((prev) => prev.filter((f) => f !== file))} className="text-fg-muted hover:text-fg">
-                  <X {...iconProps} />
+                  <X {...smallIconProps} />
                 </button>
               </li>
             ))}
           </ul>
         )}
         <div>
-          <Button onClick={() => void upload()} disabled={uploading || files.length === 0} leadingIcon={uploading ? <Spinner size={16} state="active" /> : <Upload {...iconProps} />}>
+          <Button onClick={() => void upload()} disabled={uploading || files.length === 0} leadingIcon={uploading ? <Spinner size={16} state="active" /> : <Upload {...smallIconProps} />}>
             {uploading ? 'Uploading…' : `Upload${files.length ? ` (${files.length})` : ''}`}
           </Button>
         </div>
@@ -270,10 +270,10 @@ export function KnowledgeBasePage() {
       </Section>
 
       <Section
-        title={<><Database {...iconProps} /> Step 2 — Vectorize slide templates</>}
+        title={<><Database {...smallIconProps} /> Step 2 — Vectorize slide templates</>}
         description="Embeds each slide's visual layout, use cases, tags and notes, and ensures the Atlas vector indexes. Only slides without embeddings run, unless you force a re-embed."
         action={
-          <Button variant="outline" size="sm" onClick={loadDocuments} disabled={loadingDocs || vectorizing} leadingIcon={<RefreshCw {...iconProps} />}>
+          <Button variant="outline" size="sm" onClick={loadDocuments} disabled={loadingDocs || vectorizing} leadingIcon={<RefreshCw {...smallIconProps} />}>
             Refresh
           </Button>
         }
@@ -319,7 +319,7 @@ export function KnowledgeBasePage() {
           Force re-embed selected slides
         </label>
         <div>
-          <Button onClick={() => void vectorize()} disabled={vectorizing || selectedSlides === 0} leadingIcon={vectorizing ? <Spinner size={16} state="active" /> : <Database {...iconProps} />}>
+          <Button onClick={() => void vectorize()} disabled={vectorizing || selectedSlides === 0} leadingIcon={vectorizing ? <Spinner size={16} state="active" /> : <Database {...smallIconProps} />}>
             {vectorizing ? 'Vectorizing…' : `Vectorize (${selectedSlides} slides)`}
           </Button>
         </div>
@@ -341,7 +341,7 @@ export function KnowledgeBasePage() {
       </Section>
 
       <Section
-        title={<><Search {...iconProps} /> Step 3 — Semantic retrieve</>}
+        title={<><Search {...smallIconProps} /> Step 3 — Semantic retrieve</>}
         description="Tests the production /kb/retrieve route: one embedded field, an optional metadata filter, optional LLM reasoning."
       >
         <form
@@ -379,7 +379,7 @@ export function KnowledgeBasePage() {
             <textarea rows={2} aria-label="Additional information" className={fieldClass} value={additionalInfo} onChange={(e) => setAdditionalInfo(e.target.value)} placeholder="Additional information for the reasoning model (optional)…" disabled={retrieving} />
           )}
           <div>
-            <Button type="submit" disabled={retrieving || !query.trim()} leadingIcon={retrieving ? <Spinner size={16} state="active" /> : <Search {...iconProps} />}>
+            <Button type="submit" disabled={retrieving || !query.trim()} leadingIcon={retrieving ? <Spinner size={16} state="active" /> : <Search {...smallIconProps} />}>
               {retrieving ? 'Searching…' : 'Search'}
             </Button>
           </div>

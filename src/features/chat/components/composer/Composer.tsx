@@ -248,10 +248,10 @@ export function Composer({
                   )}
                 />
               </div>
-              {!hasChips && <div className="flex h-12 shrink-0 items-center gap-1 pr-2">{controls}</div>}
+              {!hasChips && <div className="flex h-12 shrink-0 items-center gap-1 pr-1.5">{controls}</div>}
             </div>
             {hasChips && (
-              <div className="flex h-12 animate-reveal items-center gap-0.5 pl-3 pr-2">
+              <div className="flex h-12 animate-reveal items-center gap-0.5 pl-3 pr-1.5">
                 <ModelChips />
                 <div className="ml-auto flex items-center gap-1">{controls}</div>
               </div>
@@ -269,7 +269,7 @@ export function Composer({
         )}
 
         {/* Idle pill: only the send / mic button, centred in its 48px. */}
-        {!voiceActive && !expanded && <div className="absolute bottom-2 right-2">{sendButton}</div>}
+        {!voiceActive && !expanded && <div className="absolute bottom-1.5 right-1.5">{sendButton}</div>}
       </div>
     </form>
   );

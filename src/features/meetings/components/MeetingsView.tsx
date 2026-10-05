@@ -3,7 +3,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ErrorState } from '@/components/ErrorState';
 import { ScrollArea } from '@/components/ScrollArea';
-import { IconButton, Skeleton, VisuallyHidden, iconProps } from '@/components/ui';
+import { IconButton, Skeleton, VisuallyHidden, iconProps, smallIconProps } from '@/components/ui';
 import { useUiStore } from '@/stores/uiStore';
 import type { MeetingSummary } from '@/types/api';
 import { useMeetings, useMeetingSource } from '../hooks/useMeetings';
@@ -96,7 +96,7 @@ export function MeetingsView() {
       <>
         <label className="relative mb-5 flex items-center">
           <VisuallyHidden>Search meetings</VisuallyHidden>
-          <Search {...iconProps} className="pointer-events-none absolute left-3 text-fg-muted" />
+          <Search {...smallIconProps} className="pointer-events-none absolute left-3 text-fg-muted" />
           <input
             type="search"
             value={query}

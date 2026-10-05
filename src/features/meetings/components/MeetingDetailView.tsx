@@ -35,11 +35,11 @@ function AskLam13({ meeting }: { meeting: Meeting }) {
     <button
       type="button"
       onClick={() => navigate('/', { state })}
-      className="group flex h-12 w-full items-center gap-3 rounded-composer border border-border bg-composer pl-4 pr-2 text-left shadow-xs outline-offset-2 transition-[border-color] duration-150 ease-standard hover:border-fg/25"
+      className="group flex h-12 w-full items-center gap-3 rounded-composer border border-border bg-composer pl-4 pr-1.5 text-left shadow-xs outline-offset-2 transition-[border-color] duration-150 ease-standard hover:border-fg/25"
     >
       <span className="min-w-0 flex-1 truncate text-base font-medium sm:text-sm">Ask Lam13 about this meeting</span>
-      <span aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-full bg-fg text-bg">
-        <ArrowUp size={14} strokeWidth={1.75} />
+      <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-full bg-fg text-bg">
+        <ArrowUp {...iconProps} strokeWidth={2} />
       </span>
     </button>
   );
@@ -186,7 +186,7 @@ export function MeetingDetailView({ meetingId }: { meetingId: string }) {
           to="/meetings"
           className="flex min-h-11 items-center gap-2 pr-2 text-nav text-fg-muted transition-colors duration-150 ease-standard hover:text-fg md:min-h-0"
         >
-          <ArrowLeft {...iconProps} />
+          <ArrowLeft {...smallIconProps} />
           Back to Meetings
         </Link>
       </header>

@@ -89,8 +89,8 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
                 aria-label={label}
                 className={({ isActive }) =>
                   cn(
-                    'hit-area relative inline-flex size-8 items-center justify-center rounded-full transition-all duration-200 ease-standard',
-                    isActive ? 'bg-accent-wash text-fg' : 'text-fg-muted hover:bg-accent-wash hover:text-fg',
+                    'hit-area relative inline-flex size-9 items-center justify-center rounded-full transition-all duration-200 ease-standard',
+                    isActive ? 'bg-accent-wash text-fg' : 'text-icon hover:bg-accent-wash hover:text-fg',
                   )
                 }
               >
@@ -132,7 +132,7 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
           variant="outline"
           size="sm"
           fullWidth
-          leadingIcon={<SquarePen {...iconProps} />}
+          leadingIcon={<SquarePen {...iconProps} className="mx-0.5 shrink-0" />}
           onClick={startNewChat}
         >
           New chat
@@ -153,7 +153,8 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
               )
             }
           >
-            <Icon {...iconProps} />
+            {/* 20px glyph in a 24px box, like the New chat button's. */}
+            <Icon {...iconProps} className="mx-0.5 shrink-0" />
             {label}
           </NavLink>
         ))}

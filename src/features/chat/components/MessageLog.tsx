@@ -1,7 +1,7 @@
 import { ArrowDown } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useApi } from '@/api';
-import { Spinner } from '@/components/ui';
+import { Spinner, iconProps } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import type { ErrorInfo } from '@/types/api';
 import type { MessageView } from '@/types/chat';
@@ -192,12 +192,12 @@ export function MessageLog({ messages, failures, older, onRetry, streaming = fal
         tabIndex={showJump ? 0 : -1}
         aria-hidden={!showJump}
         className={cn(
-          'hit-area absolute bottom-3 left-1/2 flex size-8 -translate-x-1/2 items-center justify-center rounded-full',
+          'hit-area absolute bottom-3 left-1/2 flex size-9 -translate-x-1/2 items-center justify-center rounded-full',
           'border border-border bg-bg text-fg shadow-card transition-all duration-200 ease-standard hover:border-fg/40',
           showJump ? 'visible opacity-100' : 'pointer-events-none invisible translate-y-2 opacity-0',
         )}
       >
-        <ArrowDown size={14} strokeWidth={1.75} aria-hidden />
+        <ArrowDown {...iconProps} />
       </button>
     </div>
   );

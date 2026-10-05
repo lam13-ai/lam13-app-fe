@@ -2,7 +2,7 @@ import { PhoneOff, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { AgentMark } from '@/components/AgentMark';
 import { ScrollArea } from '@/components/ScrollArea';
-import { Button, Spinner, iconProps } from '@/components/ui';
+import { Button, Spinner, smallIconProps } from '@/components/ui';
 import { Waveform } from '@/components/Waveform';
 import { cn } from '@/lib/cn';
 import { formatDuration } from '@/lib/format';
@@ -133,7 +133,7 @@ export function CallPanel() {
               Dismiss
             </Button>
             {error.code !== 'not-configured' && error.code !== 'unsupported' && (
-              <Button variant="primary" size="sm" onClick={start} leadingIcon={<RotateCcw {...iconProps} size={14} />}>
+              <Button variant="primary" size="sm" onClick={start} leadingIcon={<RotateCcw {...smallIconProps} />}>
                 Try again
               </Button>
             )}
@@ -151,7 +151,7 @@ export function CallPanel() {
               size="sm"
               onClick={end}
               disabled={state.status === 'ending'}
-              leadingIcon={<PhoneOff {...iconProps} size={14} />}
+              leadingIcon={<PhoneOff {...smallIconProps} />}
             >
               {state.status === 'ending' ? 'Ending…' : 'End call'}
             </Button>

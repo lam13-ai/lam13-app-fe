@@ -2,7 +2,7 @@ import { Copy, KeyRound, RefreshCw, Trash2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { request, requestJson, toErrorInfo } from '@/api';
-import { Button, Spinner, iconProps, smallIconProps, useToast } from '@/components/ui';
+import { Button, Spinner, smallIconProps, useToast } from '@/components/ui';
 import { Badge, Section, fieldClass, labelClass } from './ui';
 
 interface ApiKey {
@@ -79,7 +79,7 @@ export function ApiKeysPage() {
       </div>
 
       <Section
-        title={<><KeyRound {...iconProps} /> Create a key</>}
+        title={<><KeyRound {...smallIconProps} /> Create a key</>}
         description="Name the service the key is for (e.g. kothar_fn, prod, an Azure function)."
       >
         <form
@@ -93,7 +93,7 @@ export function ApiKeysPage() {
             <label className={labelClass} htmlFor="service">Service</label>
             <input id="service" className={fieldClass} value={service} onChange={(e) => setService(e.target.value)} placeholder="e.g. kothar_fn" disabled={creating} />
           </div>
-          <Button type="submit" disabled={creating || !service.trim()} leadingIcon={creating ? <Spinner size={16} state="active" /> : <KeyRound {...iconProps} />}>
+          <Button type="submit" disabled={creating || !service.trim()} leadingIcon={creating ? <Spinner size={16} state="active" /> : <KeyRound {...smallIconProps} />}>
             {creating ? 'Creating…' : 'Create key'}
           </Button>
         </form>
@@ -103,7 +103,7 @@ export function ApiKeysPage() {
             <p className="mb-2 font-bold">Copy this key now — it is shown in full only once.</p>
             <div className="flex items-center gap-2">
               <code className="flex-1 break-all bg-bg px-2 py-1 text-xs">{newKey}</code>
-              <Button variant="outline" size="sm" onClick={() => void copy(newKey)} leadingIcon={<Copy {...iconProps} />}>
+              <Button variant="outline" size="sm" onClick={() => void copy(newKey)} leadingIcon={<Copy {...smallIconProps} />}>
                 Copy
               </Button>
             </div>
@@ -115,7 +115,7 @@ export function ApiKeysPage() {
         title="All keys"
         description="Stored encrypted; the values below are decrypted for you."
         action={
-          <Button variant="outline" size="sm" onClick={loadKeys} disabled={loading} leadingIcon={<RefreshCw {...iconProps} />}>
+          <Button variant="outline" size="sm" onClick={loadKeys} disabled={loading} leadingIcon={<RefreshCw {...smallIconProps} />}>
             Refresh
           </Button>
         }
@@ -154,7 +154,7 @@ export function ApiKeysPage() {
                     <td className="whitespace-nowrap px-2 py-2 text-fg-muted">{fmtDate(k.last_used_at)}</td>
                     <td className="px-2 py-2 text-right">
                       {k.active && (
-                        <Button variant="ghost" size="sm" onClick={() => void deactivate(k)} leadingIcon={<Trash2 {...iconProps} />} className="text-danger">
+                        <Button variant="ghost" size="sm" onClick={() => void deactivate(k)} leadingIcon={<Trash2 {...smallIconProps} />} className="text-danger">
                           Deactivate
                         </Button>
                       )}

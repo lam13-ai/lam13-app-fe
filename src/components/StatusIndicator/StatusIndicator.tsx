@@ -15,7 +15,7 @@ const labels: Record<AgentStatus, string> = {
 export function StatusIndicator({ status, className }: { status: AgentStatus; className?: string }) {
   return (
     <span role="status" className={cn('flex items-center gap-2 text-2xs text-fg-muted', className)}>
-      <Spinner size={20} state={status === 'online' ? 'idle' : 'active'} />
+      <Spinner size={22} state={status === 'online' ? 'idle' : 'active'} />
       {/* Label is visually hidden on narrow screens to leave room for the title. */}
       <span className="max-sm:sr-only">{labels[status]}</span>
     </span>
