@@ -107,7 +107,8 @@ export function ConversationActions({
   return (
     <Popover
       placement="bottom-end"
-      className="w-60"
+      // Narrower than the sidebar, so it hangs from the ⋯ button with room to its left.
+      className="w-52"
       onOpenChange={(open) => {
         if (!open) setView('menu');
       }}

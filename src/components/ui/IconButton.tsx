@@ -13,7 +13,8 @@ export interface IconButtonProps extends Omit<ComponentProps<'button'>, 'aria-la
 }
 
 const variants: Record<Variant, string> = {
-  ghost: 'text-fg-soft hover:bg-accent-wash hover:text-fg aria-expanded:bg-accent-wash aria-expanded:text-fg',
+  // `fg-muted`, not the fainter `fg-soft`: a 1.5px stroke needs the stronger tone to read on a light surface.
+  ghost: 'text-fg-muted hover:bg-accent-wash hover:text-fg aria-expanded:bg-accent-wash aria-expanded:text-fg',
   solid: 'bg-fg text-bg hover:opacity-90',
 };
 

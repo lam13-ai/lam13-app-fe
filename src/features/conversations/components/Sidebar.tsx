@@ -90,7 +90,7 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
                 className={({ isActive }) =>
                   cn(
                     'hit-area relative inline-flex size-8 items-center justify-center rounded-full transition-all duration-200 ease-standard',
-                    isActive ? 'bg-accent-wash text-fg' : 'text-fg-soft hover:bg-accent-wash hover:text-fg',
+                    isActive ? 'bg-accent-wash text-fg' : 'text-fg-muted hover:bg-accent-wash hover:text-fg',
                   )
                 }
               >
@@ -137,7 +137,8 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
         >
           New chat
         </Button>
-        {/* Same row language as the history below: tinted when active, lighter tint on hover. */}
+        {/* Same row language as the history below: tinted when active, lighter tint on hover. The pages'
+            labels and icons are at full strength (the history rows stay one step quieter). */}
         {NAV.map(({ to, label, Icon }, i) => (
           <NavLink
             key={to}
@@ -145,9 +146,10 @@ export function Sidebar({ user, onSignOut, collapsed = false, onToggleCollapsed,
             onClick={onNavigate}
             className={({ isActive }) =>
               cn(
-                'flex h-11 items-center gap-2.5 px-3 text-nav transition-colors duration-150 ease-standard md:h-9',
+                // The transparent border matches the New chat button's, so the icons share one column.
+                'flex h-11 items-center gap-2.5 border border-transparent px-3 text-nav transition-colors duration-150 ease-standard md:h-9',
                 i === 0 ? 'mt-2' : 'mt-0.5',
-                isActive ? 'bg-accent-wash font-bold text-fg' : 'text-fg-muted hover:bg-fg/[0.045] hover:text-fg',
+                isActive ? 'bg-accent-wash font-bold text-fg' : 'text-fg hover:bg-fg/[0.045]',
               )
             }
           >

@@ -64,6 +64,8 @@ export function Popover({
   className,
 }: PopoverProps) {
   const [open, setOpen] = useState(false);
+  // Opened the other way (above ↔ below) because the preferred side had no room.
+  const [flipped, setFlipped] = useState(false);
   const onOpenChangeRef = useRef(onOpenChange);
   useEffect(() => {
     onOpenChangeRef.current = onOpenChange;
@@ -115,14 +117,45 @@ export function Popover({
     };
   }, [open, close]);
 
-  const isTop = placement.startsWith('top');
+  /**
+   * Whether the panel should open on the other side: not enough room on the preferred side — within the
+   * scroll container that would clip it, or the viewport — and more on the opposite one. Measured when
+   * the trigger is clicked (the hidden panel is already laid out).
+   */
+  const needsFlip = () => {
+    const panel = panelRef.current;
+    const triggerEl = triggerRef.current;
+    if (anchor !== 'trigger' || !panel || !triggerEl) return false;
+    let top = 0;
+    let bottom = window.innerHeight;
+    for (let el = triggerEl.parentElement; el; el = el.parentElement) {
+      if (getComputedStyle(el).overflowY !== 'visible') {
+        const box = el.getBoundingClientRect();
+        top = Math.max(top, box.top);
+        bottom = Math.min(bottom, box.bottom);
+        break;
+      }
+    }
+    const rect = triggerEl.getBoundingClientRect();
+    // The panel's gap, plus room for it to grow a step (e.g. a confirmation replacing a two-item menu).
+    const needed = panel.offsetHeight + 56;
+    const below = bottom - rect.bottom;
+    const above = rect.top - top;
+    return placement.startsWith('top') ? above < needed && below > above : below < needed && above > below;
+  };
+  const side = placement.startsWith('top') !== flipped ? 'top' : 'bottom';
+  const resolved = `${side}-${placement.endsWith('start') ? 'start' : 'end'}` as Placement;
+  const isTop = side === 'top';
 
   return (
     <PopoverContext.Provider value={{ close }}>
       <div ref={wrapperRef} className={cn('inline-flex', anchor === 'trigger' && 'relative')}>
         {trigger({
           ref: triggerRef,
-          onClick: () => setOpen((o) => !o),
+          onClick: () => {
+            if (!open) setFlipped(needsFlip());
+            setOpen((o) => !o);
+          },
           'aria-expanded': open,
           'aria-haspopup': kind,
           'aria-controls': id,
@@ -133,7 +166,7 @@ export function Popover({
           className={cn(
             'absolute z-50 min-w-44 rounded-popover border border-border bg-elevated/95 p-1 shadow-popover backdrop-blur-md',
             'duration-300 ease-spring',
-            placements[placement],
+            placements[resolved],
             open
               ? // Visibility must flip at once on open (not transition) or the rAF focus below lands on a
                 // still-hidden panel and silently fails. Closing still fades out before hiding.

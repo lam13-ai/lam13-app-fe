@@ -63,3 +63,37 @@ describe('Popover + Menu', () => {
     expect(document.activeElement).toBe(low);
   });
 });
+
+describe('Popover placement', () => {
+  /** A bottom-end popover whose trigger sits at `triggerTop` in a 600px-tall scroll container. */
+  function openAt(triggerTop: number) {
+    render(
+      <div data-testid="scroller" style={{ overflowY: 'auto' }}>
+        <Popover placement="bottom-end" trigger={(props) => <button {...props}>Actions</button>}>
+          <Menu label="Actions">
+            <MenuItem onSelect={() => {}}>Rename</MenuItem>
+          </Menu>
+        </Popover>
+      </div>,
+    );
+    const rect = (top: number, height: number) => ({ top, bottom: top + height, left: 0, right: 0, width: 0, height, x: 0, y: top, toJSON: () => ({}) });
+    const trigger = screen.getByRole('button', { name: 'Actions' });
+    const panel = screen.getByRole('menu').parentElement!;
+    // jsdom has no layout: give the pieces the geometry the component measures.
+    screen.getByTestId('scroller').getBoundingClientRect = () => rect(100, 600);
+    trigger.getBoundingClientRect = () => rect(triggerTop, 28);
+    Object.defineProperty(panel, 'offsetHeight', { value: 80 });
+    fireEvent.click(trigger);
+    return panel;
+  }
+
+  it('opens below when there is room in its scroll container', () => {
+    expect(openAt(200).className).toContain('top-full'); // hangs under the trigger
+  });
+
+  it('flips above when the container would clip it below', () => {
+    const panel = openAt(640); // 32px left under the trigger, inside a container ending at 700
+    expect(panel.className).toContain('bottom-full');
+    expect(panel.className).not.toContain('top-full');
+  });
+});

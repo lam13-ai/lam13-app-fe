@@ -46,10 +46,18 @@ function SwapLabel({ value }: { value: string }) {
 
 /**
  * "+": add files, or add context — a meeting, picked in a second step of the same menu (like the
- * conversation actions' confirm step). Without `onAddMeeting` it stays the plain attach button.
+ * conversation actions' confirm step). Without `onAddMeeting` it is the plain attach button. Same 32px
+ * round button as the composer's other controls.
  */
-function AddMenu({ onAttach, onAddMeeting }: { onAttach: () => void; onAddMeeting: (meeting: MeetingSummary) => void }) {
+export function AddControl({ onAttach, onAddMeeting }: { onAttach: () => void; onAddMeeting?: (meeting: MeetingSummary) => void }) {
   const [view, setView] = useState<'menu' | 'meetings'>('menu');
+  if (!onAddMeeting) {
+    return (
+      <Tooltip content="Add images" align="end">
+        <IconButton label="Add attachment" size="md" icon={<Plus {...iconProps} />} onClick={onAttach} />
+      </Tooltip>
+    );
+  }
   return (
     <Popover
       placement="top-end"
@@ -58,7 +66,7 @@ function AddMenu({ onAttach, onAddMeeting }: { onAttach: () => void; onAddMeetin
       onOpenChange={(open) => {
         if (!open) setView('menu');
       }}
-      trigger={(props) => <IconButton {...props} label="Add files or context" icon={<Plus {...iconProps} size={14} />} />}
+      trigger={(props) => <IconButton {...props} label="Add files or context" size="md" icon={<Plus {...iconProps} />} />}
     >
       {view === 'menu' ? (
         <Menu label="Add to message">
@@ -76,26 +84,26 @@ function AddMenu({ onAttach, onAddMeeting }: { onAttach: () => void; onAddMeetin
   );
 }
 
-export function ComposerToolbar({
-  onAttach,
-  onAddMeeting,
-}: {
-  onAttach: () => void;
-  onAddMeeting?: (meeting: MeetingSummary) => void;
-}) {
+/** The model / effort choices the backend offers; `show` is false when there is nothing to choose. */
+export function useModelChips() {
   const modelId = useUiStore((s) => s.model);
-  const effort = useUiStore((s) => s.effort);
-  const setModel = useUiStore((s) => s.setModel);
-  const setEffort = useUiStore((s) => s.setEffort);
-
   const models = useModels().data ?? [];
   const model = models.find((m) => m.id === modelId) ?? models[0];
   const efforts = model?.efforts ?? [];
   // Hide the chips until models load, and when there is nothing to choose (api-contract.md §4.6).
   const showModel = models.length > 1 || efforts.length > 0;
+  return { models, model, efforts, showModel, show: (showModel && Boolean(model)) || efforts.length > 0 };
+}
+
+/** Model and reasoning-effort chips (nothing when the backend offers no choice). */
+export function ModelChips() {
+  const effort = useUiStore((s) => s.effort);
+  const setModel = useUiStore((s) => s.setModel);
+  const setEffort = useUiStore((s) => s.setEffort);
+  const { models, model, efforts, showModel } = useModelChips();
 
   return (
-    <div className="flex h-10 animate-reveal items-center gap-0.5 pb-1 pl-3 pr-12">
+    <>
       {showModel && model && (
         <Popover
           placement="top-start"
@@ -135,16 +143,6 @@ export function ComposerToolbar({
           </Menu>
         </Popover>
       )}
-
-      <div className="ml-auto">
-        {onAddMeeting ? (
-          <AddMenu onAttach={onAttach} onAddMeeting={onAddMeeting} />
-        ) : (
-          <Tooltip content="Add images" align="end">
-            <IconButton label="Add attachment" icon={<Plus {...iconProps} size={14} />} onClick={onAttach} />
-          </Tooltip>
-        )}
-      </div>
-    </div>
+    </>
   );
 }

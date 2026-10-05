@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn';
 import { useComposerStore } from '@/stores/composerStore';
 import type { MeetingSummary } from '@/types/api';
 import { clipboardFiles } from '../../lib/attachments';
-import { ComposerToolbar } from './ComposerToolbar';
+import { AddControl, ModelChips, useModelChips } from './ComposerToolbar';
 import { SendButton, type SendButtonMode } from './SendButton';
 
 const PLACEHOLDER = 'Ask Lam13 about strategy…';
@@ -64,6 +64,8 @@ export function Composer({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const textareaId = useId();
   const recorder = useVoiceRecorder();
+  // Model / effort chips, when the backend offers a choice: they get their own row under the text.
+  const hasChips = useModelChips().show;
   const voiceActive = Boolean(onSendVoice) && recorder.state.status !== 'idle' && recorder.state.status !== 'sent';
 
   const expanded = open || draft.length > 0 || streaming || voiceActive || Boolean(attachments);
@@ -147,6 +149,24 @@ export function Composer({
     if (next && !formRef.current?.contains(next) && !draft && !streaming) setOpen(false);
   };
 
+  const sendButton = (
+    <SendButton
+      ref={buttonRef}
+      mode={mode}
+      disabled={disabled || (mode === 'send' && !canSend)}
+      onSend={submit}
+      onVoice={() => void recorder.start()}
+      onStop={onStop}
+    />
+  );
+  /** The composer's controls, always together on one line: add (files / context), then send / mic / stop. */
+  const controls = (
+    <>
+      <AddControl onAttach={onAttach} onAddMeeting={onAddMeeting} />
+      {sendButton}
+    </>
+  );
+
   return (
     <form
       ref={formRef}
@@ -173,54 +193,66 @@ export function Composer({
         ) : expanded ? (
           <>
             {attachments}
-            <div className="relative">
-              <label htmlFor={textareaId} className="sr-only">
-                Message Lam13
-              </label>
-              <textarea
-                id={textareaId}
-                ref={textareaRef}
-                rows={1}
-                value={draft}
-                disabled={streaming}
-                placeholder={streaming ? 'Lam13 is responding…' : PLACEHOLDER}
-                enterKeyHint="send"
-                onChange={(e) => setDraft(draftKey, e.target.value)}
-                onKeyDown={onKeyDown}
-                onPaste={(e) => {
-                  const files = clipboardFiles(e.clipboardData);
-                  if (!onPasteFiles || files.length === 0) return; // text: the browser pastes it as usual
-                  // Files only: nothing to paste as text. With text too, the textarea still takes just its
-                  // plain text (never HTML) while the files are attached.
-                  if (!e.clipboardData.types.includes('text/plain')) e.preventDefault();
-                  onPasteFiles(files);
-                }}
-                onScroll={updateEdges}
-                className={cn(
-                  'block max-h-[min(40dvh,240px)] w-full animate-enter-sm resize-none overflow-y-auto bg-transparent',
-                  'px-4 pb-1 pt-3.5 text-base leading-[22px] text-fg outline-none sm:text-sm sm:leading-[22px]',
-                  // The shared thin scrollbar, shown only when the text overflows; its track starts below the
-                  // pill's rounded corner so it runs along the straight edge.
-                  'scrollbar-subtle [&::-webkit-scrollbar-track]:mt-3 [&::-webkit-scrollbar-track]:mb-1',
-                  'placeholder:font-medium placeholder:text-fg-muted focus-visible:outline-none disabled:cursor-not-allowed',
-                )}
-              />
-              <div
-                aria-hidden="true"
-                className={cn(
-                  'pointer-events-none absolute inset-x-4 top-0 h-8 bg-linear-to-b from-composer via-composer/90 to-transparent transition-opacity duration-150',
-                  edges.top ? 'opacity-100' : 'opacity-0',
-                )}
-              />
-              <div
-                aria-hidden="true"
-                className={cn(
-                  'pointer-events-none absolute inset-x-4 bottom-0 h-8 bg-linear-to-t from-composer via-composer/90 to-transparent transition-opacity duration-150',
-                  edges.bottom ? 'opacity-100' : 'opacity-0',
-                )}
-              />
+            {/* One row for the text and its controls: the controls sit on the text's last line (centred
+                on a single line), never on a row of their own. With chips, they share the chips' row. */}
+            <div className="flex items-end">
+              <div className="relative min-w-0 flex-1">
+                <label htmlFor={textareaId} className="sr-only">
+                  Message Lam13
+                </label>
+                <textarea
+                  id={textareaId}
+                  ref={textareaRef}
+                  rows={1}
+                  value={draft}
+                  disabled={streaming}
+                  placeholder={streaming ? 'Lam13 is responding…' : PLACEHOLDER}
+                  enterKeyHint="send"
+                  onChange={(e) => setDraft(draftKey, e.target.value)}
+                  onKeyDown={onKeyDown}
+                  onPaste={(e) => {
+                    const files = clipboardFiles(e.clipboardData);
+                    if (!onPasteFiles || files.length === 0) return; // text: the browser pastes it as usual
+                    // Files only: nothing to paste as text. With text too, the textarea still takes just its
+                    // plain text (never HTML) while the files are attached.
+                    if (!e.clipboardData.types.includes('text/plain')) e.preventDefault();
+                    onPasteFiles(files);
+                  }}
+                  onScroll={updateEdges}
+                  className={cn(
+                    'block max-h-[min(40dvh,240px)] w-full animate-enter-sm resize-none overflow-y-auto bg-transparent',
+                    'text-base leading-[22px] text-fg outline-none sm:text-sm sm:leading-[22px]',
+                    // A single line is 48px tall, like the idle pill and the voice bars.
+                    hasChips ? 'px-4 pb-1 pt-3.5' : 'py-[13px] pl-4 pr-2',
+                    // The shared thin scrollbar, shown only when the text overflows; its track starts below the
+                    // pill's rounded corner so it runs along the straight edge.
+                    'scrollbar-subtle [&::-webkit-scrollbar-track]:mt-3 [&::-webkit-scrollbar-track]:mb-1',
+                    'placeholder:font-medium placeholder:text-fg-muted focus-visible:outline-none disabled:cursor-not-allowed',
+                  )}
+                />
+                <div
+                  aria-hidden="true"
+                  className={cn(
+                    'pointer-events-none absolute inset-x-4 top-0 h-8 bg-linear-to-b from-composer via-composer/90 to-transparent transition-opacity duration-150',
+                    edges.top ? 'opacity-100' : 'opacity-0',
+                  )}
+                />
+                <div
+                  aria-hidden="true"
+                  className={cn(
+                    'pointer-events-none absolute inset-x-4 bottom-0 h-8 bg-linear-to-t from-composer via-composer/90 to-transparent transition-opacity duration-150',
+                    edges.bottom ? 'opacity-100' : 'opacity-0',
+                  )}
+                />
+              </div>
+              {!hasChips && <div className="flex h-12 shrink-0 items-center gap-1 pr-2">{controls}</div>}
             </div>
-            <ComposerToolbar onAttach={onAttach} onAddMeeting={onAddMeeting} />
+            {hasChips && (
+              <div className="flex h-12 animate-reveal items-center gap-0.5 pl-3 pr-2">
+                <ModelChips />
+                <div className="ml-auto flex items-center gap-1">{controls}</div>
+              </div>
+            )}
           </>
         ) : (
           <button
@@ -233,18 +265,8 @@ export function Composer({
           </button>
         )}
 
-        {!voiceActive && (
-          <div className="absolute bottom-2 right-2">
-            <SendButton
-              ref={buttonRef}
-              mode={mode}
-              disabled={disabled || (mode === 'send' && !canSend)}
-              onSend={submit}
-              onVoice={() => void recorder.start()}
-              onStop={onStop}
-            />
-          </div>
-        )}
+        {/* Idle pill: only the send / mic button, centred in its 48px. */}
+        {!voiceActive && !expanded && <div className="absolute bottom-2 right-2">{sendButton}</div>}
       </div>
     </form>
   );
