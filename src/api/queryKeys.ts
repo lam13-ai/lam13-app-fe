@@ -23,4 +23,12 @@ export const queryKeys = {
     connection: () => ['meetings', 'connection'] as const,
   },
   whatsapp: () => ['whatsapp'] as const,
+  projects: {
+    list: () => ['projects', 'list'] as const,
+    detail: (id: string) => ['projects', 'detail', id] as const,
+  },
+  calendar: {
+    events: () => ['calendar', 'events'] as const,
+    tasks: () => ['calendar', 'tasks'] as const,
+  },
 };

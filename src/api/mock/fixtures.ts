@@ -1,4 +1,5 @@
 import type { Conversation, Message, ModelOption } from '@/types/api';
+import { PROJECT_CHAT_SEEDS } from './projectChatFixtures';
 
 /** Seed data for the in-memory mock backend. Timestamps are relative to `now`. */
 
@@ -178,7 +179,8 @@ export function createSeed(now: number): MockSeed {
   const conversations: Conversation[] = [];
   const messages = new Map<string, Message[]>();
 
-  for (const seed of SEED) {
+  // The sample projects' conversations are seeded too (they are listed by their project, not in the history).
+  for (const seed of [...SEED, ...PROJECT_CHAT_SEEDS]) {
     const updatedAt = now - seed.ageMs;
     const list: Message[] = [];
     // Space turns 2 minutes apart, ending at the conversation's updated_at.

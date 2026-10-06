@@ -1,1 +1,1 @@
-export { ChatView } from './components/ChatView';
+export { ChatView, type ChatScope } from './components/ChatView';

@@ -9,15 +9,6 @@ import { useModels } from '../../hooks/useModels';
 
 const EFFORT_ORDER: Effort[] = ['low', 'medium', 'high'];
 
-function ModelSquare() {
-  return (
-    <span
-      aria-hidden="true"
-      className="inline-block size-3.5 shrink-0 opacity-70 transition-opacity group-hover:opacity-100 [background:var(--gradient-accent)]"
-    />
-  );
-}
-
 /** Three signal bars; filled bars encode the effort level (reference §6). */
 function EffortIcon({ effort }: { effort: Effort }) {
   const level = EFFORT_ORDER.indexOf(effort) + 1;
@@ -84,46 +75,22 @@ export function AddControl({ onAttach, onAddMeeting }: { onAttach: () => void; o
   );
 }
 
-/** The model / effort choices the backend offers; `show` is false when there is nothing to choose. */
+/** The reasoning-effort choices the backend offers; `show` is false when there is nothing to choose. */
 export function useModelChips() {
   const modelId = useUiStore((s) => s.model);
   const models = useModels().data ?? [];
-  const model = models.find((m) => m.id === modelId) ?? models[0];
-  const efforts = model?.efforts ?? [];
-  // Hide the chips until models load, and when there is nothing to choose (api-contract.md §4.6).
-  const showModel = models.length > 1 || efforts.length > 0;
-  return { models, model, efforts, showModel, show: (showModel && Boolean(model)) || efforts.length > 0 };
+  const efforts = (models.find((m) => m.id === modelId) ?? models[0])?.efforts ?? [];
+  return { efforts, show: efforts.length > 0 };
 }
 
-/** Model and reasoning-effort chips (nothing when the backend offers no choice). */
+/** Reasoning-effort chips (nothing when the backend offers no choice). The model has its own selector. */
 export function ModelChips() {
   const effort = useUiStore((s) => s.effort);
-  const setModel = useUiStore((s) => s.setModel);
   const setEffort = useUiStore((s) => s.setEffort);
-  const { models, model, efforts, showModel } = useModelChips();
+  const { efforts } = useModelChips();
 
   return (
     <>
-      {showModel && model && (
-        <Popover
-          placement="top-start"
-          anchor="container"
-          trigger={(props) => (
-            <Chip {...props} aria-label={`Select model. Current: ${model.label}`} leading={<ModelSquare />}>
-              <SwapLabel value={model.label} />
-            </Chip>
-          )}
-        >
-          <Menu label="Model">
-            {models.map((m) => (
-              <MenuItem key={m.id} checked={m.id === model.id} onSelect={() => setModel(m.id)} leading={<ModelSquare />}>
-                {m.label}
-              </MenuItem>
-            ))}
-          </Menu>
-        </Popover>
-      )}
-
       {efforts.length > 0 && (
         <Popover
           placement="top-start"

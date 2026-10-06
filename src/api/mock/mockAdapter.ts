@@ -17,6 +17,8 @@ import { composeReply, deriveTitle } from './responder';
 import { createMockMeetings } from './meetings';
 import { createMockProfiles } from './profiles';
 import { createMockWhatsApp } from './whatsapp';
+import { demoProjectChats, isDemoConversation } from './projectChatFixtures';
+import { createMockCalendar, createMockProjects } from './workspace';
 import { createEventBody, type EventWriter } from './sseEncoder';
 import { mockTranscribe } from './transcripts';
 import { between, clone, sleep, type Range } from './utils';
@@ -216,7 +218,8 @@ export function createMockAdapter(options: MockAdapterOptions = {}): ApiAdapter 
     conversations: {
       async list({ cursor, limit = DEFAULT_PAGE }: ListParams = {}) {
         await respond();
-        const sorted = [...conversations].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+        // Demo project conversations belong to their project's list only.
+        const sorted = conversations.filter((c) => !isDemoConversation(c.id)).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
         const start = cursor ? Number(cursor) : 0;
         const end = start + limit;
         return { items: clone(sorted.slice(start, end)), next_cursor: end < sorted.length ? String(end) : null };
@@ -533,5 +536,7 @@ export function createMockAdapter(options: MockAdapterOptions = {}): ApiAdapter 
     ...createMockProfiles({ now, respond: () => respond(), newId, failWrites: options.failProfileWrites }),
     meetings: createMockMeetings({ now, respond: () => respond() }),
     whatsapp: createMockWhatsApp({ respond: () => respond() }),
+    projects: createMockProjects({ now, respond: () => respond(), chats: demoProjectChats(now()) }),
+    calendar: createMockCalendar({ now, respond: () => respond() }),
   };
 }

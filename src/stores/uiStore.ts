@@ -28,7 +28,7 @@ interface UiState {
 export const useUiStore = create<UiState>()((set) => ({
   sidebarOpen: false,
   sidebarCollapsed: false,
-  model: 'lam13',
+  model: 'lam', // DEFAULT_MODEL_ID (features/chat/models)
   effort: 'medium',
   contactSheetWidth: 480,
   contactSheetRestoreWidth: null,

@@ -5,6 +5,7 @@ import { ScrollArea } from '@/components/ScrollArea';
 import { IconButton, iconProps, useToast } from '@/components/ui';
 import { GranolaConnectionControl } from '@/features/meetings';
 import { useUiStore } from '@/stores/uiStore';
+import { CustomServerSection, DemoIntegration } from './DemoIntegrations';
 import { IntegrationRow } from './IntegrationRow';
 import { WhatsAppIntegration } from './WhatsAppIntegration';
 
@@ -42,12 +43,25 @@ export function IntegrationsView() {
 
       <ScrollArea className="min-h-0 flex-1 px-4 py-6 md:px-6 md:py-8">
         <div className="mx-auto w-full max-w-[var(--chat-max-w)]">
+          <h2 className="eyebrow mb-4">Meeting note takers</h2>
           <IntegrationRow
-            name="Granola"
+            brand="granola"
             description="Bring your meeting notes into Lam13, so you can ask about decisions and action items."
             action={<GranolaConnectionControl />}
           />
+          <DemoIntegration brand="otter" description="Import Otter transcripts and summaries as meeting context." />
+          <DemoIntegration brand="fireflies" description="Sync Fireflies notes, action items and transcripts from your recorded calls." />
+
+          <h2 className="eyebrow mb-4 mt-10">Communication</h2>
           <WhatsAppIntegration />
+          <DemoIntegration brand="teams" description="Ask Lam13 from Microsoft Teams and bring channel discussions into your projects." />
+          <DemoIntegration brand="slack" description="Ask Lam13 from Slack and share answers back to a channel." />
+
+          <h2 className="eyebrow mb-4 mt-10">Custom</h2>
+          <CustomServerSection />
+          <p className="mt-6 text-2xs leading-relaxed text-fg-muted">
+            Otter, Fireflies, Microsoft Teams, Slack and custom servers are demo connections: connecting them here links no account and sends nothing.
+          </p>
         </div>
       </ScrollArea>
     </section>

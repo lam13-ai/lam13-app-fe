@@ -33,6 +33,7 @@ export type {
 } from './services';
 export { createHttpAdapter, request, requestJson, type RequestOptions } from './http';
 export { readEventStream, type EventStream, type StreamEvent, type StreamEventName } from './stream';
+export { isDemoConversation } from './mock/projectChatFixtures';
 export { createMockAdapter, INSTANT_TIMING, REALISTIC_TIMING, type MockAdapterOptions, type MockTiming } from './mock/mockAdapter';
 
 /**

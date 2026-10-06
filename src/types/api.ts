@@ -264,3 +264,78 @@ export interface WhatsAppVerification {
   /** Shown under the code input when set — development previews only (e.g. a mock that sends nothing). */
   notice?: string | null;
 }
+
+// ── Projects & Calendar (frontend-only for now: no backend routes yet) ───────
+
+export type ArchiveFileKind = 'presentation' | 'document' | 'image';
+
+/** A file uploaded earlier that the assistant can read as context (a project's Archives). */
+export interface ArchiveFile {
+  id: Id;
+  name: string;
+  kind: ArchiveFileKind;
+  /** Upper-case file extension, e.g. "PPTX". */
+  extension: string;
+  size_bytes: number;
+  /** Slides or pages; absent for images. */
+  pages?: number;
+  uploaded_at: IsoDateTime;
+  uploaded_by: string;
+  /** `processing`: not yet readable by the assistant. `local`: picked in this browser only, not uploaded. */
+  status: 'ready' | 'processing' | 'local';
+}
+
+export interface ProjectChat {
+  id: Id;
+  title: string;
+  preview: string;
+  updated_at: IsoDateTime;
+}
+
+/** Information a project's chats draw on: a file, meeting notes, a contact, a note or a link. */
+export interface ProjectContextSource {
+  id: Id;
+  type: 'file' | 'meeting' | 'contact' | 'note' | 'link';
+  title: string;
+  detail: string;
+  /** What the source contains, for its preview. */
+  summary: string;
+}
+
+export interface ProjectSummary {
+  id: Id;
+  name: string;
+  description: string;
+  updated_at: IsoDateTime;
+  chat_count: number;
+  file_count: number;
+}
+
+export interface Project extends ProjectSummary {
+  /** Standing instructions the assistant follows in this project. */
+  instructions: string;
+  chats: ProjectChat[];
+  sources: ProjectContextSource[];
+  files: ArchiveFile[];
+}
+
+export interface CalendarEvent {
+  id: Id;
+  title: string;
+  starts_at: IsoDateTime;
+  ends_at: IsoDateTime;
+  /** Where the meeting is recorded or held, when known. */
+  source: 'granola' | 'otter' | 'fireflies' | 'teams' | null;
+  participants: string[];
+  project: string | null;
+}
+
+export interface CalendarTask {
+  id: Id;
+  title: string;
+  due_at: IsoDateTime;
+  completed: boolean;
+  /** The meeting this action came out of. */
+  meeting: string | null;
+  project: string | null;
+}

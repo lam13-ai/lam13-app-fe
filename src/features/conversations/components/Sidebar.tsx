@@ -1,5 +1,5 @@
 import { Link, NavLink, useNavigate } from 'react-router';
-import { CalendarDays, LogOut, Plug, PanelLeftClose, PanelLeftOpen, Shield, SquarePen, Users, X } from 'lucide-react';
+import { CalendarDays, FolderKanban, LogOut, PanelLeftClose, PanelLeftOpen, Plug, Shield, SquarePen, Users, X } from 'lucide-react';
 import { Wordmark } from '@/components/AgentMark';
 import { LegalLinks } from '@/components/LegalLinks';
 import { ThemeMenu } from '@/components/ThemeMenu';
@@ -12,8 +12,9 @@ import { ConversationList } from './ConversationList';
 
 /** Workspace pages below New chat (the chat history follows). */
 const NAV = [
+  { to: '/projects', label: 'Projects', Icon: FolderKanban },
   { to: '/contacts', label: 'My Contacts', Icon: Users },
-  { to: '/meetings', label: 'Meetings', Icon: CalendarDays },
+  { to: '/calendar', label: 'Calendar', Icon: CalendarDays },
   { to: '/integrations', label: 'Integrations', Icon: Plug },
 ] as const;
 

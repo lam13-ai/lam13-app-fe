@@ -14,16 +14,14 @@ const search = () => screen.getByRole('searchbox', { name: 'Search meetings' });
 const chip = (title: string) => screen.queryByText(title, { selector: '.truncate' });
 
 describe('Meetings workspace', () => {
-  it('is in the sidebar and lists meetings grouped by day, newest first', async () => {
-    const { router } = renderApp('/');
-    fireEvent.click(await screen.findByRole('link', { name: 'Meetings' }, { timeout: 8000 }));
+  it('lists meetings grouped by day, newest first (reached from Calendar: it has no sidebar entry of its own)', async () => {
+    renderApp('/meetings');
     await heading();
-    expect(router.state.location.pathname).toBe('/meetings');
+    expect(screen.queryByRole('link', { name: 'Meetings' })).toBeNull();
     await screen.findByRole('searchbox', { name: 'Search meetings' });
     expect(screen.getByRole('region', { name: 'Today' })).toBeTruthy();
     expect(rows()[0]!.textContent).toContain('Product strategy review');
     expect(rows()[0]!.textContent).toMatch(/50 min · Hannah Lee, Saqlain Haider \+2/);
-    expect(screen.getByRole('link', { name: 'Meetings' }).className).toContain('bg-accent-wash'); // active nav
   });
 
   it('searches titles and participants, with a no-results state that clears', async () => {

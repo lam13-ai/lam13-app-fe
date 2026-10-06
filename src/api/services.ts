@@ -5,9 +5,13 @@ import type {
   Conversation,
   Effort,
   FeedbackRating,
+  CalendarEvent,
+  CalendarTask,
   Meeting,
   MeetingSourceConnection,
   MeetingSummary,
+  Project,
+  ProjectSummary,
   Message,
   ModelOption,
   Page,
@@ -124,6 +128,8 @@ export interface ArtifactsService {
 export interface TranscriptionInput {
   file: Blob;
   duration_ms: number;
+  /** The conversation the recording was made in, when there is one. Not part of the request: it only lets an adapter refuse a demo conversation. */
+  conversation_id?: string | null;
 }
 
 export interface AudioService {
@@ -236,6 +242,22 @@ export interface ApiCapabilities {
   transcription: boolean;
 }
 
+/** Projects: a workspace's chats, context and archived files. Frontend-only for now (a local mock in both adapters). */
+export interface ProjectsService {
+  list(): Promise<ProjectSummary[]>;
+  get(id: string): Promise<Project>;
+  saveInstructions(id: string, instructions: string): Promise<Project>;
+  /** Adds a conversation to a project (no-op when it is already there). */
+  linkChat(projectId: string, chat: { id: string; title: string }): Promise<Project>;
+}
+
+/** Calendar: upcoming meetings and the tasks that came out of them. Frontend-only for now. */
+export interface CalendarService {
+  events(): Promise<CalendarEvent[]>;
+  tasks(): Promise<CalendarTask[]>;
+  setTaskCompleted(id: string, completed: boolean): Promise<CalendarTask>;
+}
+
 export interface ApiAdapter {
   capabilities: ApiCapabilities;
   conversations: ConversationsService;
@@ -248,4 +270,6 @@ export interface ApiAdapter {
   profileSuggestions: ProfileSuggestionsService;
   meetings: MeetingsService;
   whatsapp: WhatsAppService;
+  projects: ProjectsService;
+  calendar: CalendarService;
 }

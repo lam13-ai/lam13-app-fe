@@ -7,6 +7,9 @@ const chatRoute = async () => ({ Component: (await import('./routes/ChatRoute'))
 const contactsRoute = async () => ({ Component: (await import('./routes/ContactsRoute')).default });
 const integrationsRoute = async () => ({ Component: (await import('./routes/IntegrationsRoute')).default });
 const granolaCallbackRoute = async () => ({ Component: (await import('./routes/GranolaCallbackRoute')).default });
+const projectsRoute = async () => ({ Component: (await import('./routes/ProjectsRoute')).default });
+const projectChatRoute = async () => ({ Component: (await import('./routes/ProjectChatRoute')).default });
+const calendarRoute = async () => ({ Component: (await import('./routes/CalendarRoute')).default });
 const meetingsRoute = async () => ({ Component: (await import('./routes/MeetingsRoute')).default });
 const notFoundRoute = async () => ({ Component: (await import('./routes/NotFoundRoute')).default });
 const loginRoute = async () => ({ Component: (await import('./routes/LoginRoute')).default });
@@ -54,7 +57,12 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, lazy: chatRoute, errorElement: <RouteError /> },
           { path: 'c/:conversationId', lazy: chatRoute, errorElement: <RouteError /> },
+          { path: 'projects', lazy: projectsRoute, errorElement: <RouteError /> },
+          { path: 'projects/:projectId', lazy: projectsRoute, errorElement: <RouteError /> },
+          { path: 'projects/:projectId/new', lazy: projectChatRoute, errorElement: <RouteError /> },
+          { path: 'projects/:projectId/c/:conversationId', lazy: projectChatRoute, errorElement: <RouteError /> },
           { path: 'contacts', lazy: contactsRoute, errorElement: <RouteError /> },
+          { path: 'calendar', lazy: calendarRoute, errorElement: <RouteError /> },
           { path: 'meetings', lazy: meetingsRoute, errorElement: <RouteError /> },
           { path: 'meetings/:meetingId', lazy: meetingsRoute, errorElement: <RouteError /> },
           { path: 'integrations', lazy: integrationsRoute, errorElement: <RouteError /> },

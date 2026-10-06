@@ -406,7 +406,7 @@ export function WhatsAppIntegration() {
   }
 
   return (
-    <IntegrationRow name="WhatsApp" description={DESCRIPTION} action={action}>
+    <IntegrationRow brand="whatsapp" description={DESCRIPTION} action={action}>
       {body}
     </IntegrationRow>
   );

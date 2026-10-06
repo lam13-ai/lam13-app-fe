@@ -1,5 +1,5 @@
 import { CalendarDays, FileText, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ApiError, ATTACHMENT_LIMITS, toErrorInfo, useApi } from '@/api';
 import { ErrorState } from '@/components/ErrorState';
@@ -43,13 +43,26 @@ export interface ChatViewProps {
   conversation?: Conversation;
   /** The route's React key for this view; handed to the created conversation's URL to keep this instance. */
   viewKey?: string;
+  /** A chat that lives inside something else (a project): its URLs and what its header shows. Everything else is the same chat. */
+  scope?: ChatScope;
+}
+
+export interface ChatScope {
+  /** The URL of a conversation in this scope (default `/c/:id`). */
+  path: (conversationId: string) => string;
+  /** Header title before the conversation exists. */
+  newTitle: string;
+  /** Under the header title (e.g. the project's name). */
+  context: ReactNode;
+  /** Header controls (e.g. Project details). */
+  actions?: ReactNode;
 }
 
 /**
  * Chat workspace: header + log + composer. Desktop renders the reference's bordered 12px card;
  * mobile is full-bleed. Mount with a `key` per route so view state resets per conversation.
  */
-export function ChatView({ conversationId, conversation, viewKey }: ChatViewProps) {
+export function ChatView({ conversationId, conversation, viewKey, scope }: ChatViewProps) {
   const navigate = useNavigate();
   const location = useLocation();
   // Arrived via New Chat: the empty state plays its entrance transition.
@@ -84,6 +97,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
     navigate(location.pathname, { replace: true, state: { newChat: true } });
   }, [askedMeeting, location.pathname, navigate]);
 
+  const scopePath = scope?.path;
   const history = useMessages(key, effectiveId);
   const active = useStreamStore((s) => s.active[key]);
   const failures = useStreamStore((s) => s.failures);
@@ -93,8 +107,8 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
   useEffect(() => {
     if (created?.origin !== origin) return;
     if (conversationId) useStreamStore.getState().setCreated(null);
-    else navigate(`/c/${created.id}`, { replace: true, state: { viewKey } });
-  }, [created, origin, conversationId, navigate, viewKey]);
+    else navigate(scopePath ? scopePath(created.id) : `/c/${created.id}`, { replace: true, state: { viewKey } });
+  }, [created, origin, conversationId, navigate, viewKey, scopePath]);
 
   const status: AgentStatus = !active
     ? 'online'
@@ -102,7 +116,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
       ? active.phase
       : 'thinking';
   const activity = active && ACTIVITY_LABELS[active.phase];
-  const title = conversationId ? conversation?.title : AGENT_NAME;
+  const title = conversationId ? conversation?.title : (scope?.newTitle ?? AGENT_NAME);
   const send = (text: string) => {
     // The meeting context goes with this message, then the chip clears (restored if the send fails first).
     const meetingIds = meeting ? [meeting.id] : undefined;
@@ -129,7 +143,7 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
   const loadingHistory = Boolean(conversationId) && history.isPending;
 
   const transcribe = (recording: Recording, signal: AbortSignal) =>
-    api.audio.transcribe({ file: recording.blob, duration_ms: recording.durationMs }, { signal }).then((r) => r.text);
+    api.audio.transcribe({ file: recording.blob, duration_ms: recording.durationMs, conversation_id: conversationId ?? null }, { signal }).then((r) => r.text);
   /**
    * Backends without voice messages (the FastAPI one) send a recording as text. A failure throws, so the
    * recorder keeps the recording and offers Retry (it owns busy / error / retry) — nothing is sent.
@@ -197,6 +211,8 @@ export function ChatView({ conversationId, conversation, viewKey }: ChatViewProp
       <ChatHeader
         title={title}
         subtitle={conversationId ? AGENT_NAME : AGENT_TAGLINE}
+        context={scope?.context}
+        actions={scope?.actions}
         status={status}
         onOpenSidebar={() => setSidebarOpen(true)}
       />

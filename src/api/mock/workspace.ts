@@ -1,0 +1,236 @@
+import type { ArchiveFile, CalendarEvent, CalendarTask, Project, ProjectChat, ProjectSummary } from '@/types/api';
+import { ApiError } from '../errors';
+import type { CalendarService, ProjectsService } from '../services';
+import { clone } from './utils';
+
+/**
+ * Sample Projects and Calendar data behind `ProjectsService` / `CalendarService`, used by BOTH adapters
+ * until the backend has these routes. Everything is relative to `now`, so the calendar always has a
+ * populated "today". Replace with the real services — the UI does not change.
+ */
+
+const HOUR = 3600e3;
+const DAY = 24 * HOUR;
+const MB = 1024 * 1024;
+
+const ago = (now: number, ms: number) => new Date(now - ms).toISOString();
+
+function file(now: number, id: string, name: string, kind: ArchiveFile['kind'], size: number, daysAgo: number, by: string, pages?: number): ArchiveFile {
+  return {
+    id,
+    name,
+    kind,
+    extension: name.split('.').pop()!.toUpperCase(),
+    size_bytes: Math.round(size * MB),
+    ...(pages !== undefined && { pages }),
+    uploaded_at: ago(now, daysAgo * DAY),
+    uploaded_by: by,
+    status: 'ready',
+  };
+}
+
+function createProjects(now: number): Project[] {
+  const projects: Omit<Project, 'chat_count' | 'file_count'>[] = [
+    {
+      id: 'water-security',
+      name: 'National Water Security Strategy',
+      description: 'Baseline, KPI framework and delivery roadmap for the 2030 water security programme.',
+      updated_at: ago(now, 2 * HOUR),
+      instructions:
+        'Write for ministry leadership: lead with the decision, then the evidence. Use the 2022 baseline unless told otherwise, cite the source file for every figure, and flag any KPI without an owner.',
+      chats: [],
+      sources: [
+        { id: 'ws-s0', type: 'file', title: 'Baseline Assessment 2022.pdf', detail: 'PDF · 84 pages', summary: 'The 2022 baseline for supply, demand, network losses and metering coverage by region, with the method used for each figure.' },
+        { id: 'ws-s00', type: 'file', title: 'KPI Framework Draft.docx', detail: 'DOCX · 14 pages', summary: 'Five headline indicators with two diagnostic measures each, proposed targets for 2030 and the data source for every KPI.' },
+        { id: 'ws-s1', type: 'meeting', title: 'KPI working session', detail: 'Meeting notes · 5 action items', summary: 'Agreed five headline indicators with diagnostic measures underneath, and to test two baseline years before choosing one.' },
+        { id: 'ws-s2', type: 'meeting', title: 'Steering committee review', detail: 'Meeting notes · 3 decisions', summary: 'Approved the roadmap phasing, asked for a funding sensitivity analysis, and moved tariff reform to the second year.' },
+        { id: 'ws-s3', type: 'contact', title: 'Daniel Brandt', detail: 'CFO, Harbor & Finch', summary: 'Owns the funding model. Prefers a one-page summary before any detailed pack.' },
+        { id: 'ws-s4', type: 'note', title: 'Baseline year decision', detail: 'Note', summary: 'Use 2022 as the baseline year; revisit if the 2023 audit data lands before June.' },
+        { id: 'ws-s5', type: 'link', title: 'UN-Water SDG 6 data portal', detail: 'sdg6data.org', summary: 'Reference indicators for SDG 6, used to benchmark the national targets.' },
+      ],
+      files: [
+        file(now, 'ws-f1', 'Water Security Strategy – Board Deck v4.pptx', 'presentation', 18.4, 1, 'Aashir Aqeel', 32),
+        file(now, 'ws-f2', 'Baseline Assessment 2022.pdf', 'document', 6.2, 4, 'Maya Okafor', 84),
+        file(now, 'ws-f3', 'KPI Framework Draft.docx', 'document', 0.9, 5, 'Aashir Aqeel', 14),
+        file(now, 'ws-f4', 'Steering Committee Update – March.pptx', 'presentation', 11.7, 9, 'Daniel Brandt', 21),
+        file(now, 'ws-f5', 'Supply-demand gap chart.png', 'image', 0.6, 9, 'Maya Okafor'),
+        file(now, 'ws-f6', 'Network losses by region.png', 'image', 1.1, 12, 'Maya Okafor'),
+        file(now, 'ws-f7', 'Tariff Reform Options Paper.pdf', 'document', 2.8, 16, 'Daniel Brandt', 27),
+        { ...file(now, 'ws-f8', 'Desalination Capacity Review.pptx', 'presentation', 24.9, 0, 'Aashir Aqeel', 40), status: 'processing' },
+        file(now, 'ws-f9', 'Workshop whiteboard – levers.jpg', 'image', 3.4, 20, 'Aashir Aqeel'),
+      ],
+    },
+    {
+      id: 'ai-strategy',
+      name: 'National AI Strategy',
+      description: 'Vision, capability pillars and governance model for the national AI programme.',
+      updated_at: ago(now, 1 * DAY),
+      instructions: 'Keep recommendations vendor-neutral. Separate what is decided from what is proposed, and note the owner of each initiative.',
+      chats: [],
+      sources: [
+        { id: 'ai-s1', type: 'meeting', title: 'Governance model workshop', detail: 'Meeting notes · 4 action items', summary: 'Compared a central AI office with a federated model; the group leaned towards a small central office with ministry leads.' },
+        { id: 'ai-s2', type: 'note', title: 'Scope', detail: 'Note', summary: 'Public sector adoption first; private-sector incentives in phase two.' },
+      ],
+      files: [
+        file(now, 'ai-f1', 'AI Strategy – Vision & Pillars.pptx', 'presentation', 9.3, 2, 'Aashir Aqeel', 18),
+        file(now, 'ai-f2', 'Governance Model Options.docx', 'document', 0.4, 6, 'Maya Okafor', 9),
+        file(now, 'ai-f3', 'Capability maturity heatmap.png', 'image', 0.8, 7, 'Maya Okafor'),
+      ],
+    },
+    {
+      id: 'digital-services',
+      name: 'Digital Services KPI Framework',
+      description: 'Indicators, targets and reporting cadence for citizen-facing digital services.',
+      updated_at: ago(now, 5 * DAY),
+      instructions: 'Prefer outcome measures over activity counts. Every KPI needs a baseline, a target and a data source.',
+      chats: [],
+      sources: [],
+      files: [],
+    },
+  ];
+  return projects.map((p) => ({ ...p, chat_count: p.chats.length, file_count: p.files.length }));
+}
+
+const CHATS_KEY = 'lam13.projectChats.v1';
+
+/** The project ↔ conversation links kept in this browser (`storage`), if any. Never throws. */
+function loadLinks(storage: Storage | undefined): Record<string, ProjectChat[]> {
+  try {
+    const parsed: unknown = JSON.parse(storage?.getItem(CHATS_KEY) ?? '{}');
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, ProjectChat[]>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * `chats`: conversations already in each project (the demo ones, projectChatFixtures.ts). `storage`: where the
+ * links made here are kept — the backend has no projects, so which conversation belongs to which project
+ * is known only to this browser. Without it they last for the session.
+ */
+export function createMockProjects({
+  now = Date.now,
+  respond = () => Promise.resolve(),
+  chats = {},
+  storage,
+}: { now?: () => number; respond?: () => Promise<void>; chats?: Record<string, ProjectChat[]>; storage?: Storage } = {}): ProjectsService {
+  const projects = createProjects(now());
+  const links = loadLinks(storage);
+  for (const project of projects) {
+    project.chats = [...(links[project.id] ?? []), ...(chats[project.id] ?? [])];
+    project.chat_count = project.chats.length;
+  }
+  return {
+    async list() {
+      await respond();
+      return projects.map(({ id, name, description, updated_at, chat_count, file_count }): ProjectSummary =>
+        clone({ id, name, description, updated_at, chat_count, file_count }),
+      );
+    },
+    async linkChat(projectId, chat) {
+      await respond();
+      const project = projects.find((p) => p.id === projectId);
+      if (!project) throw new ApiError(404, 'not_found', 'This project does not exist.');
+      if (!project.chats.some((c) => c.id === chat.id)) {
+        const linked: ProjectChat = { id: chat.id, title: chat.title, preview: '', updated_at: new Date(now()).toISOString() };
+        project.chats = [linked, ...project.chats];
+        project.chat_count = project.chats.length;
+        try {
+          const stored = loadLinks(storage);
+          storage?.setItem(CHATS_KEY, JSON.stringify({ ...stored, [projectId]: [linked, ...(stored[projectId] ?? [])] }));
+        } catch {
+          // Storage unavailable (private mode, quota): the link lasts for this session only.
+        }
+      }
+      return clone(project);
+    },
+    async get(id) {
+      await respond();
+      const project = projects.find((p) => p.id === id);
+      if (!project) throw new ApiError(404, 'not_found', 'This project does not exist.');
+      return clone(project);
+    },
+    async saveInstructions(id, instructions) {
+      await respond();
+      const project = projects.find((p) => p.id === id);
+      if (!project) throw new ApiError(404, 'not_found', 'This project does not exist.');
+      project.instructions = instructions;
+      return clone(project);
+    },
+  };
+}
+
+/** Local midnight of the day `offset` days from `now`. */
+function dayStart(now: number, offset: number) {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + offset);
+  return d.getTime();
+}
+
+function createCalendar(now: number): { events: CalendarEvent[]; tasks: CalendarTask[] } {
+  const at = (day: number, hour: number, minutes = 0) => new Date(dayStart(now, day) + hour * HOUR + minutes * 60e3).toISOString();
+  const event = (
+    id: string,
+    title: string,
+    day: number,
+    hour: number,
+    durationMin: number,
+    source: CalendarEvent['source'],
+    participants: string[],
+    project: string | null = null,
+    minutes = 0,
+  ): CalendarEvent => ({
+    id,
+    title,
+    starts_at: at(day, hour, minutes),
+    ends_at: new Date(new Date(at(day, hour, minutes)).getTime() + durationMin * 60e3).toISOString(),
+    source,
+    participants,
+    project,
+  });
+  const WATER = 'National Water Security Strategy';
+  const AI = 'National AI Strategy';
+  return {
+    events: [
+      event('ev-1', 'KPI working session', 0, 10, 60, 'granola', ['Maya Okafor', 'Daniel Brandt'], WATER),
+      event('ev-2', 'Steering committee prep', 0, 14, 45, 'teams', ['Daniel Brandt', 'Priya Nair', 'Omar Haddad'], WATER, 30),
+      event('ev-3', 'Governance model workshop', 1, 11, 90, 'otter', ['Priya Nair', 'Lena Fischer'], AI),
+      event('ev-4', 'Weekly strategy sync', 2, 9, 30, 'fireflies', ['Maya Okafor'], null, 30),
+      event('ev-5', 'Tariff reform options review', 3, 15, 60, 'teams', ['Daniel Brandt', 'Omar Haddad'], WATER),
+      event('ev-6', 'Board deck dry run', 6, 13, 60, 'granola', ['Maya Okafor', 'Daniel Brandt', 'Lena Fischer'], WATER),
+      event('ev-7', 'Digital services KPI review', 8, 10, 45, 'otter', ['Priya Nair'], 'Digital Services KPI Framework'),
+      event('ev-8', 'Baseline data walkthrough', -1, 16, 45, 'granola', ['Maya Okafor'], WATER),
+      event('ev-9', 'AI talent pillar interview', -3, 11, 30, 'fireflies', ['Lena Fischer'], AI),
+    ],
+    tasks: [
+      { id: 'tk-1', title: 'Send the revised KPI list to the steering committee', due_at: at(0, 17), completed: false, meeting: 'KPI working session', project: WATER },
+      { id: 'tk-2', title: 'Confirm 2022 as the baseline year with finance', due_at: at(0, 12), completed: true, meeting: 'Baseline data walkthrough', project: WATER },
+      { id: 'tk-3', title: 'Draft the governance options one-pager', due_at: at(1, 17), completed: false, meeting: 'Governance model workshop', project: AI },
+      { id: 'tk-4', title: 'Collect regional network-loss figures', due_at: at(3, 12), completed: false, meeting: 'Tariff reform options review', project: WATER },
+      { id: 'tk-5', title: 'Rehearse the board narrative', due_at: at(6, 10), completed: false, meeting: 'Board deck dry run', project: WATER },
+      { id: 'tk-6', title: 'Share interview notes with the talent workstream', due_at: at(-2, 17), completed: true, meeting: 'AI talent pillar interview', project: AI },
+    ],
+  };
+}
+
+export function createMockCalendar({ now = Date.now, respond = () => Promise.resolve() } = {}): CalendarService {
+  const { events, tasks } = createCalendar(now());
+  return {
+    async events() {
+      await respond();
+      return clone(events);
+    },
+    async tasks() {
+      await respond();
+      return clone(tasks);
+    },
+    async setTaskCompleted(id, completed) {
+      await respond();
+      const task = tasks.find((t) => t.id === id);
+      if (!task) throw new ApiError(404, 'not_found', 'This task does not exist.');
+      task.completed = completed;
+      return clone(task);
+    },
+  };
+}

@@ -16,7 +16,10 @@ import type {
 } from '@/types/api';
 import { getAccessToken } from './auth';
 import { abortError, ApiError } from './errors';
+import { createMockAdapter } from './mock/mockAdapter';
+import { demoProjectChats, isDemoConversation } from './mock/projectChatFixtures';
 import { createMockWhatsApp } from './mock/whatsapp';
+import { createMockCalendar, createMockProjects } from './mock/workspace';
 import type { ApiAdapter, SendMessageBody } from './services';
 import { readSseMessages, type SseMessage, type StreamEvent } from './stream';
 
@@ -91,6 +94,20 @@ async function toApiError(response: Response): Promise<ApiError> {
 }
 
 const notSupported = (what: string) => new ApiError(501, 'not_supported', `${what} isn't available yet.`);
+/** A demo conversation is local sample data: nothing from it may reach the backend, and nothing is faked in its place. */
+const notInDemo = (what: string) => new ApiError(501, 'not_supported', `${what} isn't available in demo conversations.`);
+
+/**
+ * This browser's localStorage, or undefined when it cannot be used. Reading the property itself throws
+ * when site data is blocked, so the access is guarded — not only the calls made on it later.
+ */
+function browserStorage(): Storage | undefined {
+  try {
+    return globalThis.localStorage ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // ── Backend DTOs (lam13-app/api/schemas/chat.py) ─────────────────────────────
 
@@ -492,6 +509,11 @@ export function createHttpAdapter(): ApiAdapter {
     return pending;
   };
 
+  // DEMO: the sample projects' conversations are local data, not backend sessions. Reading or continuing one
+  // goes to an in-memory mock (canned replies, nothing sent to the backend, gone on reload).
+  let demoAdapter: ApiAdapter | undefined;
+  const demo = () => (demoAdapter ??= createMockAdapter());
+
   return {
     // No regenerate or /audio (voice-message) endpoint: the UI hides Regenerate and audio messages. Recordings
     // are transcribed (POST /voice/transcribe) into the message box and sent as text.
@@ -503,6 +525,7 @@ export function createHttpAdapter(): ApiAdapter {
         return { items: items.map(toConversation), next_cursor: null };
       },
       async get(id) {
+        if (isDemoConversation(id)) return demo().conversations.get(id);
         return toConversation(await loadDetail(id));
       },
       async create() {
@@ -519,12 +542,14 @@ export function createHttpAdapter(): ApiAdapter {
     },
 
     messages: {
-      async list(conversationId) {
+      async list(conversationId, params) {
+        if (isDemoConversation(conversationId)) return demo().messages.list(conversationId, params);
         // ponytail: the backend returns the whole history in one response; add paging if chats get very long.
         const messages = toMessages(await loadDetail(conversationId));
         return { items: messages.reverse(), next_cursor: null };
       },
       async send(conversationId, body, options) {
+        if (isDemoConversation(conversationId)) return demo().messages.send(conversationId, body, options);
         if (body.kind !== 'text') throw notSupported('Voice notes');
         const response = await request('/chat/stream', {
           method: 'POST',
@@ -544,7 +569,9 @@ export function createHttpAdapter(): ApiAdapter {
         return translateStream(readSseMessages(response.body, options?.signal), { conversationId, body }, loadDetail);
       },
       // No cancel endpoint: the backend finishes and saves the answer; the client just stops reading.
-      async cancel() {},
+      async cancel(conversationId, messageId) {
+        if (isDemoConversation(conversationId)) await demo().messages.cancel(conversationId, messageId);
+      },
       async regenerate() {
         throw notSupported('Regenerating an answer');
       },
@@ -555,6 +582,7 @@ export function createHttpAdapter(): ApiAdapter {
 
     attachments: {
       async upload({ file, filename, conversation_id }, options) {
+        if (isDemoConversation(conversation_id)) throw notInDemo('Attaching files');
         const form = new FormData();
         form.append('file', file, filename);
         if (conversation_id) form.append('session_id', conversation_id);
@@ -581,7 +609,8 @@ export function createHttpAdapter(): ApiAdapter {
         throw notSupported('Voice notes');
       },
       /** POST /voice/transcribe — multipart `file` → `{ text }` (TranscriptionResponse). Stores nothing. */
-      async transcribe({ file }, options) {
+      async transcribe({ file, conversation_id }, options) {
+        if (isDemoConversation(conversation_id)) throw notInDemo('Voice input');
         if (file.size > MAX_TRANSCRIBE_BYTES) throw new ApiError(413, 'payload_too_large', 'Audio file must be 25 MB or smaller.');
         const form = new FormData();
         form.append('file', file, recordingFilename(file));
@@ -626,6 +655,11 @@ export function createHttpAdapter(): ApiAdapter {
     // TODO(backend): WhatsApp connection is not on the backend yet — a local mock that sends nothing. Replace
     // with the real integration here (OTP, Meta embedded signup, …); the UI only uses WhatsAppService.
     whatsapp: createMockWhatsApp(),
+    // TODO(backend): Projects and Calendar have no backend routes yet — local sample data behind the same services.
+    // Chats started in a project are real backend sessions (which project each belongs to is kept in this browser
+    // only, when its storage can be used); the sample projects' demo conversations are local data.
+    projects: createMockProjects({ storage: browserStorage(), chats: demoProjectChats(Date.now()) }),
+    calendar: createMockCalendar(),
 
     // My Contacts: /contacts. The UI searches and sorts the (unpaginated) list itself; version history has
     // no UI yet and is not called.

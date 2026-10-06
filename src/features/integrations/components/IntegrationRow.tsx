@@ -1,13 +1,14 @@
 import { useId, type ReactNode } from 'react';
+import { BrandLogo, brandName, type Brand } from '@/components/BrandLogo';
 
 /** One integration on the Integrations page: name and purpose, its state or action, then any flow below. */
 export function IntegrationRow({
-  name,
+  brand,
   description,
   action,
   children,
 }: {
-  name: string;
+  brand: Brand;
   description: string;
   action?: ReactNode;
   children?: ReactNode;
@@ -16,15 +17,18 @@ export function IntegrationRow({
   return (
     <section aria-labelledby={id} className="flex flex-col gap-4 border-b border-hairline py-6 first:pt-0">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0 flex-1 basis-60">
-          <h2 id={id} className="text-sm font-bold">
-            {name}
-          </h2>
-          <p className="mt-1 max-w-[52ch] text-xs leading-relaxed text-fg-muted">{description}</p>
+        <div className="flex min-w-0 flex-1 basis-60 items-start gap-3.5">
+          <BrandLogo brand={brand} />
+          <div className="min-w-0 flex-1">
+            <h3 id={id} className="text-sm font-bold">
+              {brandName(brand)}
+            </h3>
+            <p className="mt-1 max-w-[52ch] text-xs leading-relaxed text-fg-muted">{description}</p>
+          </div>
         </div>
         {action && <div className="shrink-0">{action}</div>}
       </div>
-      {children && <div className="max-w-md">{children}</div>}
+      {children && <div className="max-w-md sm:pl-[3.375rem]">{children}</div>}
     </section>
   );
 }

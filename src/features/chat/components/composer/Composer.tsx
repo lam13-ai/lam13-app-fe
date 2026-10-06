@@ -6,6 +6,7 @@ import { useComposerStore } from '@/stores/composerStore';
 import type { MeetingSummary } from '@/types/api';
 import { clipboardFiles } from '../../lib/attachments';
 import { AddControl, ModelChips, useModelChips } from './ComposerToolbar';
+import { ModelSelector } from './ModelSelector';
 import { SendButton, type SendButtonMode } from './SendButton';
 
 const PLACEHOLDER = 'Ask Lam13 about strategy…';
@@ -162,9 +163,10 @@ export function Composer({
       onStop={onStop}
     />
   );
-  /** The composer's controls, always together on one line: add (files / context), then send / mic / stop. */
+  /** The composer's controls, always together on one line: model, add (files / context), then send / mic / stop. */
   const controls = (
     <>
+      <ModelSelector />
       <AddControl onAttach={onAttach} onAddMeeting={onAddMeeting} />
       {sendButton}
     </>
@@ -230,6 +232,8 @@ export function Composer({
                     // The shared thin scrollbar, shown only when the text overflows; its track starts below the
                     // pill's rounded corner so it runs along the straight edge.
                     'scrollbar-subtle [&::-webkit-scrollbar-track]:mt-3 [&::-webkit-scrollbar-track]:mb-1',
+                    // The placeholder stays on one line (ellipsis) when the controls leave little room, as on a phone.
+                    'placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap',
                     'placeholder:font-medium placeholder:text-fg-muted focus-visible:outline-none disabled:cursor-not-allowed',
                   )}
                 />
