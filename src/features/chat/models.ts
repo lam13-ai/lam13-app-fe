@@ -53,6 +53,17 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     ],
   },
   { id: 'moonshot', name: 'Moonshot AI', brand: 'moonshot', models: [{ id: 'kimi-k3', name: 'Kimi K3' }] },
+  {
+    // Sample entries (the Qwen family's tier names), like the rest of this list: not connected to anything.
+    id: 'qwen',
+    name: 'Qwen',
+    brand: 'qwen',
+    models: [
+      { id: 'qwen-max', name: 'Qwen Max' },
+      { id: 'qwen-plus', name: 'Qwen Plus' },
+      { id: 'qwen-turbo', name: 'Qwen Turbo' },
+    ],
+  },
   { id: 'zai', name: 'Z.ai', brand: 'zai', models: [{ id: 'glm-5.3', name: 'GLM 5.3' }] },
 ];
 

@@ -8,10 +8,11 @@ import anthropic from '@/assets/providers/anthropic.svg';
 import google from '@/assets/providers/google.svg';
 import moonshot from '@/assets/providers/moonshot.svg';
 import openai from '@/assets/providers/openai.svg';
+import qwen from '@/assets/providers/qwen.svg';
 import zai from '@/assets/providers/zai.svg';
 import { cn } from '@/lib/cn';
 
-export type Brand = 'granola' | 'otter' | 'fireflies' | 'whatsapp' | 'teams' | 'slack' | 'openai' | 'anthropic' | 'google' | 'moonshot' | 'zai';
+export type Brand = 'granola' | 'otter' | 'fireflies' | 'whatsapp' | 'teams' | 'slack' | 'openai' | 'anthropic' | 'google' | 'moonshot' | 'qwen' | 'zai';
 
 /** Each vendor's own mark (src/assets/brands, src/assets/providers). `bleed`: the icon is a full square that fills the tile. */
 const BRANDS: Record<Brand, { name: string; src: string; bleed?: boolean }> = {
@@ -25,6 +26,7 @@ const BRANDS: Record<Brand, { name: string; src: string; bleed?: boolean }> = {
   anthropic: { name: 'Anthropic', src: anthropic },
   google: { name: 'Google', src: google },
   moonshot: { name: 'Moonshot AI', src: moonshot },
+  qwen: { name: 'Qwen', src: qwen },
   zai: { name: 'Z.ai', src: zai },
 };
 

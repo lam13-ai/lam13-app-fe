@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useUiStore } from '@/stores/uiStore';
 import { ApiProvider, createMockAdapter, INSTANT_TIMING } from '@/api';
 import { Composer, type ComposerProps } from './Composer';
 
@@ -23,6 +24,9 @@ function open() {
   return screen.getByLabelText('Message Lam13') as HTMLTextAreaElement;
 }
 
+// The UI store is shared by the tests in this file: each one starts from its real initial state (model: Lam).
+beforeEach(() => useUiStore.setState(useUiStore.getInitialState()));
+
 describe('Composer', () => {
   it('starts collapsed and expands into a focused textarea with the toolbar', async () => {
     setup();
@@ -41,11 +45,11 @@ describe('Composer', () => {
     open();
     fireEvent.click(screen.getByRole('button', { name: 'Model: Lam' }));
     const menu = () => screen.getByRole('menu', { name: 'Model' });
-    expect(within(menu()).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['Lam', 'OpenAI', 'Anthropic', 'Google', 'Moonshot AI', 'Z.ai']);
+    expect(within(menu()).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['Lam', 'OpenAI', 'Anthropic', 'Google', 'Moonshot AI', 'Qwen', 'Z.ai']);
     expect(within(menu()).getAllByRole('menuitemradio', { checked: true }).map((o) => o.textContent)).toEqual([expect.stringMatching(/^Lam/)]);
     expect(within(menu()).queryByText(/Lam (Deep|Swift|Research|Vision)|Lam13/)).toBeNull();
     expect(screen.queryByText(/soon/i)).toBeNull();
-    for (const name of ['GPT-6.1 Sol', 'Claude Opus 5.5', 'Gemini 3.8 Pro', 'Kimi K3', 'GLM 5.3']) {
+    for (const name of ['GPT-6.1 Sol', 'Claude Opus 5.5', 'Gemini 3.8 Pro', 'Kimi K3', 'Qwen Max', 'GLM 5.3']) {
       expect(within(menu()).getByRole('menuitemradio', { name })).toBeTruthy();
     }
     expect(screen.getByText(/Lam answers every message for now/)).toBeTruthy(); // never claims the others are live
@@ -54,6 +58,32 @@ describe('Composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Model: Claude Sonnet 5.5' }));
     expect(within(menu()).getAllByRole('menuitemradio', { checked: true }).map((o) => o.textContent)).toEqual(['Claude Sonnet 5.5']);
     expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('Qwen is a provider group with its logo and sample models; choosing one is a UI-only selection and Lam stays the default', () => {
+    const { onSend } = setup();
+    open();
+    expect(screen.getByRole('button', { name: 'Model: Lam' })).toBeTruthy(); // the default is unchanged
+    fireEvent.click(screen.getByRole('button', { name: 'Model: Lam' }));
+    const menu = () => screen.getByRole('menu', { name: 'Model' });
+    const qwen = within(menu()).getByRole('group', { name: 'Qwen' });
+    expect(qwen.querySelector('img')).toBeTruthy();
+    expect(within(qwen).getAllByRole('menuitemradio').map((o) => o.textContent)).toEqual(['Qwen Max', 'Qwen Plus', 'Qwen Turbo']);
+    expect(within(qwen).queryAllByRole('menuitemradio', { checked: true })).toEqual([]);
+    expect(screen.getByText(/Other models are not connected yet/)).toBeTruthy(); // no claim that Qwen is live
+
+    fireEvent.click(within(qwen).getByRole('menuitemradio', { name: 'Qwen Plus' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Model: Qwen Plus' }));
+    expect(within(menu()).getAllByRole('menuitemradio', { checked: true }).map((o) => o.textContent)).toEqual(['Qwen Plus']);
+    expect(onSend).not.toHaveBeenCalled();
+
+    // Search finds it by provider and by model name.
+    const names = () => within(menu()).queryAllByRole('menuitemradio').map((o) => o.textContent);
+    const search = screen.getByRole('searchbox', { name: 'Search models' });
+    fireEvent.change(search, { target: { value: 'qwen' } });
+    expect(names()).toEqual(['Qwen Max', 'Qwen Plus', 'Qwen Turbo']);
+    fireEvent.change(search, { target: { value: 'turbo' } });
+    expect(names()).toEqual(['Qwen Turbo']);
   });
 
   it('the model list is searchable by model or provider', () => {
