@@ -1,16 +1,17 @@
-import { CircleCheck, FileText, Image as ImageIcon, Presentation, Search, Upload } from 'lucide-react';
+import { CircleCheck, Search, Upload } from 'lucide-react';
 import { useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Button, Spinner, VisuallyHidden, smallIconProps } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatRelativeTime } from '@/lib/format';
 import type { ArchiveFile, ArchiveFileKind } from '@/types/api';
+import { FileTypeIcon } from './FileTypeIcon';
 
 type Filter = 'all' | ArchiveFileKind;
 
-const KINDS: Record<ArchiveFileKind, { label: string; Icon: typeof FileText; tone: string; unit: string }> = {
-  presentation: { label: 'Presentations', Icon: Presentation, tone: 'bg-fg text-bg', unit: 'slide' },
-  document: { label: 'Documents', Icon: FileText, tone: 'bg-accent-wash text-accent', unit: 'page' },
-  image: { label: 'Images', Icon: ImageIcon, tone: 'bg-muted text-fg', unit: '' },
+const KINDS: Record<ArchiveFileKind, { label: string; unit: string }> = {
+  presentation: { label: 'Presentations', unit: 'slide' },
+  document: { label: 'Documents', unit: 'page' },
+  image: { label: 'Images', unit: '' },
 };
 const FILTERS: Filter[] = ['all', 'presentation', 'document', 'image'];
 
@@ -39,13 +40,12 @@ export function formatFileSize(bytes: number): string {
 function FileCard({ file }: { file: ArchiveFile }) {
   const kind = KINDS[file.kind];
   return (
-    <article className="flex h-full flex-col gap-3 rounded-card border border-border bg-bg p-3.5 transition-[border-color] duration-150 ease-standard hover:border-fg/30">
+    <article className="flex h-full flex-col gap-3 rounded-card border border-border bg-bg p-4 transition-[border-color] duration-150 ease-standard hover:border-fg/30">
       <div className="flex items-start gap-3">
-        <span aria-hidden="true" className={cn('flex size-10 shrink-0 items-center justify-center rounded-card', kind.tone)}>
-          <kind.Icon size={20} strokeWidth={1.8} />
-        </span>
+        {/* The format's own mark (PowerPoint, Word, PDF, image); the extension is spelled out in the line below. */}
+        <FileTypeIcon extension={file.extension} />
         <div className="min-w-0 flex-1">
-          <h3 className="line-clamp-2 break-words text-xs font-bold leading-snug" title={file.name}>
+          <h3 className="line-clamp-2 break-words text-xs font-bold leading-snug text-fg" title={file.name}>
             {file.name}
           </h3>
           <p className="mt-1 text-2xs text-fg-muted">
@@ -58,13 +58,13 @@ function FileCard({ file }: { file: ArchiveFile }) {
           {file.uploaded_by} · {formatRelativeTime(file.uploaded_at)}
         </span>
         {file.status === 'ready' ? (
-          <span className="flex shrink-0 items-center gap-1 font-bold text-fg">
+          <span className="flex shrink-0 items-center gap-1 text-fg">
             <CircleCheck size={14} strokeWidth={1.8} aria-hidden className="text-accent" /> Readable by Lam
           </span>
         ) : file.status === 'local' ? (
-          <span className="shrink-0 rounded-full border border-hairline-strong px-2 font-bold">Not uploaded</span>
+          <span className="shrink-0">Not uploaded</span>
         ) : (
-          <span className="flex shrink-0 items-center gap-1.5 font-bold">
+          <span className="flex shrink-0 items-center gap-1.5">
             <Spinner size={12} state="active" /> Processing…
           </span>
         )}
@@ -149,8 +149,9 @@ export function Archives({ files: saved, compact = false }: { files: ArchiveFile
             aria-pressed={filter === f}
             onClick={() => setFilter(f)}
             className={cn(
-              'flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-bold transition-colors duration-150 ease-standard',
-              filter === f ? 'border-fg bg-fg text-bg' : 'border-border text-fg-muted hover:border-fg/40 hover:text-fg',
+              'flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs transition-colors duration-150 ease-standard',
+              // As before — a solid pill for the current filter, outlined ones for the rest — in the page's softer ink.
+              filter === f ? 'border-fg bg-fg font-bold text-bg' : 'border-border text-fg-muted hover:border-fg/40 hover:text-fg',
             )}
           >
             {f === 'all' ? 'All files' : KINDS[f].label}

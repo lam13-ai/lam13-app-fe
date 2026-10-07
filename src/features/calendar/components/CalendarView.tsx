@@ -1,11 +1,12 @@
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Server } from 'lucide-react';
-import { useId, useMemo, useState, type KeyboardEvent } from 'react';
+import { useId, useMemo, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Link } from 'react-router';
 import { BrandLogo, brandName, type Brand } from '@/components/BrandLogo';
 import { ErrorState } from '@/components/ErrorState';
 import { PageFrame } from '@/components/PageFrame';
-import { Button, IconButton, Menu, MenuItem, Popover, Skeleton, iconProps, smallIconProps } from '@/components/ui';
+import { Button, IconButton, Menu, MenuItem, Popover, Skeleton, iconProps, smallIconProps, usePopover } from '@/components/ui';
 import { cn } from '@/lib/cn';
+import { isHttpsUrl } from '@/lib/url';
 import { useDemoStore, type NoteTaker } from '@/stores/demoStore';
 import type { CalendarEvent, CalendarTask } from '@/types/api';
 import { useCalendarEvents, useCalendarTasks, useSetTaskCompleted } from '../hooks/useCalendar';
@@ -48,21 +49,112 @@ function NoteTakerMark({ taker, size }: { taker: (typeof NOTE_TAKERS)[number]; s
   );
 }
 
-/** Which note taker the calendar shows as its source. A demo choice: nothing is connected by picking one. */
+const FIELD =
+  'h-11 w-full border border-border bg-bg px-3 text-base text-fg outline-none transition-colors duration-150 ease-standard placeholder:text-fg-muted focus:border-composer-focus focus:ring-1 focus:ring-composer-ring focus-visible:outline-none sm:text-sm md:h-10';
+
+/**
+ * The custom note taker's set-up, inside the selector's popover: it is connected only once a valid webhook
+ * URL has been entered and Connect pressed. A demo — the URL is kept in session memory and nothing is called.
+ */
+function CustomNoteTakerForm() {
+  const popover = usePopover();
+  const custom = useDemoStore((s) => s.customNoteTaker);
+  const setCustom = useDemoStore((s) => s.setCustomNoteTaker);
+  const [url, setUrl] = useState(custom?.url ?? '');
+  const [submitted, setSubmitted] = useState(false);
+  const id = useId();
+  const value = url.trim();
+  const invalid = submitted && value !== '' && !isHttpsUrl(value);
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    setSubmitted(true);
+    if (!isHttpsUrl(value)) return;
+    setCustom({ url: value });
+    popover?.close();
+  };
+  return (
+    <form noValidate onSubmit={onSubmit} aria-labelledby={`${id}-title`} className="flex flex-col gap-3 p-2">
+      <div>
+        <h2 id={`${id}-title`} className="text-sm font-bold">
+          Custom Note Taker
+        </h2>
+        <p className="mt-1 text-xs leading-relaxed text-fg-muted">Connect your own note taker using a webhook or callback URL.</p>
+      </div>
+      <div>
+        <label htmlFor={`${id}-url`} className="mb-1.5 block text-xs font-bold">
+          Webhook URL
+        </label>
+        <input
+          id={`${id}-url`}
+          type="url"
+          inputMode="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://example.com/webhook"
+          autoComplete="off"
+          spellCheck={false}
+          autoFocus
+          aria-invalid={invalid}
+          aria-describedby={invalid ? `${id}-error` : `${id}-help`}
+          className={FIELD}
+        />
+        {invalid ? (
+          <p id={`${id}-error`} role="alert" className="mt-1.5 text-xs text-danger">
+            Enter a valid https:// URL.
+          </p>
+        ) : (
+          <p id={`${id}-help`} className="mt-1.5 text-2xs leading-relaxed text-fg-muted">
+            Demo: the URL is kept for this session only and nothing is contacted.
+          </p>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" variant="primary" size="sm" disabled={value === ''}>
+          {custom ? 'Save' : 'Connect'}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => popover?.close()}>
+          Cancel
+        </Button>
+        {custom && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            onClick={() => {
+              setCustom(null);
+              popover?.close();
+            }}
+          >
+            Disconnect
+          </Button>
+        )}
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Which note taker the calendar shows as its source. A demo choice: Granola, Otter and Fireflies only
+ * change this label; the custom one first asks for its webhook URL and is not "Connected" until then.
+ */
 function NoteTakerSelect() {
   const noteTaker = useDemoStore((s) => s.noteTaker);
   const setNoteTaker = useDemoStore((s) => s.setNoteTaker);
+  const [view, setView] = useState<'menu' | 'custom'>('menu');
   const current = NOTE_TAKERS.find((t) => t.id === noteTaker)!;
   return (
     <Popover
       placement="bottom-end"
-      className="w-60"
+      className={view === 'custom' ? 'w-[min(20rem,calc(100vw-1.5rem))]' : 'w-60'}
+      onOpenChange={(open) => {
+        if (!open) setView('menu');
+      }}
       trigger={(props) => (
         <button
           {...props}
           type="button"
           aria-label={`Note taker: ${current.name} Connected`}
-          className="group flex h-9 shrink-0 items-center gap-2 rounded-full border border-border pl-1.5 pr-2.5 text-xs font-bold transition-colors duration-150 ease-standard hover:border-fg/40 aria-expanded:border-fg/40"
+          className="group flex h-9 shrink-0 items-center gap-2 rounded-full border border-border pl-1.5 pr-2.5 text-xs transition-colors duration-150 ease-standard hover:border-fg/40 aria-expanded:border-fg/40"
         >
           <NoteTakerMark taker={current} size={22} />
           <span className="max-sm:sr-only">{current.name}</span>
@@ -74,14 +166,27 @@ function NoteTakerSelect() {
         </button>
       )}
     >
-      <Menu label="Note taker">
-        {NOTE_TAKERS.map((t) => (
-          <MenuItem key={t.id} checked={t.id === noteTaker} onSelect={() => setNoteTaker(t.id)} leading={<NoteTakerMark taker={t} size={18} />}>
-            {t.name}
-          </MenuItem>
-        ))}
-      </Menu>
-      <p className="mt-1.5 border-t border-hairline px-2.5 pt-2 text-2xs leading-snug text-fg-muted">Demo: choosing a note taker only changes this label.</p>
+      {view === 'custom' ? (
+        <CustomNoteTakerForm />
+      ) : (
+        <>
+          <Menu label="Note taker">
+            {NOTE_TAKERS.map((t) =>
+              t.id === 'custom' ? (
+                // Not a selection yet: it opens the set-up, and only a valid URL + Connect makes it the note taker.
+                <MenuItem key={t.id} checked={noteTaker === 'custom'} keepOpen onSelect={() => setView('custom')} leading={<NoteTakerMark taker={t} size={18} />}>
+                  {t.name}
+                </MenuItem>
+              ) : (
+                <MenuItem key={t.id} checked={t.id === noteTaker} onSelect={() => setNoteTaker(t.id)} leading={<NoteTakerMark taker={t} size={18} />}>
+                  {t.name}
+                </MenuItem>
+              ),
+            )}
+          </Menu>
+          <p className="mt-1.5 border-t border-hairline px-2.5 pt-2 text-2xs leading-snug text-fg-muted">Demo: choosing a note taker only changes this label.</p>
+        </>
+      )}
     </Popover>
   );
 }

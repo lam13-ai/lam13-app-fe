@@ -32,3 +32,23 @@ export function useLinkChat() {
     },
   });
 }
+
+/** Adds a member to the project's (demo) member list. */
+export function useAddMember(projectId: string) {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (email: string) => api.projects.addMember(projectId, { email, role: 'member' }),
+    onSuccess: (project) => queryClient.setQueryData(queryKeys.projects.detail(projectId), project),
+  });
+}
+
+/** Removes a member from the project's (demo) member list. */
+export function useRemoveMember(projectId: string) {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (memberId: string) => api.projects.removeMember(projectId, memberId),
+    onSuccess: (project) => queryClient.setQueryData(queryKeys.projects.detail(projectId), project),
+  });
+}

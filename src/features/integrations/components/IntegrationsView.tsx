@@ -23,7 +23,7 @@ export function IntegrationsView() {
   return (
     <section
       aria-labelledby="integrations-heading"
-      className="flex h-full min-h-0 flex-col overflow-hidden bg-bg md:rounded-card md:border md:border-frame md:shadow-card"
+      className="soft-ink flex h-full min-h-0 flex-col overflow-hidden bg-bg md:rounded-card md:border md:border-frame md:shadow-card"
     >
       <header className="bright-chrome flex h-[var(--header-h)] shrink-0 items-center gap-3 border-b border-hairline px-3 md:px-5">
         <IconButton

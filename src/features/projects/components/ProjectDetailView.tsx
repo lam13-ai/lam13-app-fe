@@ -7,10 +7,11 @@ import { PageFrame } from '@/components/PageFrame';
 import { Button, Skeleton, iconProps, smallIconProps } from '@/components/ui';
 import { useProject } from '../hooks/useProjects';
 import { Archives } from './Archives';
+import { Members } from './Members';
 import { ProjectChatList, projectNewChatPath } from './ProjectChatList';
 import { Context, Instructions, Tabs, tabPanelProps } from './ProjectSections';
 
-const TABS = ['Chats', 'Instructions', 'Context', 'Archives'] as const;
+const TABS = ['Chats', 'Instructions', 'Context', 'Archives', 'Members'] as const;
 type Tab = (typeof TABS)[number];
 
 /** `/projects/:projectId`: the project's workspace — its chats, and its instructions, context and archive. */
@@ -69,7 +70,9 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   return (
     <PageFrame
       title={data.name}
-      subtitle="Project"
+      // A project with more than its owner is shared: say so, quietly, where the title is.
+      subtitle={data.members.length > 1 ? `Shared project · ${data.members.length} members` : 'Project'}
+      subtitleOnMobile
       leading={back}
       wide
       actions={
@@ -89,7 +92,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         tabs={TABS}
         value={tab}
         onChange={setTab}
-        counts={{ Chats: data.chats.length, Context: data.sources.length, Archives: data.files.length }}
+        counts={{ Chats: data.chats.length, Context: data.sources.length, Archives: data.files.length, Members: data.members.length }}
         className="mb-6 mt-5"
       />
 
@@ -113,6 +116,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         {tab === 'Instructions' && <Instructions project={data} />}
         {tab === 'Context' && <Context project={data} />}
         {tab === 'Archives' && <Archives files={data.files} />}
+        {tab === 'Members' && <Members project={data} />}
       </div>
     </PageFrame>
   );

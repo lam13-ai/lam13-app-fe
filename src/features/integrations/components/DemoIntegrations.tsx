@@ -1,13 +1,14 @@
 import { Server } from 'lucide-react';
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { brandName, type Brand } from '@/components/BrandLogo';
 import { Button } from '@/components/ui';
+import { isHttpsUrl } from '@/lib/url';
 import { useDemoStore } from '@/stores/demoStore';
 import { ConnectedDot, IntegrationRow } from './IntegrationRow';
 
 /** Marks a state that exists only in this page, so "Connected" is never read as a real account link. */
 function DemoTag() {
-  return <span className="rounded-full border border-hairline-strong px-1.5 text-[10px] font-bold uppercase leading-4 tracking-wide text-fg-muted">Demo</span>;
+  return <span className="rounded-full border border-hairline-strong px-1.5 text-[10px] uppercase leading-4 tracking-wide text-fg-muted">Demo</span>;
 }
 
 /**
@@ -44,16 +45,6 @@ export function DemoIntegration({ brand, description }: { brand: Brand; descript
 const FIELD =
   'h-11 w-full border border-border bg-bg px-3 text-base text-fg outline-none transition-colors duration-150 ease-standard placeholder:text-fg-muted focus:border-composer-focus focus:ring-1 focus:ring-composer-ring focus-visible:outline-none sm:text-sm md:h-10';
 
-/** An https URL (or http on localhost, for a server on the user's own machine). */
-function validUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' || (url.protocol === 'http:' && /^(localhost|127\.0\.0\.1)$/.test(url.hostname));
-  } catch {
-    return false;
-  }
-}
-
 /**
  * A custom MCP server or note taker: name, endpoint, optional API key. A local demo — saving stores the
  * name and URL in session memory only; the key is cleared on save and never stored, logged or sent.
@@ -67,8 +58,19 @@ export function CustomServerSection() {
   const [key, setKey] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const id = useId();
+  const sectionRef = useRef<HTMLElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  // Opening the form brings the start of this section into view (it is the last thing on the page, so the
+  // form would otherwise open below the fold). Never on closing; no animation when motion is reduced.
+  useEffect(() => {
+    if (!editing) return;
+    const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    sectionRef.current?.scrollIntoView?.({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+    // Focus without the browser's own (instant) scroll, which would cut the smooth one short.
+    nameRef.current?.focus({ preventScroll: true });
+  }, [editing]);
   const nameError = !name.trim() ? 'Enter a name.' : null;
-  const urlError = !url.trim() ? 'Enter the endpoint or webhook URL.' : !validUrl(url.trim()) ? 'Enter a valid https:// URL.' : null;
+  const urlError = !url.trim() ? 'Enter the endpoint or webhook URL.' : !isHttpsUrl(url.trim()) ? 'Enter a valid https:// URL.' : null;
 
   const startEditing = () => {
     setName(server?.name ?? '');
@@ -87,11 +89,11 @@ export function CustomServerSection() {
   };
 
   return (
-    <section aria-labelledby={`${id}-title`} className="rounded-card border border-border p-4 sm:p-5">
+    <section ref={sectionRef} aria-labelledby={`${id}-title`} className="scroll-mt-4 rounded-card border border-hairline-strong p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="flex min-w-0 flex-1 basis-60 items-start gap-3.5">
-          <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-card bg-fg text-bg">
-            <Server size={20} strokeWidth={1.8} />
+          <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-card bg-fg/10 text-fg">
+            <Server size={18} strokeWidth={1.6} />
           </span>
           <div className="min-w-0 flex-1">
             <h3 id={`${id}-title`} className="text-sm font-bold">
@@ -116,7 +118,7 @@ export function CustomServerSection() {
       </div>
 
       {server && !editing && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-4 sm:pl-[3.375rem]">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-4 sm:pl-[3.125rem]">
           <div className="min-w-0">
             <p className="truncate text-sm font-bold">{server.name}</p>
             <p className="truncate text-xs text-fg-muted">
@@ -136,7 +138,7 @@ export function CustomServerSection() {
       )}
 
       {editing && (
-        <form noValidate onSubmit={onSubmit} className="mt-4 flex max-w-md flex-col gap-4 border-t border-hairline pt-4 sm:ml-[3.375rem]">
+        <form noValidate onSubmit={onSubmit} className="mt-4 flex max-w-md flex-col gap-4 border-t border-hairline pt-4 sm:ml-[3.125rem]">
           <div>
             <label htmlFor={`${id}-name`} className="mb-1.5 block text-xs font-bold">
               Name
@@ -146,8 +148,8 @@ export function CustomServerSection() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Team notes server"
+              ref={nameRef}
               autoComplete="off"
-              autoFocus
               aria-invalid={submitted && Boolean(nameError)}
               aria-describedby={submitted && nameError ? `${id}-name-error` : undefined}
               className={FIELD}

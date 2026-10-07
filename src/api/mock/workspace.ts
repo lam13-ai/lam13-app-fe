@@ -1,4 +1,4 @@
-import type { ArchiveFile, CalendarEvent, CalendarTask, Project, ProjectChat, ProjectSummary } from '@/types/api';
+import type { ArchiveFile, CalendarEvent, CalendarTask, Project, ProjectChat, ProjectMember, ProjectSummary } from '@/types/api';
 import { ApiError } from '../errors';
 import type { CalendarService, ProjectsService } from '../services';
 import { clone } from './utils';
@@ -30,7 +30,7 @@ function file(now: number, id: string, name: string, kind: ArchiveFile['kind'], 
 }
 
 function createProjects(now: number): Project[] {
-  const projects: Omit<Project, 'chat_count' | 'file_count'>[] = [
+  const projects: Omit<Project, 'chat_count' | 'file_count' | 'members'>[] = [
     {
       id: 'water-security',
       name: 'National Water Security Strategy',
@@ -88,8 +88,19 @@ function createProjects(now: number): Project[] {
       files: [],
     },
   ];
-  return projects.map((p) => ({ ...p, chat_count: p.chats.length, file_count: p.files.length }));
+  return projects.map((p) => ({ ...p, chat_count: p.chats.length, file_count: p.files.length, members: (MEMBERS[p.id] ?? []).map((m) => ({ ...m })) }));
 }
+
+/**
+ * Who each sample project is shared with: the same people who appear as file owners in its Archives and
+ * in the calendar's meetings. No email addresses are made up for them.
+ */
+const person = (id: string, name: string, role: ProjectMember['role'] = 'member'): ProjectMember => ({ id, name, email: null, role });
+const MEMBERS: Record<string, ProjectMember[]> = {
+  'water-security': [person('m-aashir', 'Aashir Aqeel', 'owner'), person('m-maya', 'Maya Okafor'), person('m-daniel', 'Daniel Brandt'), person('m-priya', 'Priya Nair')],
+  'ai-strategy': [person('m-aashir', 'Aashir Aqeel', 'owner'), person('m-maya', 'Maya Okafor'), person('m-priya', 'Priya Nair')],
+  'digital-services': [person('m-aashir', 'Aashir Aqeel', 'owner'), person('m-priya', 'Priya Nair')],
+};
 
 const CHATS_KEY = 'lam13.projectChats.v1';
 
@@ -148,6 +159,25 @@ export function createMockProjects({
       await respond();
       const project = projects.find((p) => p.id === id);
       if (!project) throw new ApiError(404, 'not_found', 'This project does not exist.');
+      return clone(project);
+    },
+    // Demo membership: kept in memory for this session. No invitation, email or permission exists behind it.
+    async addMember(projectId, { email, role }) {
+      await respond();
+      const project = projects.find((p) => p.id === projectId);
+      if (!project) throw new ApiError(404, 'not_found', 'This project does not exist.');
+      const address = email.trim().toLowerCase();
+      if (project.members.some((m) => m.email?.toLowerCase() === address)) throw new ApiError(409, 'conflict', 'This person is already a member of the project.');
+      project.members = [...project.members, { id: `m-${now().toString(36)}-${project.members.length}`, name: address, email: address, role }];
+      return clone(project);
+    },
+    async removeMember(projectId, memberId) {
+      await respond();
+      const project = projects.find((p) => p.id === projectId);
+      const member = project?.members.find((m) => m.id === memberId);
+      if (!project || !member) throw new ApiError(404, 'not_found', 'This member does not exist.');
+      if (member.role === 'owner') throw new ApiError(403, 'forbidden', 'The owner cannot be removed from the project.');
+      project.members = project.members.filter((m) => m.id !== memberId);
       return clone(project);
     },
     async saveInstructions(id, instructions) {

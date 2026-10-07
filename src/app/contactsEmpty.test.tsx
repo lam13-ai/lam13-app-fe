@@ -40,7 +40,7 @@ describe('My Contacts: empty vs error', () => {
   it('a successful empty list shows the empty state, not an error', async () => {
     backend({ contacts: () => Response.json([]) });
     const view = within(await page());
-    expect(await view.findByText('No contacts yet.')).toBeTruthy();
+    expect(await view.findByText("You don't have any contacts yet")).toBeTruthy();
     expect(view.getByText('Add people you work with and keep approved notes about them in one place.')).toBeTruthy();
     expect(view.getByRole('button', { name: 'Add contact' })).toBeTruthy();
     expect(view.queryByText("Couldn't load your contacts.")).toBeNull();
@@ -49,7 +49,7 @@ describe('My Contacts: empty vs error', () => {
   it('an empty list still shows the empty state when suggestions fail to load', async () => {
     backend({ contacts: () => Response.json([]), suggestions: () => Response.json({ detail: 'boom' }, { status: 500 }) });
     const view = within(await page());
-    expect(await view.findByText('No contacts yet.', {}, { timeout: 8000 })).toBeTruthy();
+    expect(await view.findByText("You don't have any contacts yet", {}, { timeout: 8000 })).toBeTruthy();
     expect(view.queryByText("Couldn't load your contacts.")).toBeNull();
   });
 
@@ -59,7 +59,7 @@ describe('My Contacts: empty vs error', () => {
     expect(await view.findByText("Couldn't load your contacts.")).toBeTruthy();
     expect(view.getByText('Check your connection and try again.')).toBeTruthy();
     expect(view.getByRole('button', { name: 'Try again' })).toBeTruthy();
-    expect(view.queryByText('No contacts yet.')).toBeNull();
+    expect(view.queryByText("You don't have any contacts yet")).toBeNull();
   });
 
   it('a non-empty list shows the contacts', async () => {
@@ -68,7 +68,7 @@ describe('My Contacts: empty vs error', () => {
     expect(within(list).getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(
       expect.arrayContaining(['Daniel Brandt', 'Maya Okafor']),
     );
-    expect(screen.queryByText('No contacts yet.')).toBeNull();
+    expect(screen.queryByText("You don't have any contacts yet")).toBeNull();
     expect(screen.queryByText("Couldn't load your contacts.")).toBeNull();
   });
 });

@@ -32,6 +32,9 @@
   --color-accent-deep: #1e3fbf;
   --color-accent-light: #7aa0ff;
   --color-accent-wash: rgb(43 92 230 / 0.1);
+  /* File-type marks (Archives): each format's familiar colour, toned down. PDF uses the accent. */
+  --color-file-ppt: #c9512c;
+  --color-file-word: #2f66b3;
   --color-danger: hsl(11 58% 44%);
   --color-ring: #0a0a0a;
   /* Inverse block (user messages): a soft charcoal with off-white text in light mode — never pure black
@@ -170,6 +173,8 @@
   --color-table-border: rgb(255 255 255 / 0.12);
   --color-table-head: rgb(255 255 255 / 0.035);
   --color-accent-wash: rgb(43 92 230 / 0.16);
+  --color-file-ppt: #e8845f;
+  --color-file-word: #6f9fe6;
   --color-danger: hsl(9 72% 64%);
   --color-ring: #f2f2f2;
   --color-inverse: #1f1f1f;
@@ -198,6 +203,18 @@
   --color-fg-muted: var(--color-fg);
   --color-fg-soft: var(--color-fg);
   --color-icon: var(--color-fg);
+}
+
+/*
+ * Workspace pages (Projects, Contacts, Calendar, Integrations): in the light theme their text, headings and
+ * solid buttons use a charcoal instead of near-black — the same hierarchy, less weight. One value, set where
+ * `--color-fg` is read, so nothing on those pages needs its own colour. The dark theme is unchanged.
+ */
+:root:not([data-theme='dark']) .soft-ink {
+  --color-fg: #2b2b2b;
+  --color-outline: rgb(43 43 43 / 0.55);
+  --color-ring: #2b2b2b;
+  color: var(--color-fg);
 }
 
 /* Tokens that are not Tailwind namespaces. */

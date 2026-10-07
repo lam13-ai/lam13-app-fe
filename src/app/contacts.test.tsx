@@ -86,7 +86,7 @@ describe('My Contacts', () => {
     for (const p of (await api.profiles.list()).items) await api.profiles.delete(p.id);
     await act(() => router.navigate('/contacts'));
 
-    expect(await screen.findByText('No contacts yet.', {}, { timeout: 8000 })).toBeTruthy();
+    expect(await screen.findByText("You don't have any contacts yet", {}, { timeout: 8000 })).toBeTruthy();
     expect(screen.getByText('Add people you work with and keep approved notes about them in one place.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Add contact' }));
     expect(screen.getByRole('dialog', { name: 'Add contact' })).toBeTruthy();

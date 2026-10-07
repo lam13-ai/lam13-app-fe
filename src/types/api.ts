@@ -311,12 +311,22 @@ export interface ProjectSummary {
   file_count: number;
 }
 
+/** Someone with access to a project. Exactly one owner, who cannot be removed. */
+export interface ProjectMember {
+  id: Id;
+  name: string;
+  /** Known for people added by email; absent for the sample members. */
+  email: string | null;
+  role: 'owner' | 'member';
+}
+
 export interface Project extends ProjectSummary {
   /** Standing instructions the assistant follows in this project. */
   instructions: string;
   chats: ProjectChat[];
   sources: ProjectContextSource[];
   files: ArchiveFile[];
+  members: ProjectMember[];
 }
 
 export interface CalendarEvent {

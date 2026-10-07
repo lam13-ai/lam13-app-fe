@@ -9,6 +9,7 @@ import { useUiStore } from '@/stores/uiStore';
 export function PageFrame({
   title,
   subtitle,
+  subtitleOnMobile = false,
   leading,
   actions,
   wide = false,
@@ -16,6 +17,8 @@ export function PageFrame({
 }: {
   title: string;
   subtitle?: string;
+  /** Keep the subtitle on phones too (it is hidden there by default, to give the title room). */
+  subtitleOnMobile?: boolean;
   /** Before the title, e.g. a back button. */
   leading?: ReactNode;
   actions?: ReactNode;
@@ -28,7 +31,7 @@ export function PageFrame({
   return (
     <section
       aria-labelledby={id}
-      className="flex h-full min-h-0 flex-col overflow-hidden bg-bg md:rounded-card md:border md:border-frame md:shadow-card"
+      className="soft-ink flex h-full min-h-0 flex-col overflow-hidden bg-bg md:rounded-card md:border md:border-frame md:shadow-card"
     >
       <header className="bright-chrome flex h-[var(--header-h)] shrink-0 items-center gap-3 border-b border-hairline px-3 md:px-5">
         <IconButton label="Open sidebar" size="md" icon={<MenuIcon {...iconProps} />} onClick={() => setSidebarOpen(true)} className="md:hidden" />
@@ -37,7 +40,7 @@ export function PageFrame({
           <h1 id={id} className="truncate text-body font-bold leading-5">
             {title}
           </h1>
-          {subtitle && <p className="hidden truncate text-2xs text-fg-muted sm:block">{subtitle}</p>}
+          {subtitle && <p className={cn('truncate text-2xs text-fg-muted', !subtitleOnMobile && 'hidden sm:block')}>{subtitle}</p>}
         </div>
         {actions}
       </header>

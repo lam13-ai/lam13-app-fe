@@ -6,7 +6,7 @@ import { renderApp } from './testUtils';
 /** Navigation, Projects (instructions / context / archives), Calendar (three tabs) and the demo integrations — sample data and local state. */
 
 const find = { timeout: 8000 };
-beforeEach(() => useDemoStore.setState({ connected: {}, customServer: null, noteTaker: 'granola' }));
+beforeEach(() => useDemoStore.setState({ connected: {}, customServer: null, noteTaker: 'granola', customNoteTaker: null }));
 
 describe('Sidebar navigation', () => {
   it('has Projects, My Contacts, Calendar and Integrations — and no separate Meetings entry', async () => {
@@ -27,7 +27,7 @@ describe('Projects', () => {
     const list = await screen.findByRole('list', { name: 'Projects' }, find);
     fireEvent.click(within(list).getByRole('link', { name: /National Water Security Strategy/ }));
     expect(await screen.findByRole('heading', { level: 1, name: 'National Water Security Strategy' }, find)).toBeTruthy();
-    expect(screen.getAllByRole('tab').map((t) => t.textContent?.replace(/\d+$/, ''))).toEqual(['Chats', 'Instructions', 'Context', 'Archives']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent?.replace(/\d+$/, ''))).toEqual(['Chats', 'Instructions', 'Context', 'Archives', 'Members']);
     expect(screen.getByRole('tab', { name: /Chats/ }).getAttribute('aria-selected')).toBe('true');
     fireEvent.click(screen.getByRole('tab', { name: 'Instructions' }));
     expect(screen.getByText('Instructions tell Lam how to work within this project. They apply whenever you chat in this project.')).toBeTruthy();
@@ -193,8 +193,13 @@ describe('Calendar', () => {
     fireEvent.click(options[1]!);
     expect(screen.getByRole('button', { name: 'Note taker: Otter Connected' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Note taker: Otter Connected' }));
+    fireEvent.click(within(screen.getByRole('menu', { name: 'Note taker' })).getByRole('menuitemradio', { name: 'Fireflies' }));
+    expect(screen.getByRole('button', { name: 'Note taker: Fireflies Connected' })).toBeTruthy();
+    // Custom Note Taker is not connected by a click: it asks for its webhook URL first.
+    fireEvent.click(screen.getByRole('button', { name: 'Note taker: Fireflies Connected' }));
     fireEvent.click(within(screen.getByRole('menu', { name: 'Note taker' })).getByRole('menuitemradio', { name: 'Custom Note Taker' }));
-    expect(screen.getByRole('button', { name: 'Note taker: Custom Note Taker Connected' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Note taker: Custom Note Taker Connected' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Note taker: Fireflies Connected' })).toBeTruthy();
   });
 });
 

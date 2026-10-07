@@ -9,6 +9,7 @@ import { usePendingSuggestions, useProfiles } from '../hooks/useContacts';
 import { filterContacts, type ContactSort } from '../lib/contacts';
 import { ContactCard } from './ContactCard';
 import { ContactSheet, type SheetState } from './ContactSheet';
+import { ImportMenu, ImportMoreContacts, ImportOptions, MailConnections } from './MailImport';
 import { NewContactSuggestions } from './NewContactSuggestions';
 import { TestSuggestionControls } from './TestSuggestionControls'; // TEMP: test buttons (comment together with <TestSuggestionControls /> in the header)
 
@@ -102,15 +103,18 @@ export function ContactsView() {
     );
   } else if (all?.length === 0) {
     body = (
-      <div className="flex flex-col items-center gap-4 px-6 py-20 text-center">
+      // Loaded, and there are none (never shown for a failed request — that is the error state above).
+      <div className="mx-auto mt-6 flex max-w-xl flex-col items-center gap-4 rounded-card border border-border bg-bg-subtle px-6 py-12 text-center">
         <p className="eyebrow">My Contacts</p>
-        <h2 className="text-base font-bold">No contacts yet.</h2>
-        <p className="max-w-[40ch] text-sm leading-relaxed text-fg-muted">
-          Add people you work with and keep approved notes about them in one place.
-        </p>
-        <Button variant="primary" size="md" leadingIcon={<Plus {...smallIconProps} />} onClick={openCreate} className="mt-1">
-          Add contact
-        </Button>
+        <h2 className="text-base font-bold">You don&apos;t have any contacts yet</h2>
+        <p className="max-w-[44ch] text-sm leading-relaxed text-fg-muted">Import your contacts from Gmail or Outlook to get started.</p>
+        <ImportOptions className="flex w-full flex-col items-stretch justify-center gap-2 sm:flex-row" />
+        <div className="mt-2 flex w-full flex-col items-center gap-3 border-t border-hairline pt-5">
+          <p className="max-w-[44ch] text-xs leading-relaxed text-fg-muted">Add people you work with and keep approved notes about them in one place.</p>
+          <Button variant="outline" size="sm" leadingIcon={<Plus {...smallIconProps} />} onClick={openCreate}>
+            Add contact
+          </Button>
+        </div>
       </div>
     );
   } else {
@@ -157,6 +161,7 @@ export function ContactsView() {
             ))}
           </ul>
         )}
+        <ImportMoreContacts />
       </>
     );
   }
@@ -164,7 +169,7 @@ export function ContactsView() {
   return (
     <section
       aria-labelledby="contacts-heading"
-      className="flex h-full min-h-0 flex-col overflow-hidden bg-bg md:rounded-card md:border md:border-frame md:shadow-card"
+      className="soft-ink flex h-full min-h-0 flex-col overflow-hidden bg-bg md:rounded-card md:border md:border-frame md:shadow-card"
     >
       <header className="bright-chrome flex h-[var(--header-h)] shrink-0 items-center gap-3 border-b border-hairline px-3 md:px-5">
         <IconButton
@@ -181,6 +186,10 @@ export function ContactsView() {
           <p className="hidden truncate text-2xs text-fg-muted sm:block">People you work with and insights you&apos;ve approved.</p>
         </div>
         <TestSuggestionControls /> {/* TEMP: test buttons (comment with its import) */}
+        {/* A shortcut on wider screens; on a phone the header has no room, and the import is on the page itself. */}
+        <div className="max-sm:hidden">
+          <ImportMenu />
+        </div>
         {/* The empty state has its own primary Add contact. */}
         {all?.length !== 0 && (
           <Button variant="primary" size="sm" leadingIcon={<Plus {...smallIconProps} />} onClick={openCreate}>
@@ -191,6 +200,7 @@ export function ContactsView() {
 
       <ScrollArea className="@container min-h-0 flex-1 px-3 py-4 md:px-6 md:py-6">
         <div className="mx-auto w-full max-w-[1120px]">
+          <MailConnections />
           {profiles.isSuccess && <NewContactSuggestions suggestions={newContacts} />}
           {body}
         </div>

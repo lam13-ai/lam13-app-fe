@@ -249,6 +249,10 @@ export interface ProjectsService {
   saveInstructions(id: string, instructions: string): Promise<Project>;
   /** Adds a conversation to a project (no-op when it is already there). */
   linkChat(projectId: string, chat: { id: string; title: string }): Promise<Project>;
+  /** Adds a member by email (409 when they already are one). Sends no invitation. */
+  addMember(projectId: string, member: { email: string; role: 'member' }): Promise<Project>;
+  /** Removes a member (403 for the owner). */
+  removeMember(projectId: string, memberId: string): Promise<Project>;
 }
 
 /** Calendar: upcoming meetings and the tasks that came out of them. Frontend-only for now. */
