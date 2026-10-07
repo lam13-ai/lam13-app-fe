@@ -210,11 +210,14 @@ export function ImportOptions({ className }: { className?: string }) {
 export function ImportMoreContacts() {
   return (
     <section aria-labelledby="import-more-contacts" className="mt-8 border-t border-hairline pt-6">
-      <h2 id="import-more-contacts" className="text-sm font-bold">
-        Import more contacts
-      </h2>
-      <p className="mb-3 mt-1 text-sm text-fg-muted">Bring contacts from Gmail or Outlook.</p>
-      <ImportOptions />
+      {/* The whole block — heading, line and both buttons — sits in the centre of the page, not at the list's left edge. */}
+      <div data-import-block className="mx-auto flex w-full max-w-xl flex-col items-center text-center">
+        <h2 id="import-more-contacts" className="text-sm font-bold">
+          Import more contacts
+        </h2>
+        <p className="mb-3 mt-1 text-sm text-fg-muted">Bring contacts from Gmail or Outlook.</p>
+        <ImportOptions className="flex w-full flex-col items-stretch justify-center gap-2 sm:flex-row" />
+      </div>
     </section>
   );
 }

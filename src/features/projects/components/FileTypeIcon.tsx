@@ -11,13 +11,13 @@ const pathOf = (svg: string) => / d="([^"]+)"/.exec(svg)?.[1] ?? '';
 const MARKS: Partial<Record<FileIconType, string>> = { powerpoint: pathOf(powerpointSvg), word: pathOf(wordSvg), pdf: pathOf(pdfSvg) };
 
 /**
- * A small tinted tile per type: PowerPoint its orange, Word its blue, PDF the Lam13 accent it has always had
- * here, images the neutral surface. Colours are theme tokens (softer in light, lifted in dark).
+ * A small tinted tile per type: PowerPoint its orange, Word its blue, PDF the Acrobat red, images the
+ * neutral surface. Colours are theme tokens (softer in light, lifted in dark).
  */
 const TONES: Record<FileIconType, string> = {
   powerpoint: 'bg-file-ppt/12 text-file-ppt',
   word: 'bg-file-word/12 text-file-word',
-  pdf: 'bg-accent-wash text-accent',
+  pdf: 'bg-file-pdf/12 text-file-pdf',
   image: 'bg-muted text-fg-muted',
   file: 'bg-muted text-fg-muted',
 };

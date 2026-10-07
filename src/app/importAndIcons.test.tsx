@@ -35,7 +35,8 @@ describe('Archives: file-type icons', () => {
     const expected = [
       ['Desalination Capacity Review.pptx', 'powerpoint', /file-ppt/],
       ['KPI Framework Draft.docx', 'word', /file-word/],
-      ['Baseline Assessment 2022.pdf', 'pdf', /text-accent/],
+      ['Baseline Assessment 2022.pdf', 'pdf', /text-file-pdf/],
+      ['Tariff Reform Options Paper.pdf', 'pdf', /text-file-pdf/],
       ['Supply-demand gap chart.png', 'image', /text-fg-muted/],
       ['Workshop whiteboard – levers.jpg', 'image', /text-fg-muted/],
     ] as const;
