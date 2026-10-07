@@ -118,7 +118,7 @@ describe('meeting context in the chat composer', () => {
     const { api } = renderApp('/c/water-security-kpis');
     const send = vi.spyOn(api.messages, 'send');
     await screen.findByRole('log', { name: 'Conversation' }, { timeout: 8000 });
-    fireEvent.click(screen.getByRole('button', { name: /ask lam13/i }));
+    { const pill = screen.queryByRole('button', { name: /ask lam13/i }); if (pill) fireEvent.click(pill); }
 
     fireEvent.click(screen.getByRole('button', { name: 'Add files or context' }));
     expect(screen.getByRole('menuitem', { name: 'Files and images' })).toBeTruthy();
@@ -138,7 +138,7 @@ describe('meeting context in the chat composer', () => {
   it('the picker searches meetings', async () => {
     renderApp('/c/water-security-kpis');
     await screen.findByRole('log', { name: 'Conversation' }, { timeout: 8000 });
-    fireEvent.click(screen.getByRole('button', { name: /ask lam13/i }));
+    { const pill = screen.queryByRole('button', { name: /ask lam13/i }); if (pill) fireEvent.click(pill); }
     fireEvent.click(screen.getByRole('button', { name: 'Add files or context' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Meeting' }));
     const input = await screen.findByRole('searchbox', { name: 'Search meetings' });

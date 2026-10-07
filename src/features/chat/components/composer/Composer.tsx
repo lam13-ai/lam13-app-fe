@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useVoiceRecorder, VoiceComposer, type SendRecording, type TranscribeRecording } from '@/features/voice';
 import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
 import { cn } from '@/lib/cn';
@@ -38,7 +38,7 @@ export interface ComposerProps {
 }
 
 /**
- * Reference composer (§6). States: idle (48px pill) → expanded (textarea + toolbar)
+ * Reference composer (§6). Always expanded (textarea + toolbar)
  * → streaming (input disabled, Stop) → back to expanded, ready for the next message.
  * Voice: the mic swaps the controls for the recording → preview → sending panel in the same pill.
  */
@@ -61,7 +61,9 @@ export function Composer({
   const setDraft = useComposerStore((s) => s.setDraft);
   const clearDraft = useComposerStore((s) => s.clearDraft);
 
-  const [open, setOpen] = useState(false);
+  // Always expanded: the full composer (text, model, add, send) is there on load and never collapses —
+  // not when empty, on blur, on Escape or after sending.
+  const [open, setOpen] = useState(true);
   const [edges, setEdges] = useState({ top: false, bottom: false });
   const formRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -81,9 +83,11 @@ export function Composer({
   const shownDraft = expanded && !voiceActive ? draft : '';
   useAutoResizeTextarea(textareaRef, shownDraft);
 
-  // Focus the textarea when the user opens the composer.
+  // Focus the textarea when the user opens the composer (not on load: it starts open, and must not take focus).
+  const wasOpen = useRef(open);
   useEffect(() => {
-    if (open) textareaRef.current?.focus();
+    if (open && !wasOpen.current) textareaRef.current?.focus();
+    wasOpen.current = open;
   }, [open]);
 
   // Keep keyboard focus useful across a stream: → Stop while streaming, → textarea afterwards.
@@ -109,16 +113,6 @@ export function Composer({
     (textareaRef.current ?? buttonRef.current)?.focus();
   }, [voiceActive]);
 
-  // Collapse an empty composer when the user clicks elsewhere.
-  useEffect(() => {
-    if (!expanded) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (!formRef.current?.contains(e.target as Node) && !textareaRef.current?.value) setOpen(false);
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [expanded]);
-
   const updateEdges = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -142,15 +136,7 @@ export function Composer({
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       submit();
-    } else if (e.key === 'Escape' && !draft) {
-      setOpen(false);
     }
-  };
-
-  // Keyboard users tabbing out of an empty composer collapse it too.
-  const onBlur = (e: FocusEvent<HTMLFormElement>) => {
-    const next = e.relatedTarget as Node | null;
-    if (next && !formRef.current?.contains(next) && !draft && !streaming) setOpen(false);
   };
 
   const sendButton = (
@@ -180,7 +166,6 @@ export function Composer({
         e.preventDefault();
         submit();
       }}
-      onBlur={onBlur}
       className={cn(
         'relative mx-auto w-full transition-[max-width] duration-[400ms] ease-spring',
         expanded ? 'max-w-full' : 'max-w-[var(--composer-idle-w)]',

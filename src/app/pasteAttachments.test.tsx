@@ -30,7 +30,7 @@ function clipboard({ files = [] as File[], text, via = 'files' as 'files' | 'ite
 async function setup() {
   const app = renderApp('/c/water-security-kpis');
   await screen.findByRole('log', { name: 'Conversation' }, { timeout: 8000 });
-  fireEvent.click(screen.getByRole('button', { name: /ask lam13/i }));
+  { const pill = screen.queryByRole('button', { name: /ask lam13/i }); if (pill) fireEvent.click(pill); }
   const upload = vi.spyOn(app.api.attachments, 'upload');
   const send = vi.spyOn(app.api.messages, 'send');
   return { ...app, upload, send };

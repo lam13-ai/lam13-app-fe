@@ -111,7 +111,7 @@ describe('chat flow', () => {
 
   it('a new chat keeps its view (streaming state, open composer, focus) when it moves to its URL', async () => {
     const { router } = renderApp('/', { timing: SLOW });
-    await screen.findByRole('button', { name: /ask lam13/i });
+    await screen.findByLabelText('Message Lam13');
     await sendMessage('Stress-test a growth plan');
     const section = screen.getByRole('region', { name: 'Chat' });
 

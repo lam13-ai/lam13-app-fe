@@ -163,7 +163,7 @@ describe('Project chat', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Drafting KPIs for the 2030 targets' })).toBeTruthy();
     expect(await screen.findByRole('button', { name: 'Project: National Water Security Strategy' }, find)).toBeTruthy();
     // The same chat interface: composer, model selector, attachments.
-    fireEvent.click(screen.getByRole('button', { name: /ask lam13/i }));
+    { const pill = screen.queryByRole('button', { name: /ask lam13/i }); if (pill) fireEvent.click(pill); }
     expect(screen.getByRole('button', { name: 'Model: Lam' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Add files or context|Add attachment/ })).toBeTruthy();
   });
@@ -212,7 +212,7 @@ describe('Project chat', () => {
   it('Project details opens Instructions and Archives beside the chat, and closing returns to the same chat state', async () => {
     renderApp('/projects/water-security/c/ws-c1');
     await screen.findByRole('log', { name: 'Conversation' }, find);
-    fireEvent.click(screen.getByRole('button', { name: /ask lam13/i }));
+    { const pill = screen.queryByRole('button', { name: /ask lam13/i }); if (pill) fireEvent.click(pill); }
     fireEvent.change(screen.getByLabelText('Message Lam13'), { target: { value: 'half-written question' } });
     const history = log().textContent;
 

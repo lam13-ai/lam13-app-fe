@@ -59,9 +59,9 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
     name: 'Qwen',
     brand: 'qwen',
     models: [
-      { id: 'qwen-max', name: 'Qwen Max' },
-      { id: 'qwen-plus', name: 'Qwen Plus' },
-      { id: 'qwen-turbo', name: 'Qwen Turbo' },
+      { id: 'qwen-max', name: 'Qwen3.8-Max' },
+      { id: 'qwen-plus', name: 'Qwen3.7-Plus' },
+      { id: 'qwen-turbo', name: 'Qwen3.8-Flash' },
     ],
   },
   { id: 'zai', name: 'Z.ai', brand: 'zai', models: [{ id: 'glm-5.3', name: 'GLM 5.3' }] },

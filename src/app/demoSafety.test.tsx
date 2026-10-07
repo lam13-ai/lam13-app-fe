@@ -112,7 +112,7 @@ describe('demo conversations never reach the upload or transcription endpoints',
     const { calls, to } = backend();
     renderApp('/projects/water-security/c/ws-c1', { api: createHttpAdapter(), auth: { accessToken: TOKEN } });
     await screen.findByRole('log', { name: 'Conversation' }, find);
-    fireEvent.click(screen.getByRole('button', { name: /ask lam13/i }));
+    { const pill = screen.queryByRole('button', { name: /ask lam13/i }); if (pill) fireEvent.click(pill); }
     fireEvent.change(document.querySelector('input[type="file"][hidden]')!, { target: { files: [pdf()] } });
     expect(await screen.findByRole('list', { name: 'Attached files' })).toBeTruthy();
     const box = screen.getByLabelText('Message Lam13') as HTMLTextAreaElement;

@@ -50,10 +50,13 @@ function fakeBackend() {
 }
 
 async function send(text: string) {
-  fireEvent.click(await screen.findByRole('button', { name: /ask lam13/i }, { timeout: 8000 }));
-  const textarea = screen.getByLabelText('Message Lam13');
-  fireEvent.change(textarea, { target: { value: text } });
-  fireEvent.keyDown(textarea, { key: 'Enter' });
+  // The composer is open on load. Wait for one that takes input (a chat that is still streaming has it disabled).
+  const box = () => screen.getByLabelText('Message Lam13') as HTMLTextAreaElement;
+  await waitFor(() => expect(box().disabled).toBe(false), { timeout: 8000 });
+  fireEvent.change(box(), { target: { value: text } });
+  // Right after the app loads the typed text can take a moment to show; Enter is pressed once it has, as a person would.
+  await waitFor(() => expect(box().value).toBe(text));
+  fireEvent.keyDown(box(), { key: 'Enter' });
 }
 
 const log = () => screen.getByRole('log', { name: 'Conversation' });
