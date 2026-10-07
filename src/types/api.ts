@@ -334,8 +334,8 @@ export interface CalendarEvent {
   title: string;
   starts_at: IsoDateTime;
   ends_at: IsoDateTime;
-  /** Where the meeting is recorded or held, when known. */
-  source: 'granola' | 'otter' | 'fireflies' | 'teams' | null;
+  /** Where the meeting happens. Not the note taker: that is chosen separately, for the whole calendar. */
+  location: 'meet' | 'teams' | 'zoom' | 'in-person';
   participants: string[];
   project: string | null;
 }

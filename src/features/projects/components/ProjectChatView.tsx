@@ -8,9 +8,9 @@ import type { Conversation, Project } from '@/types/api';
 import { useLinkChat } from '../hooks/useProjects';
 import { Archives } from './Archives';
 import { ProjectChatList, projectChatPath, projectNewChatPath } from './ProjectChatList';
-import { Context, Instructions, Tabs, tabPanelProps } from './ProjectSections';
+import { Instructions, Tabs, tabPanelProps } from './ProjectSections';
 
-const SECTIONS = ['Instructions', 'Context', 'Archives'] as const;
+const SECTIONS = ['Instructions', 'Archives'] as const;
 type Section = (typeof SECTIONS)[number];
 
 /** The menu under the project's name: this project's chats (the open one marked), a new chat, the workspace. */
@@ -45,7 +45,7 @@ function ProjectMenu({ project, conversationId }: { project: Project; conversati
   );
 }
 
-/** Instructions, Context and Archives beside the chat: the same sections as the project page, in a side sheet. */
+/** Instructions and Archives beside the chat: the same sections as the project page, in a side sheet. */
 function ProjectDetails({ project, open, onClose }: { project: Project; open: boolean; onClose: () => void }) {
   const [section, setSection] = useState<Section>('Instructions');
   const id = useId();
@@ -64,13 +64,12 @@ function ProjectDetails({ project, open, onClose }: { project: Project; open: bo
         tabs={SECTIONS}
         value={section}
         onChange={setSection}
-        counts={{ Context: project.sources.length, Archives: project.files.length }}
+        counts={{ Archives: project.files.length }}
         className="shrink-0 px-3"
       />
       <ScrollArea className="min-h-0 flex-1 px-5 py-5">
         <div {...tabPanelProps(id, SECTIONS, section)}>
           {section === 'Instructions' && <Instructions project={project} />}
-          {section === 'Context' && <Context project={project} inline />}
           {section === 'Archives' && <Archives files={project.files} compact />}
         </div>
       </ScrollArea>

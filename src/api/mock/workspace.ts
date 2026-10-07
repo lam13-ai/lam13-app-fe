@@ -44,20 +44,21 @@ function createProjects(now: number): Project[] {
         { id: 'ws-s00', type: 'file', title: 'KPI Framework Draft.docx', detail: 'DOCX · 14 pages', summary: 'Five headline indicators with two diagnostic measures each, proposed targets for 2030 and the data source for every KPI.' },
         { id: 'ws-s1', type: 'meeting', title: 'KPI working session', detail: 'Meeting notes · 5 action items', summary: 'Agreed five headline indicators with diagnostic measures underneath, and to test two baseline years before choosing one.' },
         { id: 'ws-s2', type: 'meeting', title: 'Steering committee review', detail: 'Meeting notes · 3 decisions', summary: 'Approved the roadmap phasing, asked for a funding sensitivity analysis, and moved tariff reform to the second year.' },
-        { id: 'ws-s3', type: 'contact', title: 'Daniel Brandt', detail: 'CFO, Harbor & Finch', summary: 'Owns the funding model. Prefers a one-page summary before any detailed pack.' },
+        { id: 'ws-s3', type: 'contact', title: 'Omar Haddad', detail: 'Programme Director, Water Authority', summary: 'Sponsor of the tariff reform workstream. Prefers a one-page summary before any detailed pack.' },
+        { id: 'ws-s6', type: 'contact', title: 'Lena Fischer', detail: 'Policy Advisor, Ministry of Environment', summary: 'Reviews the board narrative and the regulatory implications of each option.' },
         { id: 'ws-s4', type: 'note', title: 'Baseline year decision', detail: 'Note', summary: 'Use 2022 as the baseline year; revisit if the 2023 audit data lands before June.' },
         { id: 'ws-s5', type: 'link', title: 'UN-Water SDG 6 data portal', detail: 'sdg6data.org', summary: 'Reference indicators for SDG 6, used to benchmark the national targets.' },
       ],
       files: [
-        file(now, 'ws-f1', 'Water Security Strategy – Board Deck v4.pptx', 'presentation', 18.4, 1, 'Aashir Aqeel', 32),
+        file(now, 'ws-f1', 'Water Security Strategy – Board Deck v4.pptx', 'presentation', 18.4, 1, 'Joseph Boutros', 32),
         file(now, 'ws-f2', 'Baseline Assessment 2022.pdf', 'document', 6.2, 4, 'Maya Okafor', 84),
-        file(now, 'ws-f3', 'KPI Framework Draft.docx', 'document', 0.9, 5, 'Aashir Aqeel', 14),
+        file(now, 'ws-f3', 'KPI Framework Draft.docx', 'document', 0.9, 5, 'Joseph Boutros', 14),
         file(now, 'ws-f4', 'Steering Committee Update – March.pptx', 'presentation', 11.7, 9, 'Daniel Brandt', 21),
         file(now, 'ws-f5', 'Supply-demand gap chart.png', 'image', 0.6, 9, 'Maya Okafor'),
         file(now, 'ws-f6', 'Network losses by region.png', 'image', 1.1, 12, 'Maya Okafor'),
         file(now, 'ws-f7', 'Tariff Reform Options Paper.pdf', 'document', 2.8, 16, 'Daniel Brandt', 27),
-        { ...file(now, 'ws-f8', 'Desalination Capacity Review.pptx', 'presentation', 24.9, 0, 'Aashir Aqeel', 40), status: 'processing' },
-        file(now, 'ws-f9', 'Workshop whiteboard – levers.jpg', 'image', 3.4, 20, 'Aashir Aqeel'),
+        { ...file(now, 'ws-f8', 'Desalination Capacity Review.pptx', 'presentation', 24.9, 0, 'Joseph Boutros', 40), status: 'processing' },
+        file(now, 'ws-f9', 'Workshop whiteboard – levers.jpg', 'image', 3.4, 20, 'Joseph Boutros'),
       ],
     },
     {
@@ -69,10 +70,11 @@ function createProjects(now: number): Project[] {
       chats: [],
       sources: [
         { id: 'ai-s1', type: 'meeting', title: 'Governance model workshop', detail: 'Meeting notes · 4 action items', summary: 'Compared a central AI office with a federated model; the group leaned towards a small central office with ministry leads.' },
+        { id: 'ai-s3', type: 'contact', title: 'Lena Fischer', detail: 'Policy Advisor, Ministry of Environment', summary: 'Leads the talent pillar interviews and the governance consultation.' },
         { id: 'ai-s2', type: 'note', title: 'Scope', detail: 'Note', summary: 'Public sector adoption first; private-sector incentives in phase two.' },
       ],
       files: [
-        file(now, 'ai-f1', 'AI Strategy – Vision & Pillars.pptx', 'presentation', 9.3, 2, 'Aashir Aqeel', 18),
+        file(now, 'ai-f1', 'AI Strategy – Vision & Pillars.pptx', 'presentation', 9.3, 2, 'Joseph Boutros', 18),
         file(now, 'ai-f2', 'Governance Model Options.docx', 'document', 0.4, 6, 'Maya Okafor', 9),
         file(now, 'ai-f3', 'Capability maturity heatmap.png', 'image', 0.8, 7, 'Maya Okafor'),
       ],
@@ -97,9 +99,9 @@ function createProjects(now: number): Project[] {
  */
 const person = (id: string, name: string, role: ProjectMember['role'] = 'member'): ProjectMember => ({ id, name, email: null, role });
 const MEMBERS: Record<string, ProjectMember[]> = {
-  'water-security': [person('m-aashir', 'Aashir Aqeel', 'owner'), person('m-maya', 'Maya Okafor'), person('m-daniel', 'Daniel Brandt'), person('m-priya', 'Priya Nair')],
-  'ai-strategy': [person('m-aashir', 'Aashir Aqeel', 'owner'), person('m-maya', 'Maya Okafor'), person('m-priya', 'Priya Nair')],
-  'digital-services': [person('m-aashir', 'Aashir Aqeel', 'owner'), person('m-priya', 'Priya Nair')],
+  'water-security': [person('m-joseph', 'Joseph Boutros', 'owner'), person('m-maya', 'Maya Okafor'), person('m-daniel', 'Daniel Brandt'), person('m-priya', 'Priya Nair')],
+  'ai-strategy': [person('m-joseph', 'Joseph Boutros', 'owner'), person('m-maya', 'Maya Okafor'), person('m-priya', 'Priya Nair')],
+  'digital-services': [person('m-joseph', 'Joseph Boutros', 'owner'), person('m-priya', 'Priya Nair')],
 };
 
 const CHATS_KEY = 'lam13.projectChats.v1';
@@ -206,7 +208,7 @@ function createCalendar(now: number): { events: CalendarEvent[]; tasks: Calendar
     day: number,
     hour: number,
     durationMin: number,
-    source: CalendarEvent['source'],
+    location: CalendarEvent['location'],
     participants: string[],
     project: string | null = null,
     minutes = 0,
@@ -215,7 +217,7 @@ function createCalendar(now: number): { events: CalendarEvent[]; tasks: Calendar
     title,
     starts_at: at(day, hour, minutes),
     ends_at: new Date(new Date(at(day, hour, minutes)).getTime() + durationMin * 60e3).toISOString(),
-    source,
+    location,
     participants,
     project,
   });
@@ -223,15 +225,15 @@ function createCalendar(now: number): { events: CalendarEvent[]; tasks: Calendar
   const AI = 'National AI Strategy';
   return {
     events: [
-      event('ev-1', 'KPI working session', 0, 10, 60, 'granola', ['Maya Okafor', 'Daniel Brandt'], WATER),
+      event('ev-1', 'KPI working session', 0, 10, 60, 'meet', ['Maya Okafor', 'Daniel Brandt'], WATER),
       event('ev-2', 'Steering committee prep', 0, 14, 45, 'teams', ['Daniel Brandt', 'Priya Nair', 'Omar Haddad'], WATER, 30),
-      event('ev-3', 'Governance model workshop', 1, 11, 90, 'otter', ['Priya Nair', 'Lena Fischer'], AI),
-      event('ev-4', 'Weekly strategy sync', 2, 9, 30, 'fireflies', ['Maya Okafor'], null, 30),
+      event('ev-3', 'Governance model workshop', 1, 11, 90, 'zoom', ['Priya Nair', 'Lena Fischer'], AI),
+      event('ev-4', 'Weekly strategy sync', 2, 9, 30, 'meet', ['Maya Okafor'], null, 30),
       event('ev-5', 'Tariff reform options review', 3, 15, 60, 'teams', ['Daniel Brandt', 'Omar Haddad'], WATER),
-      event('ev-6', 'Board deck dry run', 6, 13, 60, 'granola', ['Maya Okafor', 'Daniel Brandt', 'Lena Fischer'], WATER),
-      event('ev-7', 'Digital services KPI review', 8, 10, 45, 'otter', ['Priya Nair'], 'Digital Services KPI Framework'),
-      event('ev-8', 'Baseline data walkthrough', -1, 16, 45, 'granola', ['Maya Okafor'], WATER),
-      event('ev-9', 'AI talent pillar interview', -3, 11, 30, 'fireflies', ['Lena Fischer'], AI),
+      event('ev-6', 'Board deck dry run', 6, 13, 60, 'in-person', ['Maya Okafor', 'Daniel Brandt', 'Lena Fischer'], WATER),
+      event('ev-7', 'Digital services KPI review', 8, 10, 45, 'zoom', ['Priya Nair'], 'Digital Services KPI Framework'),
+      event('ev-8', 'Baseline data walkthrough', -1, 16, 45, 'meet', ['Maya Okafor'], WATER),
+      event('ev-9', 'AI talent pillar interview', -3, 11, 30, 'zoom', ['Lena Fischer'], AI),
     ],
     tasks: [
       { id: 'tk-1', title: 'Send the revised KPI list to the steering committee', due_at: at(0, 17), completed: false, meeting: 'KPI working session', project: WATER },

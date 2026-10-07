@@ -46,7 +46,7 @@ const FIELD =
   'h-11 w-full border border-border bg-bg px-3 text-base text-fg outline-none transition-colors duration-150 ease-standard placeholder:text-fg-muted focus:border-composer-focus focus:ring-1 focus:ring-composer-ring focus-visible:outline-none sm:text-sm md:h-10';
 
 /**
- * A custom MCP server or note taker: name, endpoint, optional API key. A local demo — saving stores the
+ * A custom MCP server: name, URL, optional API key. A local demo — saving stores the
  * name and URL in session memory only; the key is cleared on save and never stored, logged or sent.
  */
 export function CustomServerSection() {
@@ -70,7 +70,7 @@ export function CustomServerSection() {
     nameRef.current?.focus({ preventScroll: true });
   }, [editing]);
   const nameError = !name.trim() ? 'Enter a name.' : null;
-  const urlError = !url.trim() ? 'Enter the endpoint or webhook URL.' : !isHttpsUrl(url.trim()) ? 'Enter a valid https:// URL.' : null;
+  const urlError = !url.trim() ? 'Enter the MCP server URL.' : !isHttpsUrl(url.trim()) ? 'Enter a valid https:// URL.' : null;
 
   const startEditing = () => {
     setName(server?.name ?? '');
@@ -97,10 +97,10 @@ export function CustomServerSection() {
           </span>
           <div className="min-w-0 flex-1">
             <h3 id={`${id}-title`} className="text-sm font-bold">
-              Custom MCP Server / Custom Note Taker
+              Custom MCP Server
             </h3>
             <p className="mt-1 max-w-[52ch] text-xs leading-relaxed text-fg-muted">
-              Bring your own tool: point Lam13 at an MCP server or a note taker&apos;s webhook to use it alongside the built-in integrations.
+              Bring your own tool: connect Lam13 to your MCP server and use it alongside the built-in integrations.
             </p>
           </div>
         </div>
@@ -147,7 +147,7 @@ export function CustomServerSection() {
               id={`${id}-name`}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Team notes server"
+              placeholder="e.g. Team tools server"
               ref={nameRef}
               autoComplete="off"
               aria-invalid={submitted && Boolean(nameError)}
@@ -162,7 +162,7 @@ export function CustomServerSection() {
           </div>
           <div>
             <label htmlFor={`${id}-url`} className="mb-1.5 block text-xs font-bold">
-              Endpoint or webhook URL
+              MCP Server URL
             </label>
             <input
               id={`${id}-url`}
@@ -193,13 +193,14 @@ export function CustomServerSection() {
               value={key}
               onChange={(e) => setKey(e.target.value)}
               placeholder="Leave empty if the server needs none"
-              autoComplete="off"
+              // Not "off": browsers ignore it on a password field and fill the saved sign-in into this and the URL above.
+              autoComplete="new-password"
               spellCheck={false}
               aria-describedby={`${id}-key-help`}
               className={FIELD}
             />
             <p id={`${id}-key-help`} className="mt-1.5 text-2xs leading-relaxed text-fg-muted">
-              Demo only: the key is not stored or sent anywhere, and nothing is contacted when you save.
+              Demo only: nothing you enter here is stored or sent anywhere, and no server is contacted when you save.
             </p>
           </div>
           <div className="flex gap-2">

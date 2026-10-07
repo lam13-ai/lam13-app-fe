@@ -209,7 +209,7 @@ describe('Project chat', () => {
     expect(screen.getAllByRole('link').some((a) => a.getAttribute('href') === `/c/${id}`)).toBe(true);
   });
 
-  it('Project details opens Instructions, Context and Archives beside the chat, and closing returns to the same chat state', async () => {
+  it('Project details opens Instructions and Archives beside the chat, and closing returns to the same chat state', async () => {
     renderApp('/projects/water-security/c/ws-c1');
     await screen.findByRole('log', { name: 'Conversation' }, find);
     fireEvent.click(screen.getByRole('button', { name: /ask lam13/i }));
@@ -219,13 +219,10 @@ describe('Project chat', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Project details' }, find));
     const panel = await screen.findByRole('dialog', { name: 'Project details' });
     expect(panel.closest('[inert]')).toBeNull(); // open
-    expect(within(panel).getAllByRole('tab').map((t) => t.textContent?.replace(/\d+$/, ''))).toEqual(['Instructions', 'Context', 'Archives']);
+    expect(within(panel).getAllByRole('tab').map((t) => t.textContent?.replace(/\d+$/, ''))).toEqual(['Instructions', 'Archives']);
     expect((within(panel).getByRole('textbox', { name: 'Project instructions' }) as HTMLTextAreaElement).value).toMatch(/^Write for ministry leadership/);
 
-    fireEvent.click(within(panel).getByRole('tab', { name: /Context/ }));
-    fireEvent.click(within(panel).getByRole('button', { name: /KPI working session/ }));
-    expect(within(panel).getByText(/Agreed five headline indicators/)).toBeTruthy(); // preview, in place
-    fireEvent.click(within(panel).getByRole('button', { name: 'All context' }));
+    expect(within(panel).queryByRole('tab', { name: /Context/ })).toBeNull();
     fireEvent.click(within(panel).getByRole('tab', { name: /Archives/ }));
     expect(within(within(panel).getByRole('list', { name: 'Files' })).getAllByRole('heading', { level: 3 })).toHaveLength(9);
 

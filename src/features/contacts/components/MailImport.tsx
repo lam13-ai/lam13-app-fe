@@ -154,8 +154,11 @@ export function ImportMenu() {
   );
 }
 
-/** One provider's option on the page: opens its Connect form; once connected, says so (its row is above). */
-function ImportOption({ provider }: { provider: MailProvider }) {
+/**
+ * One provider's option on the page: opens its Connect form; once connected, says so (its row is above).
+ * `above`: the form opens over the button — for the section at the foot of the page, where there is no room below.
+ */
+function ImportOption({ provider, above = false }: { provider: MailProvider; above?: boolean }) {
   const connection = useDemoStore((s) => s.mail[provider]);
   // The form is mounted only while its popover is open (one Connect form on the page at a time).
   const [open, setOpen] = useState(false);
@@ -172,7 +175,7 @@ function ImportOption({ provider }: { provider: MailProvider }) {
   }
   return (
     <Popover
-      placement="bottom-start"
+      placement={above ? 'top-start' : 'bottom-start'}
       kind="dialog"
       className="w-[min(20rem,calc(100vw-1.5rem))]"
       onOpenChange={setOpen}
@@ -193,13 +196,13 @@ function ImportOption({ provider }: { provider: MailProvider }) {
 }
 
 /** "Import from Gmail" / "Import from Outlook", side by side (stacked on a phone). */
-export function ImportOptions({ className }: { className?: string }) {
+export function ImportOptions({ className, above }: { className?: string; above?: boolean }) {
   return (
     <div className={className ?? 'flex flex-col gap-2 sm:flex-row'}>
       {MAIL_PROVIDERS.map((provider) => (
         // The popover's own wrapper is shrink-to-fit: stretch it, so each option fills its column.
         <div key={provider} className="w-full sm:w-56 [&>div]:flex [&>div]:w-full">
-          <ImportOption provider={provider} />
+          <ImportOption provider={provider} above={above} />
         </div>
       ))}
     </div>
@@ -216,7 +219,7 @@ export function ImportMoreContacts() {
           Import more contacts
         </h2>
         <p className="mb-3 mt-1 text-sm text-fg-muted">Bring contacts from Gmail or Outlook.</p>
-        <ImportOptions className="flex w-full flex-col items-stretch justify-center gap-2 sm:flex-row" />
+        <ImportOptions above className="flex w-full flex-col items-stretch justify-center gap-2 sm:flex-row" />
       </div>
     </section>
   );

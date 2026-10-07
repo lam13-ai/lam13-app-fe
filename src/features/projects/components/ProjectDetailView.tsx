@@ -7,14 +7,14 @@ import { PageFrame } from '@/components/PageFrame';
 import { Button, Skeleton, iconProps, smallIconProps } from '@/components/ui';
 import { useProject } from '../hooks/useProjects';
 import { Archives } from './Archives';
-import { Members } from './Members';
+import { TeamAndContacts } from './TeamAndContacts';
 import { ProjectChatList, projectNewChatPath } from './ProjectChatList';
-import { Context, Instructions, Tabs, tabPanelProps } from './ProjectSections';
+import { Instructions, Tabs, tabPanelProps } from './ProjectSections';
 
-const TABS = ['Chats', 'Instructions', 'Context', 'Archives', 'Members'] as const;
+const TABS = ['Chats', 'Instructions', 'Archives', 'Team and Contacts'] as const;
 type Tab = (typeof TABS)[number];
 
-/** `/projects/:projectId`: the project's workspace — its chats, and its instructions, context and archive. */
+/** `/projects/:projectId`: the project's workspace — its chats, instructions, archive, and its team and contacts. */
 export function ProjectDetailView({ projectId }: { projectId: string }) {
   const project = useProject(projectId);
   const navigate = useNavigate();
@@ -71,7 +71,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     <PageFrame
       title={data.name}
       // A project with more than its owner is shared: say so, quietly, where the title is.
-      subtitle={data.members.length > 1 ? `Shared project · ${data.members.length} members` : 'Project'}
+      subtitle={data.members.length > 1 ? `Shared project · ${data.members.length} people` : 'Project'}
       subtitleOnMobile
       leading={back}
       wide
@@ -92,7 +92,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         tabs={TABS}
         value={tab}
         onChange={setTab}
-        counts={{ Chats: data.chats.length, Context: data.sources.length, Archives: data.files.length, Members: data.members.length }}
+        counts={{ Chats: data.chats.length, Archives: data.files.length, 'Team and Contacts': data.members.length }}
         className="mb-6 mt-5"
       />
 
@@ -106,7 +106,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                 <p className="eyebrow">Chats</p>
                 <h2 className="text-base font-bold">No chats in this project yet.</h2>
                 <p className="max-w-[46ch] text-sm leading-relaxed text-fg-muted">
-                  Start a chat here and it stays with this project, alongside its instructions, context and files.
+                  Start a chat here and it stays with this project, alongside its instructions and files.
                 </p>
                 {newChatButton('Start a chat')}
               </div>
@@ -114,9 +114,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           />
         )}
         {tab === 'Instructions' && <Instructions project={data} />}
-        {tab === 'Context' && <Context project={data} />}
         {tab === 'Archives' && <Archives files={data.files} />}
-        {tab === 'Members' && <Members project={data} />}
+        {tab === 'Team and Contacts' && <TeamAndContacts project={data} />}
       </div>
     </PageFrame>
   );

@@ -167,56 +167,90 @@ function ConfirmRemove({ project, member }: { project: Project; member: ProjectM
   );
 }
 
-/** Who has access to the project: the owner first, then members. Demo data; managing it changes this list only. */
-export function Members({ project }: { project: Project }) {
-  const members = [...project.members].sort((a, b) => Number(b.role === 'owner') - Number(a.role === 'owner'));
-  return (
-    <section aria-labelledby="project-members" className="max-w-[46rem]">
-      {/* One row at every width: the button stays at the right edge, so its panel opens inside the screen. */}
-      <div className="mb-4 flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <h2 id="project-members" className="text-sm font-bold">
-            Project members
-          </h2>
-          <p className="mt-1 text-sm text-fg-muted">People who have access to this project.</p>
-        </div>
-        <Popover
-          placement="bottom-end"
-          kind="dialog"
-          className="w-[min(20rem,calc(100vw-1.5rem))]"
-          trigger={(props) => (
-            <Button {...props} variant="outline" size="sm" leadingIcon={<UserPlus {...smallIconProps} />}>
-              Add member
-            </Button>
-          )}
-        >
-          <AddMemberForm project={project} />
-        </Popover>
-      </div>
+const ROW = 'flex min-h-14 items-center gap-3 border-b border-hairline py-2.5';
+const AVATAR = 'flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-2xs text-fg-muted';
 
-      <ul aria-label="Project members" className="border-t border-hairline">
-        {members.map((member) => (
-          <li key={member.id} className="flex min-h-14 items-center gap-3 border-b border-hairline py-2.5">
-            <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-2xs text-fg-muted">
-              {initials(member.name)}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm text-fg">{member.name}</p>
-              {member.email && member.email !== member.name && <p className="truncate text-xs text-fg-muted">{member.email}</p>}
-            </div>
-            {member.role === 'owner' ? (
-              <span className="shrink-0 rounded-full border border-hairline-strong px-2 py-0.5 text-2xs text-fg">Owner</span>
-            ) : (
-              <span className="shrink-0 text-xs text-fg-muted">Member</span>
+/**
+ * A project's people: its team (the owner first, then members) and the contacts associated with it.
+ * Demo data; managing the team changes this list only.
+ */
+export function TeamAndContacts({ project }: { project: Project }) {
+  const members = [...project.members].sort((a, b) => Number(b.role === 'owner') - Number(a.role === 'owner'));
+  const contacts = project.sources.filter((s) => s.type === 'contact');
+  return (
+    <div className="flex max-w-[46rem] flex-col gap-10">
+      <section aria-labelledby="project-team">
+        {/* One row at every width: the button stays at the right edge, so its panel opens inside the screen. */}
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h2 id="project-team" className="text-sm font-bold">
+              Team
+            </h2>
+            <p className="mt-1 text-sm text-fg-muted">People who are members of this project.</p>
+          </div>
+          <Popover
+            placement="bottom-end"
+            kind="dialog"
+            className="w-[min(20rem,calc(100vw-1.5rem))]"
+            trigger={(props) => (
+              <Button {...props} variant="outline" size="sm" leadingIcon={<UserPlus {...smallIconProps} />}>
+                Add member
+              </Button>
             )}
-            {/* The owner cannot be removed, so has no actions; the spacer keeps the roles in one column. */}
-            {member.role === 'owner' ? <span aria-hidden="true" className="size-8 shrink-0" /> : <MemberActions project={project} member={member} />}
-          </li>
-        ))}
-      </ul>
-      <p className="mt-4 text-2xs leading-relaxed text-fg-muted">
-        Sample members. Changes here stay in this browser session: no invitations are sent and no permissions change.
-      </p>
-    </section>
+          >
+            <AddMemberForm project={project} />
+          </Popover>
+        </div>
+
+        <ul aria-label="Team" className="border-t border-hairline">
+          {members.map((member) => (
+            <li key={member.id} className={ROW}>
+              <span aria-hidden="true" className={AVATAR}>
+                {initials(member.name)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm text-fg">{member.name}</p>
+                {member.email && member.email !== member.name && <p className="truncate text-xs text-fg-muted">{member.email}</p>}
+              </div>
+              {member.role === 'owner' ? (
+                <span className="shrink-0 rounded-full border border-hairline-strong px-2 py-0.5 text-2xs text-fg">Owner</span>
+              ) : (
+                <span className="shrink-0 text-xs text-fg-muted">Member</span>
+              )}
+              {/* The owner cannot be removed, so has no actions; the spacer keeps the roles in one column. */}
+              {member.role === 'owner' ? <span aria-hidden="true" className="size-8 shrink-0" /> : <MemberActions project={project} member={member} />}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 text-2xs leading-relaxed text-fg-muted">
+          Sample team. Changes here stay in this browser session: no invitations are sent and no permissions change.
+        </p>
+      </section>
+
+      <section aria-labelledby="project-contacts">
+        <h2 id="project-contacts" className="text-sm font-bold">
+          Contacts
+        </h2>
+        <p className="mb-4 mt-1 text-sm text-fg-muted">Contacts associated with this project.</p>
+        {contacts.length === 0 ? (
+          <p className="border-t border-hairline py-6 text-sm text-fg-muted">No contacts are linked to this project yet.</p>
+        ) : (
+          <ul aria-label="Project contacts" className="border-t border-hairline">
+            {contacts.map((contact) => (
+              <li key={contact.id} className={ROW}>
+                <span aria-hidden="true" className={AVATAR}>
+                  {initials(contact.title)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-fg">{contact.title}</p>
+                  <p className="truncate text-xs text-fg-muted">{contact.detail}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-4 text-2xs leading-relaxed text-fg-muted">Sample contacts: they are not synced with My Contacts.</p>
+      </section>
+    </div>
   );
 }

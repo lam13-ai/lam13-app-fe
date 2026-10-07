@@ -1,12 +1,11 @@
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Server } from 'lucide-react';
-import { useId, useMemo, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
+import { useId, useMemo, useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router';
-import { BrandLogo, brandName, type Brand } from '@/components/BrandLogo';
+import { BrandLogo, type Brand } from '@/components/BrandLogo';
 import { ErrorState } from '@/components/ErrorState';
 import { PageFrame } from '@/components/PageFrame';
-import { Button, IconButton, Menu, MenuItem, Popover, Skeleton, iconProps, smallIconProps, usePopover } from '@/components/ui';
+import { Button, IconButton, Menu, MenuItem, Popover, Skeleton, iconProps, smallIconProps } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { isHttpsUrl } from '@/lib/url';
 import { useDemoStore, type NoteTaker } from '@/stores/demoStore';
 import type { CalendarEvent, CalendarTask } from '@/types/api';
 import { useCalendarEvents, useCalendarTasks, useSetTaskCompleted } from '../hooks/useCalendar';
@@ -16,11 +15,10 @@ type Tab = (typeof TABS)[number];
 type View = 'month' | 'week';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const NOTE_TAKERS: { id: NoteTaker; name: string; brand?: Brand }[] = [
-  { id: 'granola', name: 'Granola', brand: 'granola' },
-  { id: 'otter', name: 'Otter', brand: 'otter' },
-  { id: 'fireflies', name: 'Fireflies', brand: 'fireflies' },
-  { id: 'custom', name: 'Custom Note Taker' },
+const NOTE_TAKERS: { id: NoteTaker; name: string }[] = [
+  { id: 'granola', name: 'Granola' },
+  { id: 'otter', name: 'Otter' },
+  { id: 'fireflies', name: 'Fireflies' },
 ];
 
 /** Local calendar day as a sortable key, e.g. "2026-10-06". */
@@ -40,115 +38,15 @@ function monthGrid(month: Date): Date[] {
   return Array.from({ length: 42 }, (_, i) => addDays(start, i));
 }
 
-function NoteTakerMark({ taker, size }: { taker: (typeof NOTE_TAKERS)[number]; size: number }) {
-  if (taker.brand) return <BrandLogo brand={taker.brand} size={size} />;
-  return (
-    <span aria-hidden="true" className="inline-flex shrink-0 items-center justify-center rounded-[5px] bg-muted text-fg" style={{ width: size, height: size }}>
-      <Server size={Math.round(size * 0.6)} strokeWidth={1.8} />
-    </span>
-  );
-}
-
-const FIELD =
-  'h-11 w-full border border-border bg-bg px-3 text-base text-fg outline-none transition-colors duration-150 ease-standard placeholder:text-fg-muted focus:border-composer-focus focus:ring-1 focus:ring-composer-ring focus-visible:outline-none sm:text-sm md:h-10';
-
-/**
- * The custom note taker's set-up, inside the selector's popover: it is connected only once a valid webhook
- * URL has been entered and Connect pressed. A demo — the URL is kept in session memory and nothing is called.
- */
-function CustomNoteTakerForm() {
-  const popover = usePopover();
-  const custom = useDemoStore((s) => s.customNoteTaker);
-  const setCustom = useDemoStore((s) => s.setCustomNoteTaker);
-  const [url, setUrl] = useState(custom?.url ?? '');
-  const [submitted, setSubmitted] = useState(false);
-  const id = useId();
-  const value = url.trim();
-  const invalid = submitted && value !== '' && !isHttpsUrl(value);
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    setSubmitted(true);
-    if (!isHttpsUrl(value)) return;
-    setCustom({ url: value });
-    popover?.close();
-  };
-  return (
-    <form noValidate onSubmit={onSubmit} aria-labelledby={`${id}-title`} className="flex flex-col gap-3 p-2">
-      <div>
-        <h2 id={`${id}-title`} className="text-sm font-bold">
-          Custom Note Taker
-        </h2>
-        <p className="mt-1 text-xs leading-relaxed text-fg-muted">Connect your own note taker using a webhook or callback URL.</p>
-      </div>
-      <div>
-        <label htmlFor={`${id}-url`} className="mb-1.5 block text-xs font-bold">
-          Webhook URL
-        </label>
-        <input
-          id={`${id}-url`}
-          type="url"
-          inputMode="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://example.com/webhook"
-          autoComplete="off"
-          spellCheck={false}
-          autoFocus
-          aria-invalid={invalid}
-          aria-describedby={invalid ? `${id}-error` : `${id}-help`}
-          className={FIELD}
-        />
-        {invalid ? (
-          <p id={`${id}-error`} role="alert" className="mt-1.5 text-xs text-danger">
-            Enter a valid https:// URL.
-          </p>
-        ) : (
-          <p id={`${id}-help`} className="mt-1.5 text-2xs leading-relaxed text-fg-muted">
-            Demo: the URL is kept for this session only and nothing is contacted.
-          </p>
-        )}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" variant="primary" size="sm" disabled={value === ''}>
-          {custom ? 'Save' : 'Connect'}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => popover?.close()}>
-          Cancel
-        </Button>
-        {custom && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-auto"
-            onClick={() => {
-              setCustom(null);
-              popover?.close();
-            }}
-          >
-            Disconnect
-          </Button>
-        )}
-      </div>
-    </form>
-  );
-}
-
-/**
- * Which note taker the calendar shows as its source. A demo choice: Granola, Otter and Fireflies only
- * change this label; the custom one first asks for its webhook URL and is not "Connected" until then.
- */
+/** Which note taker the calendar shows as its source. A demo choice: it only changes this label, never a meeting's location. */
 function NoteTakerSelect() {
   const noteTaker = useDemoStore((s) => s.noteTaker);
   const setNoteTaker = useDemoStore((s) => s.setNoteTaker);
-  const [view, setView] = useState<'menu' | 'custom'>('menu');
   const current = NOTE_TAKERS.find((t) => t.id === noteTaker)!;
   return (
     <Popover
       placement="bottom-end"
-      className={view === 'custom' ? 'w-[min(20rem,calc(100vw-1.5rem))]' : 'w-60'}
-      onOpenChange={(open) => {
-        if (!open) setView('menu');
-      }}
+      className="w-60"
       trigger={(props) => (
         <button
           {...props}
@@ -156,7 +54,7 @@ function NoteTakerSelect() {
           aria-label={`Note taker: ${current.name} Connected`}
           className="group flex h-9 shrink-0 items-center gap-2 rounded-full border border-border pl-1.5 pr-2.5 text-xs transition-colors duration-150 ease-standard hover:border-fg/40 aria-expanded:border-fg/40"
         >
-          <NoteTakerMark taker={current} size={22} />
+          <BrandLogo brand={current.id} size={22} />
           <span className="max-sm:sr-only">{current.name}</span>
           <span className="flex items-center gap-1.5 text-fg-muted">
             <span aria-hidden="true" className="size-1.5 rounded-full bg-accent" />
@@ -166,37 +64,38 @@ function NoteTakerSelect() {
         </button>
       )}
     >
-      {view === 'custom' ? (
-        <CustomNoteTakerForm />
-      ) : (
-        <>
-          <Menu label="Note taker">
-            {NOTE_TAKERS.map((t) =>
-              t.id === 'custom' ? (
-                // Not a selection yet: it opens the set-up, and only a valid URL + Connect makes it the note taker.
-                <MenuItem key={t.id} checked={noteTaker === 'custom'} keepOpen onSelect={() => setView('custom')} leading={<NoteTakerMark taker={t} size={18} />}>
-                  {t.name}
-                </MenuItem>
-              ) : (
-                <MenuItem key={t.id} checked={t.id === noteTaker} onSelect={() => setNoteTaker(t.id)} leading={<NoteTakerMark taker={t} size={18} />}>
-                  {t.name}
-                </MenuItem>
-              ),
-            )}
-          </Menu>
-          <p className="mt-1.5 border-t border-hairline px-2.5 pt-2 text-2xs leading-snug text-fg-muted">Demo: choosing a note taker only changes this label.</p>
-        </>
-      )}
+      <Menu label="Note taker">
+        {NOTE_TAKERS.map((t) => (
+          <MenuItem key={t.id} checked={t.id === noteTaker} onSelect={() => setNoteTaker(t.id)} leading={<BrandLogo brand={t.id} size={18} />}>
+            {t.name}
+          </MenuItem>
+        ))}
+      </Menu>
+      <p className="mt-1.5 border-t border-hairline px-2.5 pt-2 text-2xs leading-snug text-fg-muted">Demo: choosing a note taker only changes this label.</p>
     </Popover>
   );
 }
 
-function SourceMark({ event }: { event: CalendarEvent }) {
-  if (!event.source) return null;
+const LOCATIONS: Record<CalendarEvent['location'], { name: string; brand?: Brand }> = {
+  meet: { name: 'Google Meet', brand: 'meet' },
+  teams: { name: 'Microsoft Teams', brand: 'teams' },
+  zoom: { name: 'Zoom', brand: 'zoom' },
+  'in-person': { name: 'In person' },
+};
+
+/** Where the meeting happens: the platform's mark (or a pin, in person). `labelled` writes the name beside it. */
+function LocationMark({ event, labelled }: { event: CalendarEvent; labelled: boolean }) {
+  const { name, brand } = LOCATIONS[event.location];
   return (
-    <span className="shrink-0" title={brandName(event.source)}>
-      <span className="sr-only">{brandName(event.source)}</span>
-      <BrandLogo brand={event.source} size={28} />
+    <span data-location={event.location} title={name} className="flex shrink-0 items-center gap-2 text-xs text-fg-muted">
+      <span className={labelled ? 'max-sm:sr-only' : 'sr-only'}>{name}</span>
+      {brand ? (
+        <BrandLogo brand={brand} size={28} />
+      ) : (
+        <span aria-hidden="true" className="flex size-7 items-center justify-center rounded-card border border-hairline">
+          <MapPin size={15} strokeWidth={1.8} />
+        </span>
+      )}
     </span>
   );
 }
@@ -217,7 +116,7 @@ function EventRow({ event, showDate = false }: { event: CalendarEvent; showDate?
         <p className="mt-0.5 truncate text-xs text-fg-muted">{event.participants.join(', ')}</p>
         {showDate && event.project && <p className="mt-0.5 truncate text-2xs text-fg-muted">{event.project}</p>}
       </div>
-      <SourceMark event={event} />
+      <LocationMark event={event} labelled={showDate} />
     </li>
   );
 }

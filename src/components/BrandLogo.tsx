@@ -1,11 +1,13 @@
 import fireflies from '@/assets/brands/fireflies.png';
 import gmail from '@/assets/brands/gmail.svg';
 import granola from '@/assets/brands/granola.png';
+import meet from '@/assets/brands/meet.svg';
 import otter from '@/assets/brands/otter.png';
 import outlook from '@/assets/brands/outlook.svg';
 import slack from '@/assets/brands/slack.png';
 import teams from '@/assets/brands/teams.png';
 import whatsapp from '@/assets/brands/whatsapp.svg';
+import zoom from '@/assets/brands/zoom.svg';
 import anthropic from '@/assets/providers/anthropic.svg';
 import google from '@/assets/providers/google.svg';
 import moonshot from '@/assets/providers/moonshot.svg';
@@ -14,7 +16,7 @@ import qwen from '@/assets/providers/qwen.svg';
 import zai from '@/assets/providers/zai.svg';
 import { cn } from '@/lib/cn';
 
-export type Brand = 'granola' | 'otter' | 'fireflies' | 'whatsapp' | 'teams' | 'slack' | 'gmail' | 'outlook' | 'openai' | 'anthropic' | 'google' | 'moonshot' | 'qwen' | 'zai';
+export type Brand = 'granola' | 'otter' | 'fireflies' | 'whatsapp' | 'teams' | 'meet' | 'zoom' | 'slack' | 'gmail' | 'outlook' | 'openai' | 'anthropic' | 'google' | 'moonshot' | 'qwen' | 'zai';
 
 /** Each vendor's own mark (src/assets/brands, src/assets/providers). `bleed`: the icon is a full square that fills the tile. */
 const BRANDS: Record<Brand, { name: string; src: string; bleed?: boolean }> = {
@@ -23,6 +25,8 @@ const BRANDS: Record<Brand, { name: string; src: string; bleed?: boolean }> = {
   fireflies: { name: 'Fireflies', src: fireflies },
   whatsapp: { name: 'WhatsApp', src: whatsapp },
   teams: { name: 'Microsoft Teams', src: teams },
+  meet: { name: 'Google Meet', src: meet },
+  zoom: { name: 'Zoom', src: zoom, bleed: true },
   slack: { name: 'Slack', src: slack },
   gmail: { name: 'Gmail', src: gmail },
   outlook: { name: 'Outlook', src: outlook },

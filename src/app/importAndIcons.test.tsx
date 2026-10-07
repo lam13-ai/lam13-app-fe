@@ -12,6 +12,10 @@ import { renderApp } from './testUtils';
  */
 
 const find = { timeout: 8000 };
+// The theme tokens as text (CSS is not processed in tests). Loaded by a non-literal specifier: the app has no Node types.
+const nodeFs = 'node:fs';
+const { readFileSync } = (await import(/* @vite-ignore */ nodeFs)) as { readFileSync: (path: string, encoding: 'utf8') => string };
+const tokens = readFileSync('src/styles/tokens.css', 'utf8');
 beforeEach(() => useDemoStore.setState({ mail: { gmail: null, outlook: null } }));
 afterEach(() => {
   vi.restoreAllMocks();
@@ -69,6 +73,29 @@ describe('Archives: file-type icons', () => {
       expect(iconOf('KPI Framework Draft.docx').querySelector('svg')).toBeTruthy();
       expect(iconOf('Baseline Assessment 2022.pdf').querySelector('svg')).toBeTruthy();
       expect(iconOf('Supply-demand gap chart.png').querySelector('svg')).toBeTruthy();
+    } finally {
+      useThemeStore.getState().setPreference('system');
+    }
+  });
+
+  it.each(['light', 'dark'] as const)('the PDF mark is Acrobat red in the %s theme — not the blue accent — and only softly tinted', async (theme) => {
+    useThemeStore.getState().setPreference(theme);
+    try {
+      await openArchives();
+      for (const file of ['Baseline Assessment 2022.pdf', 'Tariff Reform Options Paper.pdf']) {
+        const icon = iconOf(file);
+        expect(icon.className).toContain('text-file-pdf');
+        expect(icon.className).toContain('bg-file-pdf/12'); // a light tint of the same red, not a solid block
+        expect(icon.className).not.toMatch(/accent|file-word|file-ppt/);
+      }
+      expect(iconOf('KPI Framework Draft.docx').className).toContain('text-file-word');
+      expect(iconOf('Desalination Capacity Review.pptx').className).toContain('text-file-ppt');
+      // The token behind the class is a red in both themes: the first value is the light one, the second the dark.
+      const values = [...tokens.matchAll(/--color-file-pdf:\s*#([0-9a-f]{6})/gi)].map((m) => m[1]!);
+      expect(values).toHaveLength(2);
+      const [r, g, b] = [0, 2, 4].map((i) => parseInt(values[theme === 'light' ? 0 : 1]!.slice(i, i + 2), 16)) as [number, number, number];
+      expect(r).toBeGreaterThan(g + 80);
+      expect(r).toBeGreaterThan(b + 80);
     } finally {
       useThemeStore.getState().setPreference('system');
     }

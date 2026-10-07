@@ -4,90 +4,28 @@ import { useDemoStore } from '@/stores/demoStore';
 import { renderApp } from './testUtils';
 
 /**
- * The calendar's custom note taker (a URL before "Connected"), the custom MCP form scrolling into view,
+ * The calendar's note takers (built-in only), the custom MCP form scrolling into view,
  * and the demo integrations' status. (Contacts import: mailImport.test.tsx.)
  */
 
 const find = { timeout: 8000 };
-beforeEach(() => useDemoStore.setState({ connected: {}, customServer: null, noteTaker: 'granola', customNoteTaker: null }));
+beforeEach(() => useDemoStore.setState({ connected: {}, customServer: null, noteTaker: 'granola' }));
 afterEach(() => vi.restoreAllMocks());
 
-describe('Calendar: Custom Note Taker', () => {
+describe('Calendar: note taker', () => {
   const trigger = () => screen.getByRole('button', { name: /^Note taker:/ });
-  const openForm = async () => {
+
+  it('has no Custom Note Taker: only the built-in ones, and no set-up form', async () => {
     renderApp('/calendar');
     await screen.findByRole('tablist', { name: 'Calendar sections' }, find);
-    expect(trigger().getAttribute('aria-label')).toBe('Note taker: Granola Connected'); // initial state: not the custom one
+    expect(trigger().getAttribute('aria-label')).toBe('Note taker: Granola Connected');
     fireEvent.click(trigger());
-    const option = within(screen.getByRole('menu', { name: 'Note taker' })).getByRole('menuitemradio', { name: 'Custom Note Taker' });
-    expect(option.getAttribute('aria-checked')).toBe('false');
-    fireEvent.click(option);
-    return screen.getByRole('form', { name: 'Custom Note Taker' });
-  };
-  const url = (form: HTMLElement) => within(form).getByLabelText('Webhook URL') as HTMLInputElement;
-  const connect = (form: HTMLElement) => within(form).getByRole('button', { name: 'Connect' }) as HTMLButtonElement;
-
-  it('choosing it opens the set-up and does not connect', async () => {
-    const form = await openForm();
-    expect(within(form).getByText('Connect your own note taker using a webhook or callback URL.')).toBeTruthy();
-    expect(url(form).placeholder).toBe('https://example.com/webhook');
-    expect(trigger().getAttribute('aria-label')).toBe('Note taker: Granola Connected');
-    expect(useDemoStore.getState()).toMatchObject({ noteTaker: 'granola', customNoteTaker: null });
-  });
-
-  it('an empty URL cannot connect', async () => {
-    const form = await openForm();
-    expect(connect(form).disabled).toBe(true);
-    fireEvent.change(url(form), { target: { value: '   ' } });
-    expect(connect(form).disabled).toBe(true);
-    fireEvent.submit(form); // Enter in the field
-    expect(useDemoStore.getState().customNoteTaker).toBeNull();
-    expect(trigger().getAttribute('aria-label')).toBe('Note taker: Granola Connected');
-  });
-
-  it.each(['not a url', 'example.com/webhook', 'http://example.com/webhook', 'ftp://example.com/x'])('an invalid URL (%s) shows an error and does not connect', async (value) => {
-    const form = await openForm();
-    fireEvent.change(url(form), { target: { value } });
-    fireEvent.click(connect(form));
-    expect(within(form).getByRole('alert').textContent).toBe('Enter a valid https:// URL.');
-    expect(url(form).getAttribute('aria-invalid')).toBe('true');
-    expect(useDemoStore.getState().customNoteTaker).toBeNull();
-    expect(trigger().getAttribute('aria-label')).toBe('Note taker: Granola Connected');
-  });
-
-  it('a valid URL + Connect shows Custom Note Taker as connected, without any request', async () => {
-    const form = await openForm();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch'); // from here on: connecting must not call anything
-    fireEvent.change(url(form), { target: { value: ' https://notes.example.com/webhook ' } });
-    fireEvent.click(connect(form));
-    expect(trigger().getAttribute('aria-label')).toBe('Note taker: Custom Note Taker Connected');
-    expect(useDemoStore.getState()).toMatchObject({ noteTaker: 'custom', customNoteTaker: { url: 'https://notes.example.com/webhook' } });
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(trigger().getAttribute('aria-expanded')).toBe('false'); // the set-up closed
-  });
-
-  it('Cancel leaves it disconnected, even with a valid URL typed', async () => {
-    const form = await openForm();
-    fireEvent.change(url(form), { target: { value: 'https://notes.example.com/webhook' } });
-    fireEvent.click(within(form).getByRole('button', { name: 'Cancel' }));
-    expect(trigger().getAttribute('aria-label')).toBe('Note taker: Granola Connected');
-    expect(useDemoStore.getState()).toMatchObject({ noteTaker: 'granola', customNoteTaker: null });
-  });
-
-  it('reopening it after connecting shows the URL, and Disconnect returns to a built-in note taker', async () => {
-    const form = await openForm();
-    fireEvent.change(url(form), { target: { value: 'https://notes.example.com/webhook' } });
-    fireEvent.click(connect(form));
-
-    fireEvent.click(trigger());
-    const option = within(screen.getByRole('menu', { name: 'Note taker' })).getByRole('menuitemradio', { name: 'Custom Note Taker' });
-    expect(option.getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(option);
-    const again = screen.getByRole('form', { name: 'Custom Note Taker' });
-    expect(url(again).value).toBe('https://notes.example.com/webhook');
-    fireEvent.click(within(again).getByRole('button', { name: 'Disconnect' }));
-    expect(trigger().getAttribute('aria-label')).toBe('Note taker: Granola Connected');
-    expect(useDemoStore.getState().customNoteTaker).toBeNull();
+    const menu = screen.getByRole('menu', { name: 'Note taker' });
+    expect(within(menu).getAllByRole('menuitemradio').map((o) => o.textContent)).toEqual(['Granola', 'Otter', 'Fireflies']);
+    expect(within(menu).queryByRole('menuitemradio', { name: /custom/i })).toBeNull();
+    expect(screen.queryByRole('form')).toBeNull();
+    expect(screen.queryByLabelText('Webhook URL')).toBeNull();
+    expect(useDemoStore.getState()).not.toHaveProperty('customNoteTaker');
   });
 
   it('the built-in note takers still switch with one click', async () => {
@@ -106,7 +44,7 @@ describe('Integrations: custom MCP form', () => {
     Element.prototype.scrollIntoView = scrollIntoView;
     try {
       renderApp('/integrations');
-      const section = await screen.findByRole('region', { name: 'Custom MCP Server / Custom Note Taker' }, find);
+      const section = await screen.findByRole('region', { name: 'Custom MCP Server' }, find);
       expect(scrollIntoView).not.toHaveBeenCalled();
 
       fireEvent.click(within(section).getByRole('button', { name: 'Add custom server' }));
@@ -115,7 +53,7 @@ describe('Integrations: custom MCP form', () => {
       expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
       expect(document.activeElement).toBe(within(section).getByLabelText('Name')); // the form is ready to type in
       // The form's fields are unchanged.
-      for (const label of ['Name', 'Endpoint or webhook URL', /API key/]) expect(within(section).getByLabelText(label)).toBeTruthy();
+      for (const label of ['Name', 'MCP Server URL', /API key/]) expect(within(section).getByLabelText(label)).toBeTruthy();
 
       fireEvent.click(within(section).getByRole('button', { name: 'Cancel' }));
       expect(within(section).getByRole('button', { name: 'Add custom server' })).toBeTruthy();
@@ -132,7 +70,7 @@ describe('Integrations: custom MCP form', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('prefers-reduced-motion'), media: query, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
     try {
       renderApp('/integrations');
-      const section = await screen.findByRole('region', { name: 'Custom MCP Server / Custom Note Taker' }, find);
+      const section = await screen.findByRole('region', { name: 'Custom MCP Server' }, find);
       fireEvent.click(within(section).getByRole('button', { name: 'Add custom server' }));
       await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' }));
     } finally {
