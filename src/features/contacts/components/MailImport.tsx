@@ -2,12 +2,12 @@ import { ChevronDown, Download } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { BrandLogo, brandName } from '@/components/BrandLogo';
 import { Button, Menu, MenuItem, Popover, Spinner, smallIconProps, usePopover } from '@/components/ui';
-import { initials } from '@/lib/initials';
 import { MAIL_PROVIDERS, useDemoStore, type MailProvider } from '@/stores/demoStore';
 
 /**
  * Import contacts from Gmail / Outlook — a FRONTEND DEMO. Connecting stores the typed address in the demo
- * store (session memory); "Import contacts" waits a moment and then lists a few sample contacts below.
+ * store (session memory); "Import contacts" waits a moment and then says the demo ran. No contact is made up:
+ * nothing is added to the list, which only ever shows the user's real contacts.
  * No Google or Microsoft sign-in, no request of any kind, and nothing goes through the real Contacts API.
  * TODO(backend): replace with the real OAuth + import flow.
  */
@@ -19,20 +19,6 @@ export const DEMO_IMPORT_MS = 900;
 const COPY: Record<MailProvider, { field: string; placeholder: string }> = {
   gmail: { field: 'Gmail address', placeholder: 'you@gmail.com' },
   outlook: { field: 'Outlook email', placeholder: 'you@outlook.com' },
-};
-
-/** The sample contacts each provider "imports". Example addresses only. */
-const DEMO_CONTACTS: Record<MailProvider, { name: string; email: string; detail: string }[]> = {
-  gmail: [
-    { name: 'Lena Fischer', email: 'lena.fischer@example.com', detail: 'Policy Advisor' },
-    { name: 'Omar Haddad', email: 'omar.haddad@example.com', detail: 'Programme Director' },
-    { name: 'Grace Lin', email: 'grace.lin@example.com', detail: 'Data Analyst' },
-  ],
-  outlook: [
-    { name: 'Noah Bergström', email: 'noah.bergstrom@example.com', detail: 'Finance Lead' },
-    { name: 'Amara Diallo', email: 'amara.diallo@example.com', detail: 'Chief of Staff' },
-    { name: 'Victor Hale', email: 'victor.hale@example.com', detail: 'Procurement Manager' },
-  ],
 };
 
 const FIELD =
@@ -236,7 +222,7 @@ function ConnectionRow({ provider }: { provider: MailProvider }) {
   const name = brandName(provider);
   const runImport = () => {
     setImporting(true);
-    // The "import" is only a pause: then the sample contacts for this provider are shown.
+    // The "import" is only a pause: no contact is read, created or shown.
     timer.current = setTimeout(() => {
       markImported(provider);
       setImporting(false);
@@ -261,7 +247,7 @@ function ConnectionRow({ provider }: { provider: MailProvider }) {
       <span className="flex flex-wrap items-center gap-2">
         {connection.imported ? (
           <span role="status" className="text-xs text-fg">
-            Contacts imported successfully.
+            Demo import finished. No contacts were added.
           </span>
         ) : (
           <Button
@@ -285,13 +271,11 @@ function ConnectionRow({ provider }: { provider: MailProvider }) {
 }
 
 /**
- * The connected mail accounts and, once "imported", their sample contacts — shown above the user's own
- * contacts and clearly marked as demo data. Nothing here when no provider is connected.
+ * The mail accounts connected in this demo, above the user's own contacts. Nothing here when none is.
  */
 export function MailConnections() {
   const mail = useDemoStore((s) => s.mail);
   const connected = MAIL_PROVIDERS.filter((p) => mail[p]);
-  const imported = connected.filter((p) => mail[p]?.imported);
   if (connected.length === 0) return null;
   return (
     <section aria-label="Connected accounts" className="mb-5">
@@ -300,36 +284,6 @@ export function MailConnections() {
           <ConnectionRow key={p} provider={p} />
         ))}
       </ul>
-      {imported.length > 0 && (
-        <div className="mt-4">
-          <h2 className="eyebrow">Imported contacts · Demo</h2>
-          <p className="mt-1 text-2xs leading-relaxed text-fg-muted">
-            Sample contacts for this demo. They were not read from your {imported.map(brandName).join(' or ')} account and are not saved to My Contacts.
-          </p>
-          <ul aria-label="Imported demo contacts" className="mt-2 border-t border-hairline">
-            {imported.flatMap((p) =>
-              DEMO_CONTACTS[p].map((c) => (
-                <li key={`${p}-${c.email}`} className="flex min-h-14 items-center gap-3 border-b border-hairline py-2.5">
-                  <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-2xs text-fg-muted">
-                    {initials(c.name)}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-fg">{c.name}</span>
-                    <span className="block truncate text-xs text-fg-muted">
-                      {c.detail} · {c.email}
-                    </span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-2 text-2xs text-fg-muted">
-                    <BrandLogo brand={p} size={16} />
-                    <span className="max-sm:sr-only">{brandName(p)}</span>
-                    <DemoTag />
-                  </span>
-                </li>
-              )),
-            )}
-          </ul>
-        </div>
-      )}
     </section>
   );
 }

@@ -6,7 +6,7 @@ import { renderApp } from './testUtils';
 
 /**
  * My Contacts → Import contacts: the Gmail and Outlook demo connection flow. Frontend only — a typed
- * address, a local connected state, a simulated import that lists sample contacts. No request is made
+ * address, a local connected state, a simulated import that adds and shows no contacts. No request is made
  * and the real Contacts API is never involved.
  */
 
@@ -19,8 +19,8 @@ afterEach(() => {
 });
 
 const PROVIDERS = [
-  { name: 'Gmail', key: 'gmail', field: 'Gmail address', placeholder: 'you@gmail.com', email: 'user@gmail.com', sample: 'Lena Fischer', vendor: /google|gmail/i },
-  { name: 'Outlook', key: 'outlook', field: 'Outlook email', placeholder: 'you@outlook.com', email: 'user@outlook.com', sample: 'Noah Bergström', vendor: /microsoft|outlook|live\.com|office/i },
+  { name: 'Gmail', key: 'gmail', field: 'Gmail address', placeholder: 'you@gmail.com', email: 'user@gmail.com', vendor: /google|gmail/i },
+  { name: 'Outlook', key: 'outlook', field: 'Outlook email', placeholder: 'you@outlook.com', email: 'user@outlook.com', vendor: /microsoft|outlook|live\.com|office/i },
 ] as const;
 
 async function openContacts() {
@@ -41,7 +41,7 @@ const connectButton = (form: HTMLElement, name: string) => within(form).getByRol
 const row = (name: string) => screen.getByRole('listitem', { name: `${name} connection` });
 const contactNames = () => within(screen.getByRole('list', { name: 'Contacts' })).getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
 
-describe.each(PROVIDERS)('Import contacts: $name (demo)', ({ name, key, field, placeholder, email, sample, vendor }) => {
+describe.each(PROVIDERS)('Import contacts: $name (demo)', ({ name, key, field, placeholder, email, vendor }) => {
   it('is in the Import contacts menu, and both providers start disconnected', async () => {
     await openContacts();
     expect(screen.queryByRole('region', { name: 'Connected accounts' })).toBeNull();
@@ -99,7 +99,7 @@ describe.each(PROVIDERS)('Import contacts: $name (demo)', ({ name, key, field, p
     expect(within(openMenu()).getByRole('menuitem', { name: new RegExp(`${name}.*Connected`) })).toBeTruthy();
   });
 
-  it('Import contacts shows a loading state, then success and clearly labelled demo contacts — with no request and no change to My Contacts', async () => {
+  it('Import contacts shows a loading state, then says the demo ran — and no contact is invented, requested or added', async () => {
     const { api } = await openContacts();
     const before = contactNames();
     const form = openForm(name);
@@ -115,19 +115,16 @@ describe.each(PROVIDERS)('Import contacts: $name (demo)', ({ name, key, field, p
     const busy = within(row(name)).getByRole('button', { name: `Importing contacts from ${name}` }) as HTMLButtonElement;
     expect(busy.disabled).toBe(true);
     expect(busy.textContent).toContain('Importing…');
-    expect(screen.queryByText('Contacts imported successfully.')).toBeNull();
-    expect(screen.queryByRole('list', { name: 'Imported demo contacts' })).toBeNull();
+    expect(within(row(name)).queryByRole('status')).toBeNull();
 
-    // Success.
-    expect((await within(row(name)).findByRole('status', {}, { timeout: 4000 })).textContent).toBe('Contacts imported successfully.');
-    const imported = screen.getByRole('list', { name: 'Imported demo contacts' });
-    expect(within(imported).getAllByRole('listitem')).toHaveLength(3);
-    expect(within(imported).getByText(sample)).toBeTruthy();
-    for (const item of within(imported).getAllByRole('listitem')) {
-      expect(within(item).getByText('Demo')).toBeTruthy();
-      expect(item.textContent).toMatch(/@example\.com/); // example addresses only
+    // Finished: the demo says what it did, and shows no made-up people anywhere on the page.
+    expect((await within(row(name)).findByRole('status', {}, { timeout: 4000 })).textContent).toBe('Demo import finished. No contacts were added.');
+    expect(screen.queryByRole('list', { name: /imported/i })).toBeNull();
+    expect(screen.queryByText(/Imported contacts/)).toBeNull();
+    for (const invented of ['Lena Fischer', 'Omar Haddad', 'Grace Lin', 'Noah Bergström', 'Amara Diallo', 'Victor Hale']) {
+      expect(within(screen.getByRole('region', { name: 'Connected accounts' })).queryByText(invented)).toBeNull();
     }
-    expect(screen.getByText(new RegExp(`They were not read from your ${name} account and are not saved to My Contacts`))).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Connected accounts' })).getAllByRole('listitem')).toHaveLength(1); // the account row only
 
     // Nothing left the page, and the user's own contacts are exactly as before.
     expect(fetchSpy.mock.calls.filter((c) => vendor.test(String(c[0])))).toEqual([]);
@@ -137,13 +134,13 @@ describe.each(PROVIDERS)('Import contacts: $name (demo)', ({ name, key, field, p
     expect(contactNames()).toEqual(before);
   });
 
-  it('Disconnect returns it to the disconnected state and removes its demo contacts', async () => {
+  it('Disconnect returns it to the disconnected state', async () => {
     useDemoStore.setState({ mail: { gmail: null, outlook: null, [key]: { email, imported: true } } });
     await openContacts();
-    expect(screen.getByRole('list', { name: 'Imported demo contacts' })).toBeTruthy();
+    expect(within(row(name)).getByRole('status').textContent).toBe('Demo import finished. No contacts were added.');
     fireEvent.click(within(row(name)).getByRole('button', { name: `Disconnect ${name}` }));
     expect(screen.queryByRole('listitem', { name: `${name} connection` })).toBeNull();
-    expect(screen.queryByRole('list', { name: 'Imported demo contacts' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Connected accounts' })).toBeNull();
     expect(useDemoStore.getState().mail[key]).toBeNull();
     // It can be connected again from the menu.
     expect(openForm(name)).toBeTruthy();
