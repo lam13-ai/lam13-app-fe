@@ -125,13 +125,13 @@ describe('HTTP adapter — projects', () => {
     expect(await api.create({ name: 'New one' })).toMatchObject({ id: 'p9', name: 'New one', role: 'owner' });
     await api.rename('p1', 'Renamed');
     await api.saveInstructions('p1', 'Answer in three bullets.');
-    await api.saveSummary('p1', 'Baseline agreed.');
+    await api.generateSummary('p1');
     await api.remove('p1');
     expect(writes()).toEqual([
       ['POST', '/projects', { name: 'New one' }],
       ['PATCH', '/projects/p1', { name: 'Renamed' }],
       ['PATCH', '/projects/p1', { instructions: 'Answer in three bullets.' }],
-      ['PATCH', '/projects/p1', { summary: 'Baseline agreed.' }],
+      ['POST', '/projects/p1/summary/generate', undefined],
       ['DELETE', '/projects/p1', undefined],
     ]);
   });

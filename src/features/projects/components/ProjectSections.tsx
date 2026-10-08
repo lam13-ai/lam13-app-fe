@@ -1,4 +1,4 @@
-import { Pencil } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { useId, useState, type KeyboardEvent } from 'react';
 import { toErrorInfo } from '@/api';
 import { Button, Spinner, smallIconProps } from '@/components/ui';
@@ -118,73 +118,40 @@ export function Instructions({ project }: { project: Project }) {
 }
 
 /**
- * The project's summary: plain text written by its people (the backend's `summary`, here `description`).
- * Shown as written; "Edit summary" turns it into a text box, saved explicitly like the instructions.
+ * The project's summary: written by Lam from the project's conversations, when someone asks for it
+ * (the backend's `summary`, here `description`). Plain text, shown as written; it is never edited by hand.
  */
 export function Summary({ project }: { project: Project }) {
   const action = useProjectAction(project.id);
-  // null = reading; a string = the text being edited.
-  const [draft, setDraft] = useState<string | null>(null);
-  const id = useId();
-
-  if (draft === null) {
-    return (
-      <div className="flex flex-col items-start gap-4">
-        {project.description ? (
-          <p className="max-w-[70ch] whitespace-pre-wrap text-sm leading-relaxed">{project.description}</p>
-        ) : (
-          <p className="text-sm text-fg-muted">This project has no summary yet.</p>
-        )}
+  const has = Boolean(project.description);
+  return (
+    <div className="flex flex-col items-start gap-4">
+      {has ? (
+        <p className="max-w-[70ch] whitespace-pre-wrap text-sm leading-relaxed">{project.description}</p>
+      ) : (
+        <p className="text-sm text-fg-muted">This project has no summary yet.</p>
+      )}
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           variant="outline"
           size="sm"
-          leadingIcon={<Pencil {...smallIconProps} />}
-          onClick={() => {
-            action.reset();
-            setDraft(project.description);
-          }}
+          disabled={action.isPending}
+          aria-busy={action.isPending || undefined}
+          leadingIcon={action.isPending ? <Spinner size={14} state="active" /> : <Sparkles {...smallIconProps} />}
+          onClick={() => action.mutate((projects) => projects.generateSummary(project.id))}
         >
-          Edit summary
+          {action.isPending ? 'Generating summary…' : has ? 'Update summary' : 'Generate summary'}
         </Button>
-      </div>
-    );
-  }
-
-  const dirty = draft.trim() !== project.description;
-  return (
-    <form
-      className="flex max-w-[46rem] flex-col gap-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (dirty && !action.isPending) action.mutate((projects) => projects.saveSummary(project.id, draft.trim()), { onSuccess: () => setDraft(null) });
-      }}
-    >
-      <label htmlFor={id} className="sr-only">
-        Project summary
-      </label>
-      <textarea
-        id={id}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        rows={8}
-        maxLength={20000}
-        autoFocus
-        placeholder="What this project is about, in plain text…"
-        className="scrollbar-subtle min-h-40 w-full resize-y rounded-card border border-border bg-bg p-3.5 text-base leading-relaxed text-fg outline-none transition-colors duration-150 ease-standard placeholder:text-fg-muted focus:border-composer-focus focus:ring-1 focus:ring-composer-ring focus-visible:outline-none sm:text-sm"
-      />
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" variant="primary" size="sm" disabled={!dirty || action.isPending} leadingIcon={action.isPending ? <Spinner size={14} state="active" /> : undefined}>
-          Save summary
-        </Button>
-        <Button variant="ghost" size="sm" disabled={action.isPending} onClick={() => setDraft(null)}>
-          Cancel
-        </Button>
-        {(action.isPending || action.isError) && (
-          <p role="status" className={cn('text-xs', action.isError ? 'text-danger' : 'text-fg-muted')}>
-            {action.isPending ? 'Saving…' : `Couldn't save. ${toErrorInfo(action.error).message}`}
+        {action.isError && !action.isPending && (
+          <p role="alert" className="text-xs text-danger">
+            Couldn&apos;t generate the summary. {toErrorInfo(action.error).message}
           </p>
         )}
       </div>
-    </form>
+      <p className="max-w-[70ch] text-2xs leading-relaxed text-fg-muted">
+        Lam writes the summary from this project&apos;s conversations. It changes only when you ask; for a large project it covers the most recent
+        conversations.
+      </p>
+    </div>
   );
 }

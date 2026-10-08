@@ -262,8 +262,12 @@ export interface ProjectsService {
   remove(id: string): Promise<void>;
   /** PATCH /projects/{id} `{instructions}`. */
   saveInstructions(id: string, instructions: string): Promise<Project>;
-  /** PATCH /projects/{id} `{summary}` — plain text written by the project's people ("" clears it). */
-  saveSummary(id: string, summary: string): Promise<Project>;
+  /**
+   * POST /projects/{id}/summary/generate — the backend writes the summary from the project's conversations
+   * (one model call) and saves it. 409 when the project has no conversation yet, 502 when generation
+   * failed; the summary that was there is kept in both cases.
+   */
+  generateSummary(id: string): Promise<Project>;
   /**
    * A conversation opened under the project is the project's. The backend ties a chat to its project when
    * it is created (`project_id` on the first message), so over HTTP this only reloads the project.

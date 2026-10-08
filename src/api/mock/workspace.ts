@@ -374,11 +374,13 @@ export function createMockProjects({
       project.instructions = instructions;
       return clone(project);
     },
-    async saveSummary(id, summary) {
+    // The sample backend has no model: it "generates" a fixed sentence naming the project's chats.
+    async generateSummary(id) {
       await respond();
       const project = projects.find((p) => p.id === id);
       if (!project) throw new ApiError(404, 'not_found', 'This project does not exist.');
-      project.description = summary;
+      if (project.chats.length === 0) throw new ApiError(409, 'conflict', 'This project has no conversations to summarise yet.');
+      project.description = `Summary of ${project.chats.length} conversation${project.chats.length === 1 ? '' : 's'} in ${project.name}: ${project.chats.map((c) => c.title).join('; ')}.`;
       return clone(project);
     },
   };

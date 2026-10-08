@@ -1,10 +1,10 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/api';
 import { renderApp } from './testUtils';
 
 /**
- * Creating a project with its instructions, files and people, and the project's editable Summary tab.
+ * Creating a project with its instructions, files and people, and the project's generated Summary tab.
  */
 
 const find = { timeout: 8000 };
@@ -123,82 +123,98 @@ describe('New project', () => {
 
 describe('Project: Summary', () => {
   const SAMPLE = 'Baseline, KPI framework and delivery roadmap for the 2030 water security programme.';
+  const NAME = 'National Water Security Strategy';
   async function openSummary() {
     const app = renderApp('/projects');
-    fireEvent.click(await screen.findByRole('link', { name: /National Water Security Strategy/ }, find));
+    fireEvent.click(await screen.findByRole('link', { name: new RegExp(NAME) }, find));
     const tabs = await screen.findAllByRole('tab', {}, find);
     expect(tabs.at(-1)!.textContent).toBe('Summary'); // the last section
     fireEvent.click(tabs.at(-1)!);
-    return { ...app, panel: screen.getByRole('tabpanel') };
+    const id = app.router.state.location.pathname.split('/')[2]!;
+    return { ...app, id, panel: screen.getByRole('tabpanel') };
   }
 
-  it('shows the summary as plain text with an Edit action, and no text box until it is pressed', async () => {
+  it('an existing summary is plain text with "Update summary" — and nothing to type in or edit by hand', async () => {
     const { panel } = await openSummary();
     expect(within(panel).getByText(SAMPLE).tagName).toBe('P');
+    expect(within(panel).getByRole('button', { name: 'Update summary' })).toBeTruthy();
+    expect(within(panel).queryByRole('button', { name: 'Generate summary' })).toBeNull();
     expect(within(panel).queryByRole('textbox')).toBeNull();
-    expect(within(panel).getByRole('button', { name: 'Edit summary' })).toBeTruthy();
+    expect(within(panel).queryByRole('button', { name: /edit|save/i })).toBeNull();
+    expect(within(panel).getByText(/Lam writes the summary from this project's conversations/)).toBeTruthy();
   });
 
-  it('Edit preloads the summary; Cancel leaves it as it was and saves nothing', async () => {
-    const { api, panel } = await openSummary();
-    const save = vi.spyOn(api.projects, 'saveSummary');
-    fireEvent.click(within(panel).getByRole('button', { name: 'Edit summary' }));
-    const box = within(panel).getByLabelText('Project summary') as HTMLTextAreaElement;
-    expect(box.value).toBe(SAMPLE);
-    expect((within(panel).getByRole('button', { name: 'Save summary' }) as HTMLButtonElement).disabled).toBe(true); // nothing changed yet
-    fireEvent.change(box, { target: { value: 'Something else' } });
-    fireEvent.click(within(panel).getByRole('button', { name: 'Cancel' }));
+  it('Update asks the backend for this project, shows it is generating, then shows the new summary at once — on the page and on the project card', async () => {
+    const { api, id, panel } = await openSummary();
+    const generate = api.projects.generateSummary.bind(api.projects);
+    let release!: () => void;
+    const spy = vi.spyOn(api.projects, 'generateSummary').mockImplementation(async (project) => {
+      await new Promise<void>((r) => (release = r));
+      return generate(project);
+    });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Update summary' }));
+
+    // Generating: the button says so and cannot be pressed again; the old summary stays in view meanwhile.
+    const busy = (await within(panel).findByRole('button', { name: 'Generating summary…' })) as HTMLButtonElement;
+    expect(busy.disabled).toBe(true);
+    expect(busy.getAttribute('aria-busy')).toBe('true');
     expect(within(panel).getByText(SAMPLE)).toBeTruthy();
-    expect(within(panel).queryByRole('textbox')).toBeNull();
-    expect(save).not.toHaveBeenCalled();
-  });
+    fireEvent.click(busy);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(id);
 
-  it('Save sends the text through the service and shows it at once, on the page and on the project card', async () => {
-    const { api, panel } = await openSummary();
-    const save = vi.spyOn(api.projects, 'saveSummary');
-    fireEvent.click(within(panel).getByRole('button', { name: 'Edit summary' }));
-    fireEvent.change(within(panel).getByLabelText('Project summary'), { target: { value: '  Agreed: 2022 is the baseline year.\nNext: tariff options.  ' } });
-    fireEvent.click(within(panel).getByRole('button', { name: 'Save summary' }));
-    await waitFor(() => expect(within(panel).queryByRole('textbox')).toBeNull());
-    const saved = await within(panel).findByText(/Agreed: 2022 is the baseline year\./);
-    expect(saved.textContent).toBe('Agreed: 2022 is the baseline year.\nNext: tariff options.'); // as written, line break kept
-    expect(saved.className).toMatch(/whitespace-pre-wrap/);
-    expect(save).toHaveBeenCalledWith(expect.any(String), 'Agreed: 2022 is the baseline year.\nNext: tariff options.');
-    expect(within(panel).queryByRole('textbox')).toBeNull();
+    await act(async () => release());
+    const text = await within(panel).findByText(new RegExp(`^Summary of \\d+ conversations? in ${NAME}`));
+    expect(text.className).toMatch(/whitespace-pre-wrap/); // plain text, as written
     expect(within(panel).queryByText(SAMPLE)).toBeNull();
-    expect((await api.projects.list()).find((p) => p.name === 'National Water Security Strategy')!.description).toMatch(/^Agreed: 2022/);
+    expect(within(panel).getByRole('button', { name: 'Update summary' })).toBeTruthy();
+    expect(within(panel).queryByRole('alert')).toBeNull();
+
+    // The project card shows the same field.
+    fireEvent.click(screen.getAllByRole('link', { name: 'All projects' })[0]!);
+    const card = await screen.findByRole('link', { name: new RegExp(NAME) }, find);
+    await waitFor(() => expect(card.textContent).toMatch(new RegExp(`Summary of \\d+ conversations? in ${NAME}`)));
+    expect(card.textContent).not.toContain(SAMPLE);
   });
 
-  it('a save the backend refuses says why and keeps what was typed', async () => {
+  it('a failed generation says why and leaves the existing summary exactly as it was', async () => {
     const { api, panel } = await openSummary();
-    vi.spyOn(api.projects, 'saveSummary').mockRejectedValueOnce(new ApiError(403, 'forbidden', 'You do not have permission to do this in this project.'));
-    fireEvent.click(within(panel).getByRole('button', { name: 'Edit summary' }));
-    fireEvent.change(within(panel).getByLabelText('Project summary'), { target: { value: 'New text' } });
-    fireEvent.click(within(panel).getByRole('button', { name: 'Save summary' }));
-    expect((await within(panel).findByRole('status')).textContent).toBe("Couldn't save. You do not have permission to do this in this project.");
-    expect((within(panel).getByLabelText('Project summary') as HTMLTextAreaElement).value).toBe('New text');
-    fireEvent.click(within(panel).getByRole('button', { name: 'Save summary' })); // and it can be tried again
-    await waitFor(() => expect(within(panel).queryByRole('textbox')).toBeNull());
-    expect(within(panel).getByText('New text')).toBeTruthy();
+    vi.spyOn(api.projects, 'generateSummary').mockRejectedValueOnce(new ApiError(502, 'http_502', 'The summary could not be generated. Please try again.'));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Update summary' }));
+    expect((await within(panel).findByRole('alert')).textContent).toBe("Couldn't generate the summary. The summary could not be generated. Please try again.");
+    expect(within(panel).getByText(SAMPLE)).toBeTruthy();
+    expect((await api.projects.list()).find((p) => p.name === NAME)!.description).toBe(SAMPLE);
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Update summary' })); // and it can be tried again
+    expect(await within(panel).findByText(new RegExp(`^Summary of \\d+ conversations? in ${NAME}`))).toBeTruthy();
+    expect(within(panel).queryByRole('alert')).toBeNull();
   });
 
-  it('a project without a summary says so, and one can be written; clearing it brings the empty state back', async () => {
+  it('a project without a summary says so and offers "Generate summary"; with no conversations yet the backend\u2019s reason is shown', async () => {
     const { api } = renderApp('/projects');
     const created = await api.projects.create({ name: 'Empty one' });
     renderApp(`/projects/${created.id}`, { api });
     fireEvent.click((await screen.findAllByRole('tab', { name: 'Summary' }, find)).at(-1)!);
     const panel = screen.getAllByRole('tabpanel').at(-1)!;
     expect(within(panel).getByText('This project has no summary yet.')).toBeTruthy();
-    fireEvent.click(within(panel).getByRole('button', { name: 'Edit summary' }));
-    expect((within(panel).getByLabelText('Project summary') as HTMLTextAreaElement).value).toBe('');
-    fireEvent.change(within(panel).getByLabelText('Project summary'), { target: { value: 'A first summary.' } });
-    fireEvent.click(within(panel).getByRole('button', { name: 'Save summary' }));
-    await waitFor(() => expect(within(panel).queryByRole('textbox')).toBeNull());
-    expect(within(panel).getByText('A first summary.')).toBeTruthy();
+    expect(within(panel).queryByRole('button', { name: 'Update summary' })).toBeNull();
+    const generate = vi.spyOn(api.projects, 'generateSummary');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Generate summary' }));
+    expect((await within(panel).findByRole('alert')).textContent).toBe("Couldn't generate the summary. This project has no conversations to summarise yet.");
+    expect(generate).toHaveBeenCalledWith(created.id);
+    expect(within(panel).getByText('This project has no summary yet.')).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: 'Generate summary' })).toBeTruthy();
+  });
 
-    fireEvent.click(within(panel).getByRole('button', { name: 'Edit summary' }));
-    fireEvent.change(within(panel).getByLabelText('Project summary'), { target: { value: '   ' } });
-    fireEvent.click(within(panel).getByRole('button', { name: 'Save summary' }));
-    expect(await within(panel).findByText('This project has no summary yet.')).toBeTruthy();
+  it('a project with conversations and no summary generates its first one', async () => {
+    const { api } = renderApp('/projects');
+    const created = await api.projects.create({ name: 'Fresh one' });
+    await api.projects.linkChat(created.id, { id: 'c-fresh', title: 'Kick-off notes' });
+    renderApp(`/projects/${created.id}`, { api });
+    fireEvent.click((await screen.findAllByRole('tab', { name: 'Summary' }, find)).at(-1)!);
+    const panel = screen.getAllByRole('tabpanel').at(-1)!;
+    fireEvent.click(within(panel).getByRole('button', { name: 'Generate summary' }));
+    expect(await within(panel).findByText('Summary of 1 conversation in Fresh one: Kick-off notes.')).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: 'Update summary' })).toBeTruthy();
   });
 });
