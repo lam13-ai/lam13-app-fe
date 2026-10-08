@@ -1,10 +1,11 @@
 import { FolderKanban, Plus } from 'lucide-react';
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router';
 import { toErrorInfo } from '@/api';
 import { ErrorState } from '@/components/ErrorState';
 import { PageFrame } from '@/components/PageFrame';
-import { Button, Popover, Skeleton, Spinner, smallIconProps, usePopover, useToast } from '@/components/ui';
+import { Button, Skeleton, Spinner, smallIconProps, useToast } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatRelativeTime } from '@/lib/format';
 import type { ProjectSummary } from '@/types/api';
@@ -52,8 +53,7 @@ const OPTIONAL = <span className="font-medium text-fg-muted">(optional)</span>;
  * The new project's name, and optionally its instructions, files and people. Creating it opens it; a file
  * or a person the backend refuses is named in a message, and the project is still created.
  */
-function NewProjectForm() {
-  const popover = usePopover();
+function NewProjectForm({ onClose }: { onClose: () => void }) {
   const create = useCreateProject();
   const navigate = useNavigate();
   const toast = useToast();
@@ -74,17 +74,20 @@ function NewProjectForm() {
       {
         onSuccess: ({ project, failed }) => {
           if (failed.length > 0) toast.show(`The project was created, but not everything was added. ${failed.join(' · ')}`, { tone: 'danger' });
-          popover?.close();
+          onClose();
           void navigate(`/projects/${project.id}`);
         },
       },
     );
   };
   return (
-    <form noValidate onSubmit={submit} aria-labelledby={`${id}-title`} className="flex flex-col gap-3 p-2 text-left">
-      <h2 id={`${id}-title`} className="text-sm font-bold">
-        New project
-      </h2>
+    <form noValidate onSubmit={submit} aria-labelledby={`${id}-title`} className="flex flex-col gap-5 p-5 text-left sm:p-7">
+      <div>
+        <h2 id={`${id}-title`} className="text-base font-bold">
+          New project
+        </h2>
+        <p className="mt-1 text-xs leading-relaxed text-fg-muted">Name it, then add what Lam should know. Everything but the name can also be added later.</p>
+      </div>
       <div>
         <label htmlFor={`${id}-name`} className={LABEL}>
           Project name
@@ -109,12 +112,12 @@ function NewProjectForm() {
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
           placeholder="How Lam should work in this project"
-          className={cn(FIELD, 'h-20! resize-none py-2 md:h-20!')}
+          className={cn(FIELD, 'h-44! resize-y py-2.5 leading-relaxed md:h-44!')}
         />
       </div>
-      <div>
+      <div className="border-t border-hairline pt-5">
         <label htmlFor={`${id}-files`} className={LABEL}>
-          Files {OPTIONAL}
+          Archives {OPTIONAL}
         </label>
         <input
           id={`${id}-files`}
@@ -129,9 +132,9 @@ function NewProjectForm() {
           {files.length > 0 ? `${files.length} file${files.length === 1 ? '' : 's'} will be added to Archives.` : 'PDF, DOCX, PPTX or images, up to 50 MB each.'}
         </p>
       </div>
-      <div>
+      <div className="border-t border-hairline pt-5">
         <label htmlFor={`${id}-people`} className={LABEL}>
-          People {OPTIONAL}
+          Teams &amp; Contacts {OPTIONAL}
         </label>
         <input
           id={`${id}-people`}
@@ -153,11 +156,11 @@ function NewProjectForm() {
           {toErrorInfo(create.error).message}
         </p>
       )}
-      <div className="flex gap-2">
-        <Button type="submit" variant="primary" size="sm" disabled={!name.trim() || create.isPending} leadingIcon={create.isPending ? <Spinner size={14} state="active" /> : undefined}>
+      <div className="flex flex-wrap gap-2 border-t border-hairline pt-5">
+        <Button type="submit" variant="primary" disabled={!name.trim() || create.isPending} leadingIcon={create.isPending ? <Spinner size={14} state="active" /> : undefined}>
           {create.isPending ? 'Creating…' : 'Create project'}
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => popover?.close()}>
+        <Button variant="ghost" onClick={onClose}>
           Cancel
         </Button>
       </div>
@@ -165,24 +168,79 @@ function NewProjectForm() {
   );
 }
 
+/**
+ * The form as a wide, centred dialog over the page (the whole viewport on a phone, with a margin). Escape
+ * or a click on the dimmed page closes it; Tab stays inside it; the page behind scrolls it when it is taller
+ * than the window.
+ */
+function NewProjectDialog({ onClose }: { onClose: () => void }) {
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const keepFocusInside = (e: KeyboardEvent) => {
+    if (e.key !== 'Tab') return;
+    const stops = [...(panel.current?.querySelectorAll<HTMLElement>('input, textarea, button:not(:disabled)') ?? [])];
+    const first = stops[0];
+    const last = stops.at(-1);
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last?.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first?.focus();
+    }
+  };
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex overflow-y-auto bg-scrim p-3 sm:p-6"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={panel}
+        role="dialog"
+        aria-modal="true"
+        aria-label="New project"
+        onKeyDown={keepFocusInside}
+        className="soft-ink m-auto w-full max-w-3xl rounded-card border border-border bg-bg shadow-popover"
+      >
+        <NewProjectForm onClose={onClose} />
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 /** "New project": name, instructions, files and people; creates it (the user becomes its owner) and opens it. */
 function NewProjectButton({ compact = false }: { compact?: boolean }) {
-  // The form is mounted only while its popover is open: each "New project" starts empty.
+  // The form is mounted only while its dialog is open: each "New project" starts empty.
   const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const close = () => {
+    setOpen(false);
+    button.current?.focus(); // back to where the dialog was opened from
+  };
   return (
-    <Popover
-      placement={compact ? 'bottom-end' : 'bottom-start'}
-      kind="dialog"
-      className="w-[min(24rem,calc(100vw-1.5rem))]"
-      onOpenChange={setOpen}
-      trigger={(props) => (
-        <Button {...props} variant="primary" size={compact ? 'sm' : undefined} aria-label="New project" leadingIcon={<Plus {...smallIconProps} />}>
-          <span className={compact ? 'max-sm:sr-only' : undefined}>New project</span>
-        </Button>
-      )}
-    >
-      {open && <NewProjectForm />}
-    </Popover>
+    <>
+      <Button
+        ref={button}
+        variant="primary"
+        size={compact ? 'sm' : undefined}
+        aria-label="New project"
+        aria-haspopup="dialog"
+        leadingIcon={<Plus {...smallIconProps} />}
+        onClick={() => setOpen(true)}
+      >
+        <span className={compact ? 'max-sm:sr-only' : undefined}>New project</span>
+      </Button>
+      {open && <NewProjectDialog onClose={close} />}
+    </>
   );
 }
 

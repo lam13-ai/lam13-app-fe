@@ -3,7 +3,6 @@ import { useCallback, useMemo, useState } from 'react';
 import { ErrorState } from '@/components/ErrorState';
 import { ScrollArea } from '@/components/ScrollArea';
 import { Button, IconButton, Menu, MenuItem, Popover, Skeleton, VisuallyHidden, iconProps, smallIconProps } from '@/components/ui';
-import { useConnectionResult } from '@/features/integrations';
 import { useUiStore } from '@/stores/uiStore';
 import type { ProfileUpdateSuggestion } from '@/types/api';
 import { usePendingSuggestions, useProfiles } from '../hooks/useContacts';
@@ -66,8 +65,6 @@ function GridSkeleton() {
 /** `/contacts`: header, search + sort, the contact grid, and the contact sheet. */
 export function ContactsView() {
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
-  // Gmail's and Outlook's sign-in return here (?connection=…&provider=…).
-  useConnectionResult();
   const profiles = useProfiles();
   const pending = usePendingSuggestions();
   const [query, setQuery] = useState('');

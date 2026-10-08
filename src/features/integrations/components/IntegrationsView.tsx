@@ -1,24 +1,15 @@
-import { Cloud, FolderOpen, HardDrive, Menu as MenuIcon, Video } from 'lucide-react';
+import { Menu as MenuIcon } from 'lucide-react';
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { ScrollArea } from '@/components/ScrollArea';
 import { IconButton, iconProps, useToast } from '@/components/ui';
 import { GranolaConnectionControl } from '@/features/meetings';
 import { useUiStore } from '@/stores/uiStore';
+import { CustomServerSection, DemoIntegration } from './DemoIntegrations';
 import { IntegrationRow } from './IntegrationRow';
-import { McpServerSection } from './McpServerSection';
-import { ProviderConnection, StatusNote, useConnectionResult } from './ProviderConnection';
 import { WhatsAppIntegration } from './WhatsAppIntegration';
 
-const ICON = { size: 18, strokeWidth: 1.6 };
-/** A service Lam13 has no integration for yet: listed, with nothing to press. */
-const notAvailable = <StatusNote>Not available yet</StatusNote>;
-
-/**
- * `/integrations`: the outside services Lam13 connects to (same page frame as My Contacts and Meetings).
- * Every state shown is the backend's: Granola's connection, each account provider's (`GET /integrations`),
- * and the saved MCP server. Nothing becomes "Connected" by being clicked.
- */
+/** `/integrations`: the outside services Lam13 connects to (same page frame as My Contacts and Meetings). */
 export function IntegrationsView() {
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
   const toast = useToast();
@@ -29,8 +20,6 @@ export function IntegrationsView() {
     if (params.get('granola') === 'error') toast.show("Couldn't connect Granola. Please try again.", { tone: 'danger' });
     setParams({}, { replace: true });
   }, [params, setParams, toast]);
-  // Every other provider's callback returns with ?connection=…&provider=….
-  useConnectionResult();
   return (
     <section
       aria-labelledby="integrations-heading"
@@ -60,43 +49,29 @@ export function IntegrationsView() {
             description="Bring your meeting notes into Lam13, so you can ask about decisions and action items."
             action={<GranolaConnectionControl />}
           />
-          <IntegrationRow brand="otter" description="Otter transcripts and summaries as meeting context." action={notAvailable} />
-          <IntegrationRow brand="fireflies" description="Fireflies notes, action items and transcripts from your recorded calls." action={notAvailable} />
+          <DemoIntegration brand="otter" description="Import Otter transcripts and summaries as meeting context." />
+          <DemoIntegration brand="fireflies" description="Sync Fireflies notes, action items and transcripts from your recorded calls." />
 
           <h2 className="eyebrow mb-4 mt-10">Communication</h2>
           <WhatsAppIntegration />
-          <IntegrationRow
-            brand="teams"
-            title="Microsoft Teams chat"
-            description="Chat with Lam13 inside Microsoft Teams: ask the AI assistant a question in a chat or channel and get the answer there. (Teams meetings are under Video conferencing.)"
-            action={notAvailable}
-          />
-          <IntegrationRow brand="slack" description="Ask Lam13 from Slack and share answers back to a channel." action={notAvailable} />
+          <DemoIntegration brand="teams" description="Ask Lam13 from Microsoft Teams and bring channel discussions into your projects." />
+          <DemoIntegration brand="slack" description="Ask Lam13 from Slack and share answers back to a channel." />
 
-          <h2 className="eyebrow mb-2 mt-10">Video conferencing</h2>
-          <p className="mb-4 max-w-[64ch] text-xs leading-relaxed text-fg-muted">
-            Calendar already shows where each meeting happens, read from its join link. Connecting an account gives Lam13 read-only access to your meetings on
-            that platform; bringing them in from the account is not switched on yet.
-          </p>
-          <IntegrationRow brand="meet" description="Meetings held on Google Meet, through your Google account." action={<ProviderConnection provider="google_meet" />} />
-          <IntegrationRow brand="zoom" description="Meetings held on Zoom, through your Zoom account." action={<ProviderConnection provider="zoom" />} />
-          <IntegrationRow title="Webex" icon={<Video {...ICON} />} description="Meetings held on Webex, through your Webex account." action={<ProviderConnection provider="webex" />} />
-          <IntegrationRow brand="teams" description="Meetings held on Microsoft Teams, through your Microsoft account." action={<ProviderConnection provider="teams" />} />
+          <h2 className="eyebrow mb-4 mt-10">Video conferencing</h2>
+          <DemoIntegration brand="meet" description="Bring your Google Meet meetings into Lam13 as meeting context." />
+          <DemoIntegration brand="zoom" description="Bring your Zoom meetings and recordings into Lam13 as meeting context." />
+          <DemoIntegration brand="webex" description="Bring your Webex meetings into Lam13 as meeting context." />
+          <DemoIntegration brand="teamsMeetings" description="Bring your Microsoft Teams meetings into Lam13 as meeting context." />
 
-          <h2 className="eyebrow mb-2 mt-10">Storage</h2>
-          <p className="mb-4 max-w-[64ch] text-xs leading-relaxed text-fg-muted">
-            Connect a storage account with read-only access. Bringing its files into a project&apos;s Archives is not switched on yet; files are added to
-            Archives by uploading them.
-          </p>
-          <IntegrationRow title="SharePoint" icon={<FolderOpen {...ICON} />} description="Your organisation's SharePoint sites and document libraries." action={<ProviderConnection provider="sharepoint" />} />
-          <IntegrationRow title="OneDrive" icon={<Cloud {...ICON} />} description="The files in your OneDrive." action={<ProviderConnection provider="onedrive" />} />
-          <IntegrationRow title="Google Drive" icon={<HardDrive {...ICON} />} description="The files in your Google Drive." action={<ProviderConnection provider="google_drive" />} />
+          <h2 className="eyebrow mb-4 mt-10">Storage</h2>
+          <DemoIntegration brand="sharepoint" description="Use documents from your SharePoint sites and libraries in your projects." />
+          <DemoIntegration brand="onedrive" description="Use files from your OneDrive in your projects." />
+          <DemoIntegration brand="drive" description="Use files from your Google Drive in your projects." />
 
           <h2 className="eyebrow mb-4 mt-10">Custom</h2>
-          <McpServerSection />
+          <CustomServerSection />
           <p className="mt-6 text-2xs leading-relaxed text-fg-muted">
-            Connecting an account opens that provider&apos;s own sign-in, and Lam13 asks for read-only access. &ldquo;Not set up on this server&rdquo; means
-            your administrator has not added that provider&apos;s credentials yet; &ldquo;Not available yet&rdquo; means Lam13 has no integration for it.
+            Otter, Fireflies, Microsoft Teams, Slack and custom servers are demo connections: connecting them here links no account and sends nothing.
           </p>
         </div>
       </ScrollArea>

@@ -1,13 +1,12 @@
 import { Check, ChevronDown, ChevronLeft, ChevronRight, MapPin, Video } from 'lucide-react';
 import { useId, useMemo, useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router';
-import { toErrorInfo } from '@/api';
 import { BrandLogo, type Brand } from '@/components/BrandLogo';
 import { ErrorState } from '@/components/ErrorState';
 import { PageFrame } from '@/components/PageFrame';
-import { Button, IconButton, Menu, MenuItem, Popover, Skeleton, iconProps, smallIconProps, useToast } from '@/components/ui';
+import { Button, IconButton, Menu, MenuItem, Popover, Skeleton, iconProps, smallIconProps } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { useMeetingSource, useSetMeetingSourceConnected } from '@/features/meetings';
+import { useDemoStore, type NoteTaker } from '@/stores/demoStore';
 import type { CalendarEvent, CalendarTask } from '@/types/api';
 import { useCalendarEvents, useCalendarTasks, useCalendarUpcoming, useSetTaskCompleted } from '../hooks/useCalendar';
 
@@ -16,8 +15,8 @@ type Tab = (typeof TABS)[number];
 type View = 'month' | 'week';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-/** Note takers Lam13 has no integration for. */
-const NOTE_TAKERS: { id: Brand; name: string }[] = [
+const NOTE_TAKERS: { id: NoteTaker; name: string }[] = [
+  { id: 'granola', name: 'Granola' },
   { id: 'otter', name: 'Otter' },
   { id: 'fireflies', name: 'Fireflies' },
 ];
@@ -39,59 +38,40 @@ function monthGrid(month: Date): Date[] {
   return Array.from({ length: 42 }, (_, i) => addDays(start, i));
 }
 
-/**
- * The calendar's note taker: Granola, with its real connection (the same one as on Integrations). Choosing
- * it while disconnected opens Granola's sign-in; it reads "Connected" only once that succeeded. The others
- * have no integration and are listed as such. Never a meeting's location.
- */
+/** Which note taker the calendar shows as its source. A demo choice: it only changes this label, never a meeting's location. */
 function NoteTakerSelect() {
-  const source = useMeetingSource();
-  const connect = useSetMeetingSourceConnected();
-  const toast = useToast();
-  const connected = source.data?.status === 'connected';
-  const status = source.isPending ? 'Checking' : connected ? 'Connected' : 'Not connected';
+  const noteTaker = useDemoStore((s) => s.noteTaker);
+  const setNoteTaker = useDemoStore((s) => s.setNoteTaker);
+  const current = NOTE_TAKERS.find((t) => t.id === noteTaker)!;
   return (
     <Popover
       placement="bottom-end"
-      className="w-64"
+      className="w-60"
       trigger={(props) => (
         <button
           {...props}
           type="button"
-          aria-label={`Note taker: Granola ${status}`}
+          aria-label={`Note taker: ${current.name} Connected`}
           className="group flex h-9 shrink-0 items-center gap-2 rounded-full border border-border pl-1.5 pr-2.5 text-xs transition-colors duration-150 ease-standard hover:border-fg/40 aria-expanded:border-fg/40"
         >
-          <BrandLogo brand="granola" size={22} />
-          <span className="max-sm:sr-only">Granola</span>
+          <BrandLogo brand={current.id} size={22} />
+          <span className="max-sm:sr-only">{current.name}</span>
           <span className="flex items-center gap-1.5 text-fg-muted">
-            <span aria-hidden="true" className={cn('size-1.5 rounded-full', connected ? 'bg-accent' : 'bg-fg-muted/50')} />
-            <span className="max-sm:sr-only">{status}</span>
+            <span aria-hidden="true" className="size-1.5 rounded-full bg-accent" />
+            <span className="max-sm:sr-only">Connected</span>
           </span>
           <ChevronDown {...smallIconProps} size={14} className="text-fg-muted transition-transform duration-200 group-aria-expanded:rotate-180" />
         </button>
       )}
     >
       <Menu label="Note taker">
-        <MenuItem
-          checked={connected}
-          leading={<BrandLogo brand="granola" size={18} />}
-          onSelect={() => {
-            if (connected || source.isPending) return;
-            connect.mutate(true, { onError: (error) => toast.show(`Couldn't connect Granola. ${toErrorInfo(error).message}`, { tone: 'danger' }) });
-          }}
-        >
-          {connected || source.isPending ? 'Granola' : 'Connect Granola'}
-        </MenuItem>
-      </Menu>
-      <ul aria-label="Not available yet" className="mt-1.5 border-t border-hairline pt-1.5">
         {NOTE_TAKERS.map((t) => (
-          <li key={t.id} className="flex h-11 items-center gap-2 px-2.5 text-xs text-fg-muted md:h-8">
-            <BrandLogo brand={t.id} size={18} />
+          <MenuItem key={t.id} checked={t.id === noteTaker} onSelect={() => setNoteTaker(t.id)} leading={<BrandLogo brand={t.id} size={18} />}>
             {t.name}
-            <span className="ml-auto text-2xs">Not available yet</span>
-          </li>
+          </MenuItem>
         ))}
-      </ul>
+      </Menu>
+      <p className="mt-1.5 border-t border-hairline px-2.5 pt-2 text-2xs leading-snug text-fg-muted">Demo: choosing a note taker only changes this label.</p>
     </Popover>
   );
 }

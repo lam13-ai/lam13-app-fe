@@ -1,11 +1,15 @@
+import drive from '@/assets/brands/drive.svg';
 import fireflies from '@/assets/brands/fireflies.png';
 import gmail from '@/assets/brands/gmail.svg';
 import granola from '@/assets/brands/granola.png';
 import meet from '@/assets/brands/meet.svg';
+import onedrive from '@/assets/brands/onedrive.svg';
 import otter from '@/assets/brands/otter.png';
 import outlook from '@/assets/brands/outlook.svg';
+import sharepoint from '@/assets/brands/sharepoint.svg';
 import slack from '@/assets/brands/slack.png';
 import teams from '@/assets/brands/teams.png';
+import webex from '@/assets/brands/webex.svg';
 import whatsapp from '@/assets/brands/whatsapp.svg';
 import zoom from '@/assets/brands/zoom.svg';
 import anthropic from '@/assets/providers/anthropic.svg';
@@ -16,7 +20,7 @@ import qwen from '@/assets/providers/qwen.svg';
 import zai from '@/assets/providers/zai.svg';
 import { cn } from '@/lib/cn';
 
-export type Brand = 'granola' | 'otter' | 'fireflies' | 'whatsapp' | 'teams' | 'meet' | 'zoom' | 'slack' | 'gmail' | 'outlook' | 'openai' | 'anthropic' | 'google' | 'moonshot' | 'qwen' | 'zai';
+export type Brand = 'granola' | 'otter' | 'fireflies' | 'whatsapp' | 'teams' | 'teamsMeetings' | 'meet' | 'zoom' | 'webex' | 'sharepoint' | 'onedrive' | 'drive' | 'slack' | 'gmail' | 'outlook' | 'openai' | 'anthropic' | 'google' | 'moonshot' | 'qwen' | 'zai';
 
 /** Each vendor's own mark (src/assets/brands, src/assets/providers). `bleed`: the icon is a full square that fills the tile. */
 const BRANDS: Record<Brand, { name: string; src: string; bleed?: boolean }> = {
@@ -27,6 +31,12 @@ const BRANDS: Record<Brand, { name: string; src: string; bleed?: boolean }> = {
   teams: { name: 'Microsoft Teams', src: teams },
   meet: { name: 'Google Meet', src: meet },
   zoom: { name: 'Zoom', src: zoom, bleed: true },
+  webex: { name: 'Webex', src: webex },
+  // Teams as a place meetings happen (Video conferencing), apart from Teams chat (Communication).
+  teamsMeetings: { name: 'Microsoft Teams meetings', src: teams },
+  sharepoint: { name: 'SharePoint', src: sharepoint },
+  onedrive: { name: 'OneDrive', src: onedrive },
+  drive: { name: 'Google Drive', src: drive },
   slack: { name: 'Slack', src: slack },
   gmail: { name: 'Gmail', src: gmail },
   outlook: { name: 'Outlook', src: outlook },

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setAccessTokenGetter } from './auth';
 import { isApiError } from './errors';
 import { createHttpAdapter } from './http';
+import { createHttpCalendar } from './httpWorkspace';
 import type { StreamEvent } from './stream';
 
 /**
@@ -286,7 +287,7 @@ describe('HTTP adapter — calendar', () => {
 
   it('events: the backend’s fields, the platform from its own value, a place only when it gives one', async () => {
     const { calls } = calendarBackend();
-    const events = await createHttpAdapter().calendar.events();
+    const events = await createHttpCalendar().events();
     expect(calls.map((c) => c.url).sort()).toEqual(['/calendar/events?limit=500', '/projects']);
     expect(events.map((e) => [e.title, e.location, e.location_text, e.meeting_url, e.ends_at, e.project, e.meeting_id])).toEqual([
       ['Steering committee', 'teams', null, 'https://teams.microsoft.com/l/meetup-join/abc', '2026-10-09T10:15:00Z', 'Water strategy', null],
@@ -300,7 +301,7 @@ describe('HTTP adapter — calendar', () => {
 
   it('upcoming and a single event use their own routes; the calendar still loads if the project names do not', async () => {
     const { calls } = calendarBackend((c) => (c.url === '/projects' ? json({ detail: 'boom' }, 500) : c.url === '/calendar/events/e2' ? json(EVENTS[1]) : undefined));
-    const api = createHttpAdapter().calendar;
+    const api = createHttpCalendar();
     const upcoming = await api.upcoming();
     expect(upcoming).toHaveLength(5);
     expect(upcoming[0]!.project).toBeNull(); // the name is a nicety, not a requirement
@@ -322,7 +323,7 @@ describe('HTTP adapter — calendar', () => {
       }
       return undefined;
     });
-    const api = createHttpAdapter().calendar;
+    const api = createHttpCalendar();
     expect(await api.tasks()).toEqual([
       { id: 'abc:0', title: 'Send the KPI list', due_at: null, completed: false, meeting: 'KPI working session', meeting_at: '2026-10-06T10:00:00Z', project: null },
       { id: 'abc:1', title: 'Collect loss figures', due_at: null, completed: true, meeting: 'KPI working session', meeting_at: '2026-10-06T10:00:00Z', project: null },

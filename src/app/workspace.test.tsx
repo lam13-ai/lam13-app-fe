@@ -1,10 +1,12 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useDemoStore } from '@/stores/demoStore';
 import { renderApp } from './testUtils';
 
 /** Navigation, Projects (instructions / archives), Calendar (three tabs) and the demo integrations — sample data and local state. */
 
 const find = { timeout: 8000 };
+beforeEach(() => useDemoStore.setState({ connected: {}, customServer: null, noteTaker: 'granola' }));
 
 describe('Sidebar navigation', () => {
   it('has Projects, My Contacts, Calendar and Integrations — and no separate Meetings entry', async () => {
@@ -189,15 +191,17 @@ describe('Calendar', () => {
     expect(upcoming().textContent).not.toMatch(/Granola|Otter|Fireflies/);
   });
 
-  it('the note taker is separate from the location: opening it leaves every meeting where it was', async () => {
+  it('the note taker is separate from the location: changing it leaves every meeting where it was', async () => {
     await openCalendar();
     fireEvent.click(screen.getByRole('tab', { name: 'Upcoming Meetings' }));
     const snapshot = () => within(upcoming()).getAllByRole('listitem').map((r) => `${(r.querySelector('[data-location]') as HTMLElement).dataset.location}|${r.querySelector('img')?.getAttribute('src') ?? ''}`);
     const before = snapshot();
-    fireEvent.click(await screen.findByRole('button', { name: 'Note taker: Granola Connected' }));
-    fireEvent.click(within(screen.getByRole('menu', { name: 'Note taker' })).getByRole('menuitemradio', { name: 'Granola' }));
-    expect(screen.getByRole('button', { name: 'Note taker: Granola Connected' })).toBeTruthy();
-    expect(snapshot()).toEqual(before);
+    for (const [from, to] of [['Granola', 'Otter'], ['Otter', 'Fireflies']] as const) {
+      fireEvent.click(screen.getByRole('button', { name: `Note taker: ${from} Connected` }));
+      fireEvent.click(within(screen.getByRole('menu', { name: 'Note taker' })).getByRole('menuitemradio', { name: to }));
+      expect(screen.getByRole('button', { name: `Note taker: ${to} Connected` })).toBeTruthy();
+      expect(snapshot()).toEqual(before);
+    }
   });
 
   it('the day agenda shows the location too', async () => {
@@ -223,16 +227,17 @@ describe('Calendar', () => {
     expect(done.checked).toBe(true);
   });
 
-  it('the note-taker selector shows Granola with its real connection; Otter and Fireflies cannot be chosen', async () => {
+  it('the note-taker selector offers Granola, Otter and Fireflies only, and shows the selected one as connected', async () => {
     await openCalendar();
-    fireEvent.click(await screen.findByRole('button', { name: 'Note taker: Granola Connected' }));
-    expect(within(screen.getByRole('menu', { name: 'Note taker' })).getAllByRole('menuitemradio').map((o) => o.textContent)).toEqual(['Granola']);
-    const others = within(screen.getByRole('list', { name: 'Not available yet' }));
-    expect(others.getAllByRole('listitem').map((o) => o.textContent)).toEqual(['OtterNot available yet', 'FirefliesNot available yet']);
-    expect(others.queryByRole('button')).toBeNull();
-    expect(others.queryByRole('menuitemradio')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Note taker: Granola Connected' }));
+    const options = within(screen.getByRole('menu', { name: 'Note taker' })).getAllByRole('menuitemradio');
+    expect(options.map((o) => o.textContent)).toEqual(['Granola', 'Otter', 'Fireflies']);
     expect(document.body.textContent).not.toMatch(/Custom Note Taker|Custom MCP/i);
-    expect(screen.queryByRole('button', { name: /Note taker: (Otter|Fireflies)/ })).toBeNull();
+    fireEvent.click(options[1]!);
+    expect(screen.getByRole('button', { name: 'Note taker: Otter Connected' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Note taker: Otter Connected' }));
+    fireEvent.click(within(screen.getByRole('menu', { name: 'Note taker' })).getByRole('menuitemradio', { name: 'Fireflies' }));
+    expect(screen.getByRole('button', { name: 'Note taker: Fireflies Connected' })).toBeTruthy();
   });
 });
 
@@ -242,79 +247,76 @@ describe('Integrations', () => {
     await screen.findByRole('region', { name: 'Slack' }, find);
   };
 
-  it('groups the services by category, in order, with every provider of each', async () => {
+  it('groups the services, shows each logo, and has no "coming soon" or disabled placeholder', async () => {
     await open();
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Meeting note takers', 'Communication', 'Video conferencing', 'Storage', 'Custom']);
-    expect(within(screen.getByRole('region', { name: 'Integrations' })).getAllByRole('region').map((r) => r.getAttribute('aria-labelledby') && r.querySelector('h3')!.textContent)).toEqual([
-      'Granola', 'Otter', 'Fireflies',
-      'WhatsApp', 'Microsoft Teams chat', 'Slack',
-      'Google Meet', 'Zoom', 'Webex', 'Microsoft Teams',
-      'SharePoint', 'OneDrive', 'Google Drive',
-      'Custom MCP Server',
-    ]);
-    for (const name of ['Granola', 'Otter', 'Fireflies', 'WhatsApp', 'Microsoft Teams chat', 'Slack', 'Google Meet', 'Zoom', 'Microsoft Teams']) {
-      expect(screen.getByRole('region', { name }).querySelector('img')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Meeting note takers' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Communication' })).toBeTruthy();
+    for (const name of ['Granola', 'Otter', 'Fireflies', 'WhatsApp', 'Microsoft Teams', 'Slack']) {
+      const row = screen.getByRole('region', { name });
+      expect(row.querySelector('img')).toBeTruthy();
+      // Granola is the real integration (connected in the sample backend); every other service starts at Connect.
+      if (name === 'Granola') continue;
+      const connect = await within(row).findByRole('button', { name: `Connect ${name}` }, find);
+      expect((connect as HTMLButtonElement).disabled).toBe(false);
     }
     expect(screen.queryByText(/coming soon|^soon$/i)).toBeNull();
   });
 
-  it('clicking never connects anything: no row turns to Connected without the backend, and no row is labelled Demo', async () => {
+  it('Connect gives a local demo "Connected" state with Disconnect — no request is made', async () => {
     await open();
-    const granola = screen.getByRole('region', { name: 'Granola' });
-    await within(granola).findByRole('button', { name: /Granola connected/ }, find); // the sample backend's real state
-    for (const region of within(screen.getByRole('region', { name: 'Integrations' })).getAllByRole('region')) {
-      if (region === granola) continue;
-      expect(within(region).queryByText('Connected')).toBeNull();
-      expect(within(region).queryByText('Demo')).toBeNull();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    for (const name of ['Otter', 'Fireflies', 'Microsoft Teams', 'Slack']) {
+      const row = screen.getByRole('region', { name });
+      fireEvent.click(within(row).getByRole('button', { name: `Connect ${name}` }));
+      expect(within(row).getByText('Connected')).toBeTruthy();
+      expect(within(row).getByText('Demo')).toBeTruthy(); // never read as a real account link
+      fireEvent.click(within(row).getByRole('button', { name: `Disconnect ${name}` }));
+      expect(within(row).getByRole('button', { name: `Connect ${name}` })).toBeTruthy();
     }
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 
-  it('a custom MCP server validates, saves through the service, shows Saved (not Connected) and never shows the API key', async () => {
-    const { api } = renderApp('/integrations');
-    const save = vi.spyOn(api.integrations, 'saveMcpServer');
-    const section = await screen.findByRole('region', { name: 'Custom MCP Server' }, find);
-    expect(within(section).getByText(/An MCP \(Model Context Protocol\) server gives Lam13 access to your own tools and data/)).toBeTruthy();
+  it('a custom MCP server validates locally, connects as a demo without any request, and never keeps or shows the API key', async () => {
+    await open();
+    const section = screen.getByRole('region', { name: 'Custom MCP Server' });
+    expect(within(section).getByText('Bring your own tool: connect Lam13 to your MCP server and use it alongside the built-in integrations.')).toBeTruthy();
     const log = vi.spyOn(console, 'log');
-    fireEvent.click(await within(section).findByRole('button', { name: 'Add custom server' }, find));
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    fireEvent.click(within(section).getByRole('button', { name: 'Add custom server' }));
     expect((within(section).getByLabelText('Name') as HTMLInputElement).placeholder).toBe('e.g. Team tools server');
     expect((within(section).getByLabelText('MCP Server URL') as HTMLInputElement).placeholder).toBe('https://example.com/mcp');
-    expect(within(section).getByText('The key is stored encrypted with your account and is never shown again.')).toBeTruthy();
+    expect(within(section).getByText(/nothing you enter here is stored or sent anywhere/)).toBeTruthy();
     expect(within(section).getByRole('button', { name: 'Cancel' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Integrations' }).textContent).not.toMatch(/custom note taker|webhook/i);
-    const submit = () => within(section).getByRole('button', { name: 'Save server' });
+    const save = () => within(section).getByRole('button', { name: 'Save and connect' });
 
-    fireEvent.click(submit());
+    fireEvent.click(save());
     expect(within(section).getByText('Enter a name.')).toBeTruthy();
     expect(within(section).getByText('Enter the MCP server URL.')).toBeTruthy();
     fireEvent.change(within(section).getByLabelText('Name'), { target: { value: 'Team notes' } });
     fireEvent.change(within(section).getByLabelText('MCP Server URL'), { target: { value: 'http://example.com/mcp' } });
-    fireEvent.click(submit());
+    fireEvent.click(save());
     expect(within(section).getByText('Enter a valid https:// URL.')).toBeTruthy();
-    expect(save).not.toHaveBeenCalled();
 
     fireEvent.change(within(section).getByLabelText('MCP Server URL'), { target: { value: 'https://example.com/mcp' } });
     fireEvent.change(within(section).getByLabelText(/API key/), { target: { value: 'sk-test-not-real' } });
-    fireEvent.click(submit());
-    expect(await within(section).findByText('Saved')).toBeTruthy();
-    expect(save).toHaveBeenCalledWith({ name: 'Team notes', url: 'https://example.com/mcp', api_key: 'sk-test-not-real' });
-    expect(within(section).queryByText('Connected')).toBeNull();
+    fireEvent.click(save());
+    expect(within(section).getByText('Connected')).toBeTruthy();
     expect(within(section).getByText('Team notes')).toBeTruthy();
-    expect(within(section).getByText(/https:\/\/example\.com\/mcp · API key saved/)).toBeTruthy();
-    expect(within(section).getByText(/Lam13 does not use this server's tools in chats yet/)).toBeTruthy();
+    expect(within(section).getByText(/https:\/\/example\.com\/mcp · API key provided/)).toBeTruthy();
     expect(document.body.textContent).not.toContain('sk-test-not-real');
+    expect(JSON.stringify(useDemoStore.getState())).not.toContain('sk-test-not-real');
     expect(log).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled(); // connecting contacted nothing
     log.mockRestore();
+    fetchSpy.mockRestore();
 
-    // Editing starts with an empty key field (the saved key is kept when it stays empty), and Remove deletes the server.
+    // Editing starts with an empty key field, and Disconnect removes the server.
     fireEvent.click(within(section).getByRole('button', { name: 'Edit' }));
     expect((within(section).getByLabelText(/API key/) as HTMLInputElement).value).toBe('');
-    fireEvent.change(within(section).getByLabelText('Name'), { target: { value: 'Team tools' } });
-    fireEvent.click(submit());
-    expect(await within(section).findByText('Team tools')).toBeTruthy();
-    expect(save).toHaveBeenLastCalledWith({ name: 'Team tools', url: 'https://example.com/mcp' }); // no key sent: the stored one stays
-    expect(within(section).getByText(/API key saved/)).toBeTruthy();
-    fireEvent.click(within(section).getByRole('button', { name: 'Remove Team tools' }));
-    expect(await within(section).findByRole('button', { name: 'Add custom server' })).toBeTruthy();
-    expect(await api.integrations.mcpServer()).toBeNull();
+    fireEvent.click(within(section).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(within(section).getByRole('button', { name: 'Disconnect Team notes' }));
+    expect(within(section).getByRole('button', { name: 'Add custom server' })).toBeTruthy();
   });
 });

@@ -1,6 +1,7 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHttpAdapter } from '@/api';
+import { useDemoStore } from '@/stores/demoStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { renderApp } from './testUtils';
 
@@ -15,6 +16,7 @@ const find = { timeout: 8000 };
 const nodeFs = 'node:fs';
 const { readFileSync } = (await import(/* @vite-ignore */ nodeFs)) as { readFileSync: (path: string, encoding: 'utf8') => string };
 const tokens = readFileSync('src/styles/tokens.css', 'utf8');
+beforeEach(() => useDemoStore.setState({ mail: { gmail: null, outlook: null } }));
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -123,22 +125,17 @@ const contact = (id: string, full_name: string) => ({
   updated_at: '2026-09-27T09:30:00',
 });
 
-/** Gmail and Outlook as the backend reports them: configured on the server, not connected. */
-const MAIL = ['gmail', 'outlook'].map((provider) => ({ provider, status: 'disconnected', configured: true, account: null, last_synced_at: null }));
-
 /** The real adapter over a fake backend answering GET /contacts with `respond`. Records every request. */
 function backend(respond: () => Response) {
   const calls: string[] = [];
-  const api = createHttpAdapter();
   vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
     calls.push(`${init.method ?? 'GET'} ${url}`);
     if (url === '/contacts') return respond();
-    if (url === '/integrations') return Response.json(MAIL);
     if (url.startsWith('/contacts/suggestions') || url === '/chat/sessions') return Response.json([]);
     return Response.json({ detail: 'Not Found' }, { status: 404 });
   });
-  renderApp('/contacts', { api, auth: { accessToken: 'test-token-not-real' } });
-  return Object.assign(calls, { api });
+  renderApp('/contacts', { api: createHttpAdapter(), auth: { accessToken: 'test-token-not-real' } });
+  return calls;
 }
 const page = () => within(screen.getByRole('region', { name: 'My Contacts' }));
 /** The page has rendered (the app starts asynchronously). */
@@ -189,34 +186,44 @@ describe('Contacts: importing is on the page', () => {
   });
 
   it.each([
-    ['Gmail', 'gmail'],
-    ['Outlook', 'outlook'],
-  ] as const)("%s on the page starts the provider's own sign-in — it is not connected by being clicked", async (name, key) => {
+    ['Gmail', 'Gmail address', 'you@gmail.com', 'user@gmail.com'],
+    ['Outlook', 'Outlook email', 'you@outlook.com', 'user@outlook.com'],
+  ])('%s on the page opens its connection flow; a valid address connects — with no request to anyone', async (name, field, placeholder, email) => {
     const calls = backend(() => Response.json([]));
-    const connect = vi.spyOn(calls.api.integrations, 'connect').mockResolvedValue(); // the real one leaves the app
     await ready();
-    const option = (await page().findByRole('button', { name: `Import from ${name}` }, find)) as HTMLButtonElement;
-    await waitFor(() => expect(option.disabled).toBe(false));
-    fireEvent.click(option);
-    await waitFor(() => expect(connect).toHaveBeenCalledWith(key));
-    expect(screen.queryByRole('form')).toBeNull();
-    expect(screen.queryByRole('listitem', { name: `${name} connection` })).toBeNull();
-    expect(page().queryByText('Connected')).toBeNull();
+    fireEvent.click(await page().findByRole('button', { name: `Import from ${name}` }, find));
+    const form = screen.getByRole('form', { name: `Connect ${name}` });
+    expect(within(form).getByText(`Connect your ${name} account to import contacts into Lam13.`)).toBeTruthy();
+    const input = within(form).getByLabelText(field) as HTMLInputElement;
+    expect(input.placeholder).toBe(placeholder);
+    const connect = within(form).getByRole('button', { name: `Connect ${name}` }) as HTMLButtonElement;
+    expect(connect.disabled).toBe(true);
+    expect(within(form).getByRole('button', { name: 'Cancel' })).toBeTruthy();
+
+    const before = [...calls];
+    fireEvent.change(input, { target: { value: email } });
+    fireEvent.click(connect);
+    const row = screen.getByRole('listitem', { name: `${name} connection` });
+    expect(within(row).getByText('Connected')).toBeTruthy();
+    expect(within(row).getByText(email)).toBeTruthy();
+    expect(within(row).getByRole('button', { name: `Import contacts from ${name}` })).toBeTruthy();
+    // On the page the option now reads as connected, and the other provider can still be connected.
+    expect(page().queryByRole('button', { name: `Import from ${name}` })).toBeNull();
     expect(page().getByRole('button', { name: `Import from ${name === 'Gmail' ? 'Outlook' : 'Gmail'}` })).toBeTruthy();
-    expect(external(calls)).toEqual([]); // the page itself talks only to the Lam13 backend
+    expect(calls).toEqual(before);
+    expect(external(calls)).toEqual([]);
     expect(screen.getByText("You don't have any contacts yet")).toBeTruthy(); // still the real, empty list
   });
 
-  it('the import section below the list starts the same sign-in', async () => {
-    const calls = backend(() => Response.json([contact('c1', 'Daniel Brandt')]));
-    const connect = vi.spyOn(calls.api.integrations, 'connect').mockResolvedValue();
+  it('the import section below the list opens the same flow', async () => {
+    backend(() => Response.json([contact('c1', 'Daniel Brandt')]));
     await ready();
     const section = await page().findByRole('region', { name: 'Import more contacts' }, find);
-    const option = within(section).getByRole('button', { name: 'Import from Outlook' }) as HTMLButtonElement;
-    await waitFor(() => expect(option.disabled).toBe(false));
-    fireEvent.click(option);
-    await waitFor(() => expect(connect).toHaveBeenCalledWith('outlook'));
-    expect(screen.queryByRole('listitem', { name: 'Outlook connection' })).toBeNull();
+    fireEvent.click(within(section).getByRole('button', { name: 'Import from Outlook' }));
+    const form = screen.getByRole('form', { name: 'Connect Outlook' });
+    fireEvent.change(within(form).getByLabelText('Outlook email'), { target: { value: 'user@outlook.com' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Connect Outlook' }));
+    expect(within(screen.getByRole('listitem', { name: 'Outlook connection' })).getByText('user@outlook.com')).toBeTruthy();
     expect(within(screen.getByRole('list', { name: 'Contacts' })).getAllByRole('heading', { level: 2 })).toHaveLength(1);
   });
 });

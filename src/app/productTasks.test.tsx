@@ -1,11 +1,10 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, createHttpAdapter } from '@/api';
+import { ApiError } from '@/api';
 import { renderApp } from './testUtils';
 
 /**
- * Creating a project with its instructions, files and people; the project's Summary tab; and WhatsApp
- * against the real adapter (the backend has no WhatsApp integration, so nothing may be simulated there).
+ * Creating a project with its instructions, files and people, and the project's Summary tab.
  */
 
 const find = { timeout: 8000 };
@@ -26,9 +25,36 @@ async function openForm() {
 describe('New project', () => {
   it('asks for a name, and takes instructions, files and people', async () => {
     const { form } = await openForm();
-    for (const label of ['Project name', /^Instructions/, /^Files/, /^People/]) expect(within(form).getByLabelText(label)).toBeTruthy();
+    for (const label of ['Project name', /^Instructions/, /^Archives/, /^Teams & Contacts/]) expect(within(form).getByLabelText(label)).toBeTruthy();
     expect((within(form).getByRole('button', { name: 'Create project' }) as HTMLButtonElement).disabled).toBe(true); // no name yet
-    expect((within(form).getByLabelText(/^Files/) as HTMLInputElement).multiple).toBe(true);
+    expect((within(form).getByLabelText(/^Archives/) as HTMLInputElement).multiple).toBe(true);
+  });
+
+  it('opens as a wide dialog over the page; Escape, Cancel and a click on the dimmed page close it and return to the button', async () => {
+    const { form } = await openForm();
+    const dialog = screen.getByRole('dialog', { name: 'New project' });
+    expect(dialog.contains(form)).toBe(true);
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.className).toMatch(/max-w-3xl/); // about 770px on a desktop, the full width (less a margin) on a phone
+    expect(document.activeElement).toBe(within(form).getByLabelText('Project name'));
+
+    const button = screen.getByRole('button', { name: 'New project' });
+    const closes = [
+      () => fireEvent.keyDown(document, { key: 'Escape' }),
+      () => fireEvent.click(within(screen.getByRole('dialog', { name: 'New project' })).getByRole('button', { name: 'Cancel' })),
+      () => fireEvent.mouseDown(screen.getByRole('dialog', { name: 'New project' }).parentElement!),
+    ];
+    for (const close of closes) {
+      if (!screen.queryByRole('dialog', { name: 'New project' })) fireEvent.click(button);
+      fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Half typed' } });
+      close();
+      expect(screen.queryByRole('dialog', { name: 'New project' })).toBeNull();
+      expect(document.activeElement).toBe(button);
+    }
+    fireEvent.click(button);
+    expect((screen.getByLabelText('Project name') as HTMLInputElement).value).toBe(''); // each one starts empty
+    fireEvent.mouseDown(screen.getByRole('dialog', { name: 'New project' })); // a click inside the form does not close it
+    expect(screen.getByRole('dialog', { name: 'New project' })).toBeTruthy();
   });
 
   it('creates the project with its instructions, uploads the files, adds the people, and opens it', async () => {
@@ -38,9 +64,9 @@ describe('New project', () => {
     const addMember = vi.spyOn(api.projects, 'addMember');
     fireEvent.change(within(form).getByLabelText('Project name'), { target: { value: ' Port Strategy ' } });
     fireEvent.change(within(form).getByLabelText(/^Instructions/), { target: { value: 'Answer in British English.' } });
-    fireEvent.change(within(form).getByLabelText(/^Files/), { target: { files: [pdf('Baseline.pdf'), pdf('Roadmap.pdf')] } });
+    fireEvent.change(within(form).getByLabelText(/^Archives/), { target: { files: [pdf('Baseline.pdf'), pdf('Roadmap.pdf')] } });
     expect(within(form).getByText('2 files will be added to Archives.')).toBeTruthy();
-    fireEvent.change(within(form).getByLabelText(/^People/), { target: { value: 'lena@example.com, omar@example.com' } });
+    fireEvent.change(within(form).getByLabelText(/^Teams & Contacts/), { target: { value: 'lena@example.com, omar@example.com' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Create project' }));
 
     await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/projects\/.+/), find);
@@ -61,7 +87,7 @@ describe('New project', () => {
     const { api, form } = await openForm();
     const create = vi.spyOn(api.projects, 'create');
     fireEvent.change(within(form).getByLabelText('Project name'), { target: { value: 'Port Strategy' } });
-    fireEvent.change(within(form).getByLabelText(/^People/), { target: { value: 'lena@example.com, not-an-email' } });
+    fireEvent.change(within(form).getByLabelText(/^Teams & Contacts/), { target: { value: 'lena@example.com, not-an-email' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Create project' }));
     expect(within(form).getByRole('alert').textContent).toBe('"not-an-email" is not a valid email address.');
     expect(create).not.toHaveBeenCalled();
@@ -72,8 +98,8 @@ describe('New project', () => {
     vi.spyOn(api.projects, 'uploadFile').mockRejectedValue(new ApiError(503, 'unavailable', 'Project file storage is not set up on the server yet. Uploads will work once it is.'));
     vi.spyOn(api.projects, 'addMember').mockRejectedValue(new ApiError(404, 'not_found', 'No Lam13 account uses this email.'));
     fireEvent.change(within(form).getByLabelText('Project name'), { target: { value: 'Port Strategy' } });
-    fireEvent.change(within(form).getByLabelText(/^Files/), { target: { files: [pdf('Baseline.pdf')] } });
-    fireEvent.change(within(form).getByLabelText(/^People/), { target: { value: 'nobody@example.com' } });
+    fireEvent.change(within(form).getByLabelText(/^Archives/), { target: { files: [pdf('Baseline.pdf')] } });
+    fireEvent.change(within(form).getByLabelText(/^Teams & Contacts/), { target: { value: 'nobody@example.com' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Create project' }));
 
     const message = await screen.findByText(/The project was created, but not everything was added\./, {}, find);
@@ -114,28 +140,5 @@ describe('Project: Summary', () => {
     renderApp(`/projects/${created.id}`, { api });
     fireEvent.click((await screen.findAllByRole('tab', { name: 'Summary' }, find)).at(-1)!);
     expect(screen.getByText('This project has no summary yet.')).toBeTruthy();
-  });
-});
-
-describe('WhatsApp against the real backend', () => {
-  it('is not simulated: the row says it is not available, offers no number to connect, and asks the backend nothing', async () => {
-    const calls: string[] = [];
-    vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
-      calls.push(`${init.method ?? 'GET'} ${url}`);
-      if (url === '/integrations/granola') return Response.json({ provider: 'granola', status: 'disconnected' });
-      if (url === '/integrations/custom-mcp') return Response.json(null);
-      return Response.json([]);
-    });
-    renderApp('/integrations', { api: createHttpAdapter(), auth: { accessToken: 'test-token-not-real' } });
-    const row = await screen.findByRole('region', { name: 'WhatsApp' }, find);
-    expect(within(row).getByText('Not available yet')).toBeTruthy();
-    expect(within(row).getByText(/WhatsApp is not connected to this Lam13 server yet/)).toBeTruthy();
-    expect(within(row).queryByRole('button')).toBeNull();
-    expect(within(row).queryByText('Connected')).toBeNull();
-    expect(within(row).queryByRole('textbox')).toBeNull();
-    await screen.findByRole('button', { name: 'Add custom server' }, find); // the page finished loading
-    expect(calls.some((c) => /whatsapp/i.test(c))).toBe(false);
-    expect(calls).toContain('GET /integrations');
-    expect(calls).toContain('GET /integrations/custom-mcp');
   });
 });
