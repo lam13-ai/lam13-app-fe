@@ -21,13 +21,13 @@ describe('Sidebar navigation', () => {
 });
 
 describe('Projects', () => {
-  it('opens a project on its chats, and keeps Instructions, Archives, Teams & Contacts and Summary beside them', async () => {
+  it('opens a project on its chats, and keeps Instructions, Archives, Team & Contacts and Summary beside them', async () => {
     renderApp('/');
     fireEvent.click(await screen.findByRole('link', { name: 'Projects' }, find));
     const list = await screen.findByRole('list', { name: 'Projects' }, find);
     fireEvent.click(within(list).getByRole('link', { name: /National Water Security Strategy/ }));
     expect(await screen.findByRole('heading', { level: 1, name: 'National Water Security Strategy' }, find)).toBeTruthy();
-    expect(screen.getAllByRole('tab').map((t) => t.textContent?.replace(/\d+$/, ''))).toEqual(['Chats', 'Instructions', 'Archives', 'Teams & Contacts', 'Summary']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent?.replace(/\d+$/, ''))).toEqual(['Chats', 'Instructions', 'Archives', 'Team & Contacts', 'Summary']);
     expect(screen.getByRole('tab', { name: /Chats/ }).getAttribute('aria-selected')).toBe('true');
     fireEvent.click(screen.getByRole('tab', { name: 'Instructions' }));
     expect(screen.getByText('Instructions tell Lam how to work within this project. They apply whenever you chat in this project.')).toBeTruthy();

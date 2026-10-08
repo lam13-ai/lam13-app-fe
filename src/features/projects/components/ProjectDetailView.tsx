@@ -13,7 +13,7 @@ import { ProjectChatList, projectNewChatPath } from './ProjectChatList';
 import { ConfirmPanel, NameForm } from './ProjectForms';
 import { Instructions, Summary, Tabs, tabPanelProps } from './ProjectSections';
 
-const TABS = ['Chats', 'Instructions', 'Archives', 'Teams & Contacts', 'Summary'] as const;
+const TABS = ['Chats', 'Instructions', 'Archives', 'Team & Contacts', 'Summary'] as const;
 type Tab = (typeof TABS)[number];
 
 /** The owner's menu on the project page: rename it, or delete it (confirmed, naming what goes with it). */
@@ -139,7 +139,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         tabs={TABS}
         value={tab}
         onChange={setTab}
-        counts={{ Chats: data.chats.length, Archives: data.files.length, 'Teams & Contacts': data.members.length }}
+        counts={{ Chats: data.chats.length, Archives: data.files.length, 'Team & Contacts': data.members.length }}
         className="mb-6 mt-5"
       />
 
@@ -162,7 +162,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         )}
         {tab === 'Instructions' && <Instructions project={data} />}
         {tab === 'Archives' && <Archives project={data} />}
-        {tab === 'Teams & Contacts' && <TeamAndContacts project={data} />}
+        {tab === 'Team & Contacts' && <TeamAndContacts project={data} />}
         {tab === 'Summary' && <Summary project={data} />}
       </div>
     </PageFrame>

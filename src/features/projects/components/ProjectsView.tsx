@@ -134,7 +134,7 @@ function NewProjectForm({ onClose }: { onClose: () => void }) {
       </div>
       <div className="border-t border-hairline pt-5">
         <label htmlFor={`${id}-people`} className={LABEL}>
-          Teams &amp; Contacts {OPTIONAL}
+          Team &amp; Contacts {OPTIONAL}
         </label>
         <input
           id={`${id}-people`}

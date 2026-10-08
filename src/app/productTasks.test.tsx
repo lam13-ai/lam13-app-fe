@@ -25,7 +25,7 @@ async function openForm() {
 describe('New project', () => {
   it('asks for a name, and takes instructions, files and people', async () => {
     const { form } = await openForm();
-    for (const label of ['Project name', /^Instructions/, /^Archives/, /^Teams & Contacts/]) expect(within(form).getByLabelText(label)).toBeTruthy();
+    for (const label of ['Project name', /^Instructions/, /^Archives/, /^Team & Contacts/]) expect(within(form).getByLabelText(label)).toBeTruthy();
     expect((within(form).getByRole('button', { name: 'Create project' }) as HTMLButtonElement).disabled).toBe(true); // no name yet
     expect((within(form).getByLabelText(/^Archives/) as HTMLInputElement).multiple).toBe(true);
   });
@@ -66,7 +66,7 @@ describe('New project', () => {
     fireEvent.change(within(form).getByLabelText(/^Instructions/), { target: { value: 'Answer in British English.' } });
     fireEvent.change(within(form).getByLabelText(/^Archives/), { target: { files: [pdf('Baseline.pdf'), pdf('Roadmap.pdf')] } });
     expect(within(form).getByText('2 files will be added to Archives.')).toBeTruthy();
-    fireEvent.change(within(form).getByLabelText(/^Teams & Contacts/), { target: { value: 'lena@example.com, omar@example.com' } });
+    fireEvent.change(within(form).getByLabelText(/^Team & Contacts/), { target: { value: 'lena@example.com, omar@example.com' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Create project' }));
 
     await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/projects\/.+/), find);
@@ -78,7 +78,7 @@ describe('New project', () => {
     // The project page shows what was created: its files, its people and its instructions.
     expect(await screen.findByRole('heading', { level: 1, name: 'Port Strategy' }, find)).toBeTruthy();
     expect(screen.getByRole('tab', { name: /Archives/ }).textContent).toBe('Archives2');
-    expect(screen.getByRole('tab', { name: /Teams & Contacts/ }).textContent).toBe('Teams & Contacts3'); // the owner and two people
+    expect(screen.getByRole('tab', { name: /Team & Contacts/ }).textContent).toBe('Team & Contacts3'); // the owner and two people
     fireEvent.click(screen.getByRole('tab', { name: 'Instructions' }));
     expect(await screen.findByDisplayValue('Answer in British English.')).toBeTruthy();
   });
@@ -87,7 +87,7 @@ describe('New project', () => {
     const { api, form } = await openForm();
     const create = vi.spyOn(api.projects, 'create');
     fireEvent.change(within(form).getByLabelText('Project name'), { target: { value: 'Port Strategy' } });
-    fireEvent.change(within(form).getByLabelText(/^Teams & Contacts/), { target: { value: 'lena@example.com, not-an-email' } });
+    fireEvent.change(within(form).getByLabelText(/^Team & Contacts/), { target: { value: 'lena@example.com, not-an-email' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Create project' }));
     expect(within(form).getByRole('alert').textContent).toBe('"not-an-email" is not a valid email address.');
     expect(create).not.toHaveBeenCalled();
@@ -99,7 +99,7 @@ describe('New project', () => {
     vi.spyOn(api.projects, 'addMember').mockRejectedValue(new ApiError(404, 'not_found', 'No Lam13 account uses this email.'));
     fireEvent.change(within(form).getByLabelText('Project name'), { target: { value: 'Port Strategy' } });
     fireEvent.change(within(form).getByLabelText(/^Archives/), { target: { files: [pdf('Baseline.pdf')] } });
-    fireEvent.change(within(form).getByLabelText(/^Teams & Contacts/), { target: { value: 'nobody@example.com' } });
+    fireEvent.change(within(form).getByLabelText(/^Team & Contacts/), { target: { value: 'nobody@example.com' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Create project' }));
 
     const message = await screen.findByText(/The project was created, but not everything was added\./, {}, find);

@@ -3,14 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMockProjects } from '@/api/mock/workspace';
 import { renderApp } from './testUtils';
 
-/** A project's Teams & Contacts tab: the team (owner, demo add / remove — local state only) and the project's contacts. */
+/** A project's Team & Contacts tab: the team (owner, demo add / remove — local state only) and the project's contacts. */
 
 const find = { timeout: 8000 };
 afterEach(() => vi.restoreAllMocks());
 
 async function openMembers(projectId = 'water-security') {
   const app = renderApp(`/projects/${projectId}`);
-  fireEvent.click(await screen.findByRole('tab', { name: /Teams & Contacts/ }, find));
+  fireEvent.click(await screen.findByRole('tab', { name: /Team & Contacts/ }, find));
   return app;
 }
 /** The header's Add member button (its form, closed but mounted, has a submit button of the same name). */
@@ -21,10 +21,10 @@ const names = () => rows().map((r) => r.querySelector('p')!.textContent);
 const row = (name: string) => rows().find((r) => r.querySelector('p')!.textContent === name)!;
 
 describe('Project members', () => {
-  it('the tabs are Chats, Instructions, Archives, Teams & Contacts and Summary — no Context, no Members', async () => {
+  it('the tabs are Chats, Instructions, Archives, Team & Contacts and Summary — no Context, no Members', async () => {
     renderApp('/projects/water-security');
     await screen.findByRole('list', { name: 'Project chats' }, find);
-    expect(screen.getAllByRole('tab').map((t) => t.textContent?.replace(/\d+$/, ''))).toEqual(['Chats', 'Instructions', 'Archives', 'Teams & Contacts', 'Summary']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent?.replace(/\d+$/, ''))).toEqual(['Chats', 'Instructions', 'Archives', 'Team & Contacts', 'Summary']);
     expect(screen.queryByRole('tab', { name: /Context/ })).toBeNull();
     expect(screen.queryByRole('tab', { name: /Members/ })).toBeNull();
     expect(screen.getByRole('tab', { name: /Chats/ }).getAttribute('aria-selected')).toBe('true');
@@ -34,7 +34,7 @@ describe('Project members', () => {
     expect(screen.queryByText(/Context/)).toBeNull();
     fireEvent.click(screen.getByRole('tab', { name: /Archives/ }));
     expect(screen.getByRole('list', { name: 'Files' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('tab', { name: /Teams & Contacts/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Team & Contacts/ }));
     expect(screen.getByRole('heading', { level: 2, name: 'Team' })).toBeTruthy();
     expect(screen.getByText('People who are members of this project.')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2, name: 'Contacts' })).toBeTruthy();
@@ -84,7 +84,7 @@ describe('Project members', () => {
     expect(names()).toEqual(['Joseph Boutros', 'Maya Okafor', 'Daniel Brandt', 'Priya Nair']);
     expect(rows().map((r) => (within(r).queryByText('Owner') ? 'Owner' : within(r).getByText('Member').textContent))).toEqual(['Owner', 'Member', 'Member', 'Member']);
     expect(screen.getByText('Shared project · 4 people')).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /Teams & Contacts/ }).textContent).toBe('Teams & Contacts4');
+    expect(screen.getByRole('tab', { name: /Team & Contacts/ }).textContent).toBe('Team & Contacts4');
   });
 
   it('the members are the people who appear in the project’s Archives', async () => {
