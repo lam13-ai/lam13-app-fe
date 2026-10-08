@@ -214,6 +214,7 @@ export function createHttpProjects(): ProjectsService {
       await send(projectPath(id), 'DELETE');
     },
     saveInstructions: (id, instructions) => then(id, send(projectPath(id), 'PATCH', { instructions })),
+    saveSummary: (id, summary) => then(id, send(projectPath(id), 'PATCH', { summary })),
     // The backend already knows which project a chat belongs to (set when it was created): just reload.
     linkChat: (projectId) => get(projectId),
     renameChat: (projectId, chatId, title) => then(projectId, send(projectPath(projectId, `/chats/${enc(chatId)}`), 'PATCH', { title })),

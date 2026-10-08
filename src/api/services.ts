@@ -262,6 +262,8 @@ export interface ProjectsService {
   remove(id: string): Promise<void>;
   /** PATCH /projects/{id} `{instructions}`. */
   saveInstructions(id: string, instructions: string): Promise<Project>;
+  /** PATCH /projects/{id} `{summary}` — plain text written by the project's people ("" clears it). */
+  saveSummary(id: string, summary: string): Promise<Project>;
   /**
    * A conversation opened under the project is the project's. The backend ties a chat to its project when
    * it is created (`project_id` on the first message), so over HTTP this only reloads the project.

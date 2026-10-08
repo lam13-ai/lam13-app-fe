@@ -11,7 +11,7 @@ import { Archives } from './Archives';
 import { TeamAndContacts } from './TeamAndContacts';
 import { ProjectChatList, projectNewChatPath } from './ProjectChatList';
 import { ConfirmPanel, NameForm } from './ProjectForms';
-import { Instructions, Tabs, tabPanelProps } from './ProjectSections';
+import { Instructions, Summary, Tabs, tabPanelProps } from './ProjectSections';
 
 const TABS = ['Chats', 'Instructions', 'Archives', 'Teams & Contacts', 'Summary'] as const;
 type Tab = (typeof TABS)[number];
@@ -163,13 +163,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         {tab === 'Instructions' && <Instructions project={data} />}
         {tab === 'Archives' && <Archives project={data} />}
         {tab === 'Teams & Contacts' && <TeamAndContacts project={data} />}
-        {/* The project's summary as the backend holds it: plain text, shown as written. */}
-        {tab === 'Summary' &&
-          (data.description ? (
-            <p className="max-w-[70ch] whitespace-pre-wrap text-sm leading-relaxed">{data.description}</p>
-          ) : (
-            <p className="text-sm text-fg-muted">This project has no summary yet.</p>
-          ))}
+        {tab === 'Summary' && <Summary project={data} />}
       </div>
     </PageFrame>
   );

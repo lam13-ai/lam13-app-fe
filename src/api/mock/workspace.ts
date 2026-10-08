@@ -374,6 +374,13 @@ export function createMockProjects({
       project.instructions = instructions;
       return clone(project);
     },
+    async saveSummary(id, summary) {
+      await respond();
+      const project = projects.find((p) => p.id === id);
+      if (!project) throw new ApiError(404, 'not_found', 'This project does not exist.');
+      project.description = summary;
+      return clone(project);
+    },
   };
 }
 
