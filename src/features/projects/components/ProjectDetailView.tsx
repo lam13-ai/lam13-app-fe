@@ -13,7 +13,7 @@ import { ProjectChatList, projectNewChatPath } from './ProjectChatList';
 import { ConfirmPanel, NameForm } from './ProjectForms';
 import { Instructions, Tabs, tabPanelProps } from './ProjectSections';
 
-const TABS = ['Chats', 'Instructions', 'Archives', 'Team and Contacts'] as const;
+const TABS = ['Chats', 'Instructions', 'Archives', 'Teams & Contacts', 'Summary'] as const;
 type Tab = (typeof TABS)[number];
 
 /** The owner's menu on the project page: rename it, or delete it (confirmed, naming what goes with it). */
@@ -132,7 +132,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       <Link to="/projects" className="mb-3 inline-flex min-h-11 items-center gap-2 text-xs font-bold text-fg-muted hover:text-fg md:hidden">
         <ArrowLeft {...smallIconProps} /> All projects
       </Link>
-      {data.description && <p className="max-w-[70ch] text-sm leading-relaxed text-fg-muted">{data.description}</p>}
 
       <Tabs
         label="Project sections"
@@ -140,7 +139,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         tabs={TABS}
         value={tab}
         onChange={setTab}
-        counts={{ Chats: data.chats.length, Archives: data.files.length, 'Team and Contacts': data.members.length }}
+        counts={{ Chats: data.chats.length, Archives: data.files.length, 'Teams & Contacts': data.members.length }}
         className="mb-6 mt-5"
       />
 
@@ -163,7 +162,14 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         )}
         {tab === 'Instructions' && <Instructions project={data} />}
         {tab === 'Archives' && <Archives project={data} />}
-        {tab === 'Team and Contacts' && <TeamAndContacts project={data} />}
+        {tab === 'Teams & Contacts' && <TeamAndContacts project={data} />}
+        {/* The project's summary as the backend holds it: plain text, shown as written. */}
+        {tab === 'Summary' &&
+          (data.description ? (
+            <p className="max-w-[70ch] whitespace-pre-wrap text-sm leading-relaxed">{data.description}</p>
+          ) : (
+            <p className="text-sm text-fg-muted">This project has no summary yet.</p>
+          ))}
       </div>
     </PageFrame>
   );

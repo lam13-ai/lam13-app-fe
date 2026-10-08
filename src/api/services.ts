@@ -21,6 +21,10 @@ import type {
   ProfileUpdateSuggestion,
   WhatsAppConnection,
   WhatsAppVerification,
+  ContactImportResult,
+  IntegrationConnection,
+  IntegrationProvider,
+  McpServer,
 } from '@/types/api';
 import type { EventStream } from './stream';
 
@@ -215,8 +219,8 @@ export interface MeetingsService {
 
 /**
  * Connecting a WhatsApp number (so Lam13 can receive its messages and voice notes): request a code for a
- * number, then verify it. Frontend-only for now — both adapters use a local mock that sends nothing; the
- * UI depends only on this interface. Rejects with ApiError:
+ * number, then verify it. The backend has no WhatsApp integration yet: the HTTP adapter rejects every call
+ * (`capabilities.whatsapp` is false); only the mock adapter simulates the flow. Rejects with ApiError:
  * 422 `invalid_phone` · 422 `invalid_code` · 410 `code_expired` · 409 `no_pending_verification`.
  */
 export interface WhatsAppService {
@@ -233,6 +237,30 @@ export interface WhatsAppService {
   disconnect(): Promise<WhatsAppConnection>;
 }
 
+/**
+ * Outside accounts (Gmail, Outlook, storage, video conferencing) and the custom MCP server: `/integrations…`.
+ * A provider is `connected` only after its own sign-in succeeded; one the server has no credentials for is
+ * `configured: false` and cannot be connected (503). The mock adapter has no provider configured.
+ */
+export interface IntegrationsService {
+  /** GET /integrations — every provider with the user's real state. */
+  list(): Promise<IntegrationConnection[]>;
+  /** POST /integrations/{provider}/connect — over HTTP this leaves the app for the provider's sign-in page. */
+  connect(provider: IntegrationProvider): Promise<void>;
+  /** POST /integrations/{provider}/callback with what the provider returned. 400 if the sign-in failed. */
+  finishSignIn(provider: IntegrationProvider, code: string, state: string): Promise<IntegrationConnection>;
+  /** DELETE /integrations/{provider}. */
+  disconnect(provider: IntegrationProvider): Promise<IntegrationConnection>;
+  /** POST /integrations/{provider}/import-contacts — adds the account's contacts that are not in My Contacts yet. 409 when not connected. */
+  importContacts(provider: 'gmail' | 'outlook'): Promise<ContactImportResult>;
+  /** GET /integrations/custom-mcp — null when none is saved. */
+  mcpServer(): Promise<McpServer | null>;
+  /** PUT /integrations/custom-mcp — `api_key` omitted keeps the stored key; "" removes it. */
+  saveMcpServer(body: { name: string; url: string; api_key?: string }): Promise<McpServer>;
+  /** DELETE /integrations/custom-mcp. */
+  removeMcpServer(): Promise<void>;
+}
+
 /** What the connected backend supports; the UI hides the rest instead of offering failing actions. */
 export interface ApiCapabilities {
   /** `messages.regenerate` (Regenerate, and Retry of a server-side answer in place). */
@@ -241,6 +269,8 @@ export interface ApiCapabilities {
   voiceNotes: boolean;
   /** `audio.transcribe`: the transcript is shown in the preview before sending. */
   transcription: boolean;
+  /** `whatsapp`: false while the backend has no WhatsApp integration (the page says so instead of a flow). */
+  whatsapp: boolean;
 }
 
 /**
@@ -324,6 +354,7 @@ export interface ApiAdapter {
   profileSuggestions: ProfileSuggestionsService;
   meetings: MeetingsService;
   whatsapp: WhatsAppService;
+  integrations: IntegrationsService;
   projects: ProjectsService;
   calendar: CalendarService;
 }

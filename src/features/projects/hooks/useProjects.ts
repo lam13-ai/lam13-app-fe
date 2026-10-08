@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { queryKeys, useApi, type ProjectsService } from '@/api';
+import { queryKeys, toErrorInfo, useApi, type ProjectsService } from '@/api';
 import type { Project } from '@/types/api';
 
 export function useProjects() {
@@ -35,11 +35,30 @@ export function useProjectAction(projectId: string) {
   });
 }
 
+export interface NewProject {
+  name: string;
+  instructions?: string;
+  files?: File[];
+  /** People to add to the team, by the email of their Lam13 account. */
+  emails?: string[];
+}
+
+/**
+ * Creates a project, then adds its files and people with the same calls the project page uses. Once the
+ * project exists a file or a person that is refused does not undo it: each is reported in `failed`.
+ */
 export function useCreateProject() {
   const api = useApi();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string; summary?: string }) => api.projects.create(body),
+    mutationFn: async ({ name, instructions, files = [], emails = [] }: NewProject) => {
+      const project = await api.projects.create({ name, ...(instructions ? { instructions } : {}) });
+      const failed: string[] = [];
+      for (const file of files) await api.projects.uploadFile(project.id, file).catch((error: unknown) => failed.push(`${file.name}: ${toErrorInfo(error).message}`));
+      for (const email of emails)
+        await api.projects.addMember(project.id, { email, role: 'member' }).catch((error: unknown) => failed.push(`${email}: ${toErrorInfo(error).message}`));
+      return { project, failed };
+    },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.projects.list() }),
   });
 }

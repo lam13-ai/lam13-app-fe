@@ -16,6 +16,7 @@ import { createSeed, MOCK_MODELS } from './fixtures';
 import { composeReply, deriveTitle } from './responder';
 import { createMockMeetings } from './meetings';
 import { createMockProfiles } from './profiles';
+import { createMockIntegrations } from './integrations';
 import { createMockWhatsApp } from './whatsapp';
 import { demoProjectChats, isDemoConversation } from './projectChatFixtures';
 import { createMockCalendar, createMockProjects } from './workspace';
@@ -215,7 +216,7 @@ export function createMockAdapter(options: MockAdapterOptions = {}): ApiAdapter 
 
   const profiles = createMockProfiles({ now, respond: () => respond(), newId, failWrites: options.failProfileWrites });
   return {
-    capabilities: { regenerate: true, voiceNotes: true, transcription: true },
+    capabilities: { regenerate: true, voiceNotes: true, transcription: true, whatsapp: true },
     conversations: {
       async list({ cursor, limit = DEFAULT_PAGE }: ListParams = {}) {
         await respond();
@@ -537,6 +538,7 @@ export function createMockAdapter(options: MockAdapterOptions = {}): ApiAdapter 
     ...profiles,
     meetings: createMockMeetings({ now, respond: () => respond() }),
     whatsapp: createMockWhatsApp({ respond: () => respond() }),
+    integrations: createMockIntegrations({ respond: () => respond() }),
     projects: createMockProjects({
       now,
       respond: () => respond(),

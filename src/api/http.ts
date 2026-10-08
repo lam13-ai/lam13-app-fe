@@ -2,7 +2,10 @@ import { env } from '@/lib/env';
 import type {
   Artifact,
   AttachmentRef,
+  ContactImportResult,
   Conversation,
+  IntegrationConnection,
+  McpServer,
   Meeting,
   MeetingSourceConnection,
   MeetingSummary,
@@ -19,7 +22,6 @@ import { abortError, ApiError } from './errors';
 import { createMockAdapter } from './mock/mockAdapter';
 import { createHttpCalendar, createHttpProjects } from './httpWorkspace';
 import { isDemoConversation } from './mock/projectChatFixtures';
-import { createMockWhatsApp } from './mock/whatsapp';
 import type { ApiAdapter, SendMessageBody } from './services';
 import { readSseMessages, type SseMessage, type StreamEvent } from './stream';
 
@@ -78,10 +80,13 @@ function safeText(value: unknown): string | undefined {
   return text && text.length <= 200 && !/[\r\n]|Traceback|File "/.test(text) ? text : undefined;
 }
 
-/** FastAPI errors are `{detail: string}` or `{detail: [{msg}]}`; 5xx details are never shown. */
+/**
+ * FastAPI errors are `{detail: string}` or `{detail: [{msg}]}`. 5xx details are never shown, except a 503:
+ * the backend answers it on purpose, with a sentence written for the user ("… is not set up on the server yet").
+ */
 async function toApiError(response: Response): Promise<ApiError> {
   let message = response.status >= 500 ? 'Something went wrong on our side. Please try again.' : 'Request failed.';
-  if (response.status < 500) {
+  if (response.status < 500 || response.status === 503) {
     try {
       const { detail } = (await response.json()) as { detail?: unknown };
       const text = safeText(typeof detail === 'string' ? detail : Array.isArray(detail) ? detail[0]?.msg : undefined);
@@ -94,6 +99,9 @@ async function toApiError(response: Response): Promise<ApiError> {
 }
 
 const notSupported = (what: string) => new ApiError(501, 'not_supported', `${what} isn't available yet.`);
+const noWhatsApp = async (): Promise<never> => {
+  throw notSupported('WhatsApp');
+};
 /** A demo conversation is local sample data: nothing from it may reach the backend, and nothing is faked in its place. */
 const notInDemo = (what: string) => new ApiError(501, 'not_supported', `${what} isn't available in demo conversations.`);
 
@@ -508,7 +516,7 @@ export function createHttpAdapter(): ApiAdapter {
   return {
     // No regenerate or /audio (voice-message) endpoint: the UI hides Regenerate and audio messages. Recordings
     // are transcribed (POST /voice/transcribe) into the message box and sent as text.
-    capabilities: { regenerate: false, voiceNotes: false, transcription: true },
+    capabilities: { regenerate: false, voiceNotes: false, transcription: true, whatsapp: false },
 
     conversations: {
       async list() {
@@ -645,9 +653,38 @@ export function createHttpAdapter(): ApiAdapter {
         return requestJson<MeetingSourceConnection>('/integrations/granola/callback', { method: 'POST', body: { code, state } });
       },
     },
-    // TODO(backend): WhatsApp connection is not on the backend yet — a local mock that sends nothing. Replace
-    // with the real integration here (OTP, Meta embedded signup, …); the UI only uses WhatsAppService.
-    whatsapp: createMockWhatsApp(),
+    // The backend has no WhatsApp integration: nothing is simulated here (`capabilities.whatsapp` is false
+    // and the page says so). The real one (Meta Cloud API: number verification, webhook) goes here.
+    whatsapp: { status: noWhatsApp, requestVerification: noWhatsApp, resendCode: noWhatsApp, verifyCode: noWhatsApp, disconnect: noWhatsApp },
+    // Account connections, contact import and the custom MCP server: api/routers/integration_route.py.
+    integrations: {
+      async list() {
+        return requestJson<IntegrationConnection[]>('/integrations');
+      },
+      async connect(provider) {
+        const { authorization_url } = await requestJson<{ authorization_url: string }>(`/integrations/${provider}/connect`, { method: 'POST' });
+        // The provider's sign-in; it sends the browser back to /integrations/{provider}/callback.
+        window.location.assign(authorization_url);
+      },
+      async finishSignIn(provider, code, state) {
+        return requestJson<IntegrationConnection>(`/integrations/${provider}/callback`, { method: 'POST', body: { code, state } });
+      },
+      async disconnect(provider) {
+        return requestJson<IntegrationConnection>(`/integrations/${provider}`, { method: 'DELETE' });
+      },
+      async importContacts(provider) {
+        return requestJson<ContactImportResult>(`/integrations/${provider}/import-contacts`, { method: 'POST' });
+      },
+      async mcpServer() {
+        return requestJson<McpServer | null>('/integrations/custom-mcp');
+      },
+      async saveMcpServer(body) {
+        return requestJson<McpServer>('/integrations/custom-mcp', { method: 'PUT', body });
+      },
+      async removeMcpServer() {
+        await request('/integrations/custom-mcp', { method: 'DELETE' });
+      },
+    },
     // Projects (with their chats, archives, team and contacts) and the calendar: httpWorkspace.ts.
     projects: createHttpProjects(),
     calendar: createHttpCalendar(),

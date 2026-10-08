@@ -19,7 +19,7 @@ const KINDS: Record<ArchiveFileKind, { label: string; unit: string }> = {
 const FILTERS: Filter[] = ['all', 'presentation', 'document', 'image'];
 
 /** What the backend's Archives accept (it checks again, by extension and by content). */
-const ACCEPT = '.pdf,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp';
+export const ACCEPT = '.pdf,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp';
 
 const PILL = 'flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs transition-colors duration-150 ease-standard';
 // As before — a solid pill for the current filter, outlined ones for the rest — in the page's softer ink.

@@ -1,12 +1,16 @@
 import { FolderKanban, Plus } from 'lucide-react';
+import { useId, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { toErrorInfo } from '@/api';
 import { ErrorState } from '@/components/ErrorState';
 import { PageFrame } from '@/components/PageFrame';
-import { Button, Popover, Skeleton, smallIconProps } from '@/components/ui';
+import { Button, Popover, Skeleton, Spinner, smallIconProps, usePopover, useToast } from '@/components/ui';
+import { cn } from '@/lib/cn';
 import { formatRelativeTime } from '@/lib/format';
 import type { ProjectSummary } from '@/types/api';
 import { useCreateProject, useProjects } from '../hooks/useProjects';
-import { NameForm } from './ProjectForms';
+import { ACCEPT } from './Archives';
+import { FIELD } from './ProjectForms';
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
@@ -40,29 +44,144 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
   );
 }
 
-/** "New project": asks for its name, creates it (the user becomes its owner) and opens it. */
-function NewProjectButton({ compact = false }: { compact?: boolean }) {
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const LABEL = 'mb-1.5 block text-xs font-bold';
+const OPTIONAL = <span className="font-medium text-fg-muted">(optional)</span>;
+
+/**
+ * The new project's name, and optionally its instructions, files and people. Creating it opens it; a file
+ * or a person the backend refuses is named in a message, and the project is still created.
+ */
+function NewProjectForm() {
+  const popover = usePopover();
   const create = useCreateProject();
   const navigate = useNavigate();
+  const toast = useToast();
+  const id = useId();
+  const [name, setName] = useState('');
+  const [instructions, setInstructions] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [people, setPeople] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const emails = [...new Set(people.split(/[\s,;]+/).filter(Boolean))];
+  const badEmail = emails.find((email) => !EMAIL.test(email));
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    setSubmitted(true);
+    if (!name.trim() || badEmail || create.isPending) return;
+    create.mutate(
+      { name: name.trim(), instructions: instructions.trim(), files, emails },
+      {
+        onSuccess: ({ project, failed }) => {
+          if (failed.length > 0) toast.show(`The project was created, but not everything was added. ${failed.join(' · ')}`, { tone: 'danger' });
+          popover?.close();
+          void navigate(`/projects/${project.id}`);
+        },
+      },
+    );
+  };
+  return (
+    <form noValidate onSubmit={submit} aria-labelledby={`${id}-title`} className="flex flex-col gap-3 p-2 text-left">
+      <h2 id={`${id}-title`} className="text-sm font-bold">
+        New project
+      </h2>
+      <div>
+        <label htmlFor={`${id}-name`} className={LABEL}>
+          Project name
+        </label>
+        <input
+          id={`${id}-name`}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. National Water Security Strategy"
+          maxLength={200}
+          autoComplete="off"
+          autoFocus
+          className={FIELD}
+        />
+      </div>
+      <div>
+        <label htmlFor={`${id}-instructions`} className={LABEL}>
+          Instructions {OPTIONAL}
+        </label>
+        <textarea
+          id={`${id}-instructions`}
+          value={instructions}
+          onChange={(e) => setInstructions(e.target.value)}
+          placeholder="How Lam should work in this project"
+          className={cn(FIELD, 'h-20! resize-none py-2 md:h-20!')}
+        />
+      </div>
+      <div>
+        <label htmlFor={`${id}-files`} className={LABEL}>
+          Files {OPTIONAL}
+        </label>
+        <input
+          id={`${id}-files`}
+          type="file"
+          multiple
+          accept={ACCEPT}
+          onChange={(e) => setFiles([...(e.target.files ?? [])])}
+          aria-describedby={`${id}-files-hint`}
+          className="block w-full text-xs text-fg-muted file:mr-3 file:h-9 file:cursor-pointer file:rounded-card file:border file:border-solid file:border-border file:bg-bg file:px-3 file:text-xs file:font-bold file:text-fg"
+        />
+        <p id={`${id}-files-hint`} className="mt-1.5 text-2xs leading-relaxed text-fg-muted">
+          {files.length > 0 ? `${files.length} file${files.length === 1 ? '' : 's'} will be added to Archives.` : 'PDF, DOCX, PPTX or images, up to 50 MB each.'}
+        </p>
+      </div>
+      <div>
+        <label htmlFor={`${id}-people`} className={LABEL}>
+          People {OPTIONAL}
+        </label>
+        <input
+          id={`${id}-people`}
+          value={people}
+          onChange={(e) => setPeople(e.target.value)}
+          placeholder="name@company.com, name@company.com"
+          autoComplete="off"
+          spellCheck={false}
+          aria-invalid={submitted && Boolean(badEmail)}
+          aria-describedby={`${id}-people-hint`}
+          className={FIELD}
+        />
+        <p id={`${id}-people-hint`} role={submitted && badEmail ? 'alert' : undefined} className={cn('mt-1.5 text-2xs leading-relaxed', submitted && badEmail ? 'text-danger' : 'text-fg-muted')}>
+          {submitted && badEmail ? `"${badEmail}" is not a valid email address.` : 'Emails of people who already have a Lam13 account, separated by commas.'}
+        </p>
+      </div>
+      {create.isError && (
+        <p role="alert" className="text-xs text-danger">
+          {toErrorInfo(create.error).message}
+        </p>
+      )}
+      <div className="flex gap-2">
+        <Button type="submit" variant="primary" size="sm" disabled={!name.trim() || create.isPending} leadingIcon={create.isPending ? <Spinner size={14} state="active" /> : undefined}>
+          {create.isPending ? 'Creating…' : 'Create project'}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => popover?.close()}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** "New project": name, instructions, files and people; creates it (the user becomes its owner) and opens it. */
+function NewProjectButton({ compact = false }: { compact?: boolean }) {
+  // The form is mounted only while its popover is open: each "New project" starts empty.
+  const [open, setOpen] = useState(false);
   return (
     <Popover
       placement={compact ? 'bottom-end' : 'bottom-start'}
       kind="dialog"
-      className="w-[min(20rem,calc(100vw-1.5rem))]"
+      className="w-[min(24rem,calc(100vw-1.5rem))]"
+      onOpenChange={setOpen}
       trigger={(props) => (
         <Button {...props} variant="primary" size={compact ? 'sm' : undefined} aria-label="New project" leadingIcon={<Plus {...smallIconProps} />}>
           <span className={compact ? 'max-sm:sr-only' : undefined}>New project</span>
         </Button>
       )}
     >
-      <NameForm
-        title="New project"
-        label="Project name"
-        placeholder="e.g. National Water Security Strategy"
-        submitLabel="Create project"
-        hint="You can add instructions, files and your team once it is created."
-        onSubmit={(name) => create.mutateAsync({ name }).then((project) => void navigate(`/projects/${project.id}`))}
-      />
+      {open && <NewProjectForm />}
     </Popover>
   );
 }

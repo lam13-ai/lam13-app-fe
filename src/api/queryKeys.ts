@@ -23,6 +23,10 @@ export const queryKeys = {
     connection: () => ['meetings', 'connection'] as const,
   },
   whatsapp: () => ['whatsapp'] as const,
+  integrations: {
+    list: () => ['integrations', 'list'] as const,
+    mcpServer: () => ['integrations', 'mcpServer'] as const,
+  },
   projects: {
     list: () => ['projects', 'list'] as const,
     detail: (id: string) => ['projects', 'detail', id] as const,

@@ -1,6 +1,6 @@
 import { ArrowLeft, ArrowUpRight } from 'lucide-react';
 import { useEffect, useId, useState, type FormEvent } from 'react';
-import { isApiError } from '@/api';
+import { isApiError, useApi } from '@/api';
 import { Button, Skeleton, Spinner, smallIconProps } from '@/components/ui';
 import type { WhatsAppVerification } from '@/types/api';
 import { useWhatsApp } from '../hooks/useWhatsApp';
@@ -8,6 +8,7 @@ import { countryByCode, defaultCountryCode, formatPhone, toE164 } from '../lib/p
 import { CODE_LENGTH, OtpInput } from './OtpInput';
 import { PhoneNumberField } from './PhoneNumberField';
 import { ConnectedDot, IntegrationRow } from './IntegrationRow';
+import { StatusNote } from './ProviderConnection';
 
 const DESCRIPTION = 'Connect your WhatsApp number to receive messages and voice notes directly in Lam13.';
 
@@ -341,9 +342,9 @@ type Step = { kind: 'intro' } | { kind: 'phone' } | { kind: 'verify'; verificati
  * WhatsApp on the Integrations page: connect a number from Lam13 (number → code on WhatsApp → verify), or
  * learn how to start from WhatsApp instead; see the link, disconnect it. Either way it is the same link —
  * a link made in WhatsApp shows up here via the status (refetched when you come back to the tab).
- * Everything goes through `api.whatsapp` (a local mock until the backend integration exists).
+ * Everything goes through `api.whatsapp`.
  */
-export function WhatsAppIntegration() {
+function WhatsAppFlow() {
   const { status } = useWhatsApp();
   const [step, setStep] = useState<Step>({ kind: 'intro' });
   // Kept across steps: "Change number" and errors return to what was typed.
@@ -408,6 +409,22 @@ export function WhatsAppIntegration() {
   return (
     <IntegrationRow brand="whatsapp" description={DESCRIPTION} action={action}>
       {body}
+    </IntegrationRow>
+  );
+}
+
+/**
+ * WhatsApp on the Integrations page. The flow above runs only against a backend that has a WhatsApp
+ * integration (`capabilities.whatsapp`); without one the row says so, and no number can be "connected".
+ */
+export function WhatsAppIntegration() {
+  const api = useApi();
+  if (api.capabilities.whatsapp) return <WhatsAppFlow />;
+  return (
+    <IntegrationRow brand="whatsapp" description={DESCRIPTION} action={<StatusNote>Not available yet</StatusNote>}>
+      <p className="text-xs leading-relaxed text-fg-muted">
+        WhatsApp is not connected to this Lam13 server yet: it needs Lam13&apos;s WhatsApp Business number to be set up. No number can be linked until then.
+      </p>
     </IntegrationRow>
   );
 }

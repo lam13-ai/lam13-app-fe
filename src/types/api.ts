@@ -299,6 +299,45 @@ export interface ProjectFolder {
   name: string;
 }
 
+/** An outside account Lam13 can be connected to through the provider's own sign-in (backend: /integrations). */
+export type IntegrationProvider =
+  | 'gmail'
+  | 'google_calendar'
+  | 'google_drive'
+  | 'google_meet'
+  | 'outlook'
+  | 'microsoft_calendar'
+  | 'onedrive'
+  | 'sharepoint'
+  | 'teams'
+  | 'zoom'
+  | 'webex';
+
+export interface IntegrationConnection {
+  provider: IntegrationProvider;
+  /** `connected` only after the provider's sign-in succeeded; `error` = it must be connected again. */
+  status: 'connected' | 'disconnected' | 'error';
+  /** False: the server has no credentials for this provider, so it cannot be connected. */
+  configured: boolean;
+  /** The connected account's email, when the provider says. */
+  account: string | null;
+  last_synced_at: IsoDateTime | null;
+}
+
+export interface ContactImportResult {
+  imported: number;
+  /** Already in My Contacts, or without a name. */
+  skipped: number;
+  found: number;
+}
+
+/** The user's saved MCP server. The API key is never returned: only whether one is stored. */
+export interface McpServer {
+  name: string;
+  url: string;
+  has_api_key: boolean;
+}
+
 export interface ProjectChat {
   id: Id;
   title: string;

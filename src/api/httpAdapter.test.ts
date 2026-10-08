@@ -157,6 +157,12 @@ describe('HTTP adapter — errors', () => {
     [422, { detail: [{ loc: ['body', 'title'], msg: 'Field required', type: 'missing' }] }, 'Field required'],
     [400, { detail: 'Traceback (most recent call last): File "/srv/app.py"' }, 'Request failed.'],
     [500, { detail: 'internal details' }, 'Something went wrong on our side. Please try again.'],
+    [502, { detail: 'Bad Gateway' }, 'Something went wrong on our side. Please try again.'],
+    // A 503 is the backend saying why, in words meant for the user…
+    [503, { detail: 'Project file storage is not set up on the server yet. Uploads will work once it is.' }, 'Project file storage is not set up on the server yet. Uploads will work once it is.'],
+    // …unless what came back is not such a sentence (or not JSON at all: a proxy's own 503 page).
+    [503, { detail: 'Traceback (most recent call last): File "/srv/app.py"' }, 'Something went wrong on our side. Please try again.'],
+    [503, {}, 'Something went wrong on our side. Please try again.'],
   ])('maps HTTP %i to a safe ApiError', async (status, body, message) => {
     stubFetch(() => json(body, status));
     await expect(createHttpAdapter().conversations.list()).rejects.toMatchObject({ name: 'ApiError', status, code: `http_${status}`, message });
@@ -287,7 +293,8 @@ describe('HTTP adapter — capabilities', () => {
     const { fetch } = stubFetch(() => json({}));
     const api = createHttpAdapter();
     // No voice-message endpoint, but recordings can be transcribed (POST /voice/transcribe).
-    expect(api.capabilities).toEqual({ regenerate: false, voiceNotes: false, transcription: true });
+    expect(api.capabilities).toEqual({ regenerate: false, voiceNotes: false, transcription: true, whatsapp: false });
+    await expect(api.whatsapp.status()).rejects.toMatchObject({ status: 501 }); // no simulated WhatsApp over HTTP
     await expect(api.messages.regenerate('s', 'm')).rejects.toMatchObject({ status: 501, code: 'not_supported' });
     await expect(api.messages.send('s', { client_message_id: 'c', kind: 'voice', audio_id: 'x' })).rejects.toMatchObject({ status: 501 });
     await expect(api.audio.upload({ file: new Blob(), duration_ms: 1000 })).rejects.toMatchObject({ status: 501 });
@@ -521,5 +528,43 @@ describe('HTTP adapter — POST /voice/transcribe', () => {
       throw new DOMException('aborted', 'AbortError');
     });
     await expect(api.audio.transcribe({ file: recording('audio/webm'), duration_ms: 1000 }, { signal: controller.signal })).rejects.toSatisfy(isAbortError);
+  });
+});
+
+describe('HTTP adapter — account connections (/integrations)', () => {
+  const view = { provider: 'gmail', status: 'disconnected', configured: true, account: null, last_synced_at: null };
+
+  it('reads the state, finishes a sign-in, disconnects and imports with the backend\u2019s own routes', async () => {
+    const { calls } = stubFetch((call) => (call.url.endsWith('/import-contacts') ? json({ imported: 2, skipped: 1, found: 3 }) : call.url === '/integrations' ? json([view]) : json(view)));
+    const api = createHttpAdapter();
+    expect(await api.integrations.list()).toEqual([view]);
+    await api.integrations.finishSignIn('gmail', 'the-code', 'the-state');
+    await api.integrations.disconnect('google_drive');
+    expect(await api.integrations.importContacts('outlook')).toEqual({ imported: 2, skipped: 1, found: 3 });
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'GET /integrations',
+      'POST /integrations/gmail/callback',
+      'DELETE /integrations/google_drive',
+      'POST /integrations/outlook/import-contacts',
+    ]);
+    expect(JSON.parse(calls[1]!.body as string)).toEqual({ code: 'the-code', state: 'the-state' });
+  });
+
+  it('a provider the server has no credentials for is refused (503), and the browser goes nowhere', async () => {
+    stubFetch(() => json({ detail: 'This integration is not set up on the server yet.' }, 503));
+    await expect(createHttpAdapter().integrations.connect('zoom')).rejects.toMatchObject({ status: 503, message: 'This integration is not set up on the server yet.' });
+  });
+
+  it('the custom MCP server is saved, read and removed on the backend; the key is only ever sent, never read', async () => {
+    const saved = { name: 'Team tools', url: 'https://mcp.example.com/mcp', has_api_key: true };
+    const { calls } = stubFetch((call) => (call.method === 'DELETE' ? new Response(null, { status: 204 }) : call.method === 'GET' ? json(null) : json(saved)));
+    const api = createHttpAdapter();
+    expect(await api.integrations.mcpServer()).toBeNull();
+    expect(await api.integrations.saveMcpServer({ name: 'Team tools', url: 'https://mcp.example.com/mcp', api_key: 'sk-test-not-real' })).toEqual(saved);
+    await api.integrations.saveMcpServer({ name: 'Team tools', url: 'https://mcp.example.com/mcp' });
+    await expect(api.integrations.removeMcpServer()).resolves.toBeUndefined();
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(['GET /integrations/custom-mcp', 'PUT /integrations/custom-mcp', 'PUT /integrations/custom-mcp', 'DELETE /integrations/custom-mcp']);
+    expect(JSON.parse(calls[1]!.body as string)).toEqual({ name: 'Team tools', url: 'https://mcp.example.com/mcp', api_key: 'sk-test-not-real' });
+    expect(JSON.parse(calls[2]!.body as string)).toEqual({ name: 'Team tools', url: 'https://mcp.example.com/mcp' }); // no key: the stored one is kept
   });
 });

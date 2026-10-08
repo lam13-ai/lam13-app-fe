@@ -1,57 +1,21 @@
 import { Server } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
-import { brandName, type Brand } from '@/components/BrandLogo';
-import { Button } from '@/components/ui';
+import { toErrorInfo } from '@/api';
+import { Button, Skeleton, Spinner } from '@/components/ui';
 import { isHttpsUrl } from '@/lib/url';
-import { useDemoStore } from '@/stores/demoStore';
-import { ConnectedDot, IntegrationRow } from './IntegrationRow';
-
-/** Marks a state that exists only in this page, so "Connected" is never read as a real account link. */
-function DemoTag() {
-  return <span className="rounded-full border border-hairline-strong px-1.5 text-[10px] uppercase leading-4 tracking-wide text-fg-muted">Demo</span>;
-}
-
-/**
- * An integration that has no backend yet: Connect / Disconnect only flips a local demo state.
- * TODO(backend): replace with the real connection flow; nothing is called or stored here.
- */
-export function DemoIntegration({ brand, description }: { brand: Brand; description: string }) {
-  const connected = useDemoStore((s) => Boolean(s.connected[brand]));
-  const setConnected = useDemoStore((s) => s.setConnected);
-  const name = brandName(brand);
-  return (
-    <IntegrationRow
-      brand={brand}
-      description={description}
-      action={
-        connected ? (
-          <div className="flex items-center gap-3">
-            <ConnectedDot />
-            <DemoTag />
-            <Button variant="outline" size="sm" aria-label={`Disconnect ${name}`} onClick={() => setConnected(brand, false)}>
-              Disconnect
-            </Button>
-          </div>
-        ) : (
-          <Button variant="outline" size="sm" onClick={() => setConnected(brand, true)}>
-            Connect {name}
-          </Button>
-        )
-      }
-    />
-  );
-}
+import { useMcpServer } from '../hooks/useIntegrations';
 
 const FIELD =
   'h-11 w-full border border-border bg-bg px-3 text-base text-fg outline-none transition-colors duration-150 ease-standard placeholder:text-fg-muted focus:border-composer-focus focus:ring-1 focus:ring-composer-ring focus-visible:outline-none sm:text-sm md:h-10';
 
 /**
- * A custom MCP server: name, URL, optional API key. A local demo — saving stores the
- * name and URL in session memory only; the key is cleared on save and never stored, logged or sent.
+ * A custom MCP server: name, URL, optional API key, saved to the user's account (PUT /integrations/custom-mcp;
+ * the key is stored encrypted and never returned). The state shown is "Saved", not "Connected": the backend
+ * keeps the configuration and does not call the server yet.
  */
-export function CustomServerSection() {
-  const server = useDemoStore((s) => s.customServer);
-  const setServer = useDemoStore((s) => s.setCustomServer);
+export function McpServerSection() {
+  const { server: query, save, remove } = useMcpServer();
+  const server = query.data ?? null;
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -71,21 +35,31 @@ export function CustomServerSection() {
   }, [editing]);
   const nameError = !name.trim() ? 'Enter a name.' : null;
   const urlError = !url.trim() ? 'Enter the MCP server URL.' : !isHttpsUrl(url.trim()) ? 'Enter a valid https:// URL.' : null;
+  const failure = save.error ?? remove.error;
 
   const startEditing = () => {
     setName(server?.name ?? '');
     setUrl(server?.url ?? '');
     setKey('');
     setSubmitted(false);
+    save.reset();
+    remove.reset();
     setEditing(true);
   };
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     setSubmitted(true);
-    if (nameError || urlError) return;
-    setServer({ name: name.trim(), url: url.trim(), hasKey: key.length > 0 });
-    setKey('');
-    setEditing(false);
+    if (nameError || urlError || save.isPending) return;
+    // An empty key field keeps the key already stored; a typed one replaces it.
+    save.mutate(
+      { name: name.trim(), url: url.trim(), ...(key ? { api_key: key } : {}) },
+      {
+        onSuccess: () => {
+          setKey('');
+          setEditing(false);
+        },
+      },
+    );
   };
 
   return (
@@ -100,16 +74,23 @@ export function CustomServerSection() {
               Custom MCP Server
             </h3>
             <p className="mt-1 max-w-[52ch] text-xs leading-relaxed text-fg-muted">
-              Bring your own tool: connect Lam13 to your MCP server and use it alongside the built-in integrations.
+              An MCP (Model Context Protocol) server gives Lam13 access to your own tools and data, such as an internal system or a service that has no
+              built-in integration. Add its URL and, if it needs one, an API key.
             </p>
           </div>
         </div>
         {!editing &&
-          (server ? (
-            <div className="flex flex-wrap items-center gap-3">
-              <ConnectedDot />
-              <DemoTag />
-            </div>
+          (query.isPending ? (
+            <Skeleton className="h-9 w-36" />
+          ) : query.isError ? (
+            <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+              Try again
+            </Button>
+          ) : server ? (
+            <p className="flex items-center gap-2 text-xs text-fg">
+              <span aria-hidden className="size-1.5 rounded-full bg-accent" />
+              Saved
+            </p>
           ) : (
             <Button variant="outline" size="sm" onClick={startEditing}>
               Add custom server
@@ -117,23 +98,37 @@ export function CustomServerSection() {
           ))}
       </div>
 
+      {query.isError && !editing && (
+        <p role="alert" className="mt-4 text-xs text-danger sm:pl-[3.125rem]">
+          Couldn&apos;t load your custom server.
+        </p>
+      )}
+
       {server && !editing && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-4 sm:pl-[3.125rem]">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-bold">{server.name}</p>
-            <p className="truncate text-xs text-fg-muted">
-              {server.url}
-              {server.hasKey && ' · API key provided'}
+        <div className="mt-4 border-t border-hairline pt-4 sm:pl-[3.125rem]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold">{server.name}</p>
+              <p className="truncate text-xs text-fg-muted">
+                {server.url}
+                {server.has_api_key && ' · API key saved'}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={startEditing}>
+                Edit
+              </Button>
+              <Button variant="outline" size="sm" aria-label={`Remove ${server.name}`} disabled={remove.isPending} onClick={() => remove.mutate()}>
+                Remove
+              </Button>
+            </div>
+          </div>
+          <p className="mt-3 text-2xs leading-relaxed text-fg-muted">Saved to your account. Lam13 does not use this server&apos;s tools in chats yet.</p>
+          {remove.isError && (
+            <p role="alert" className="mt-2 text-xs text-danger">
+              Couldn&apos;t remove the server. {toErrorInfo(remove.error).message}
             </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={startEditing}>
-              Edit
-            </Button>
-            <Button variant="outline" size="sm" aria-label={`Disconnect ${server.name}`} onClick={() => setServer(null)}>
-              Disconnect
-            </Button>
-          </div>
+          )}
         </div>
       )}
 
@@ -149,6 +144,7 @@ export function CustomServerSection() {
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Team tools server"
               ref={nameRef}
+              maxLength={200}
               autoComplete="off"
               aria-invalid={submitted && Boolean(nameError)}
               aria-describedby={submitted && nameError ? `${id}-name-error` : undefined}
@@ -192,7 +188,7 @@ export function CustomServerSection() {
               type="password"
               value={key}
               onChange={(e) => setKey(e.target.value)}
-              placeholder="Leave empty if the server needs none"
+              placeholder={server?.has_api_key ? 'Leave empty to keep the saved key' : 'Leave empty if the server needs none'}
               // Not "off": browsers ignore it on a password field and fill the saved sign-in into this and the URL above.
               autoComplete="new-password"
               spellCheck={false}
@@ -200,12 +196,17 @@ export function CustomServerSection() {
               className={FIELD}
             />
             <p id={`${id}-key-help`} className="mt-1.5 text-2xs leading-relaxed text-fg-muted">
-              Demo only: nothing you enter here is stored or sent anywhere, and no server is contacted when you save.
+              The key is stored encrypted with your account and is never shown again.
             </p>
           </div>
+          {failure && (
+            <p role="alert" className="text-xs text-danger">
+              Couldn&apos;t save the server. {toErrorInfo(failure).message}
+            </p>
+          )}
           <div className="flex gap-2">
-            <Button type="submit" variant="primary" size="sm">
-              Save and connect
+            <Button type="submit" variant="primary" size="sm" disabled={save.isPending} leadingIcon={save.isPending ? <Spinner size={14} state="active" /> : undefined}>
+              Save server
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
               Cancel

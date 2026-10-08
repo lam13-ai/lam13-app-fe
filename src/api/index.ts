@@ -20,6 +20,7 @@ export type {
   ListParams,
   MeetingsService,
   WhatsAppService,
+  IntegrationsService,
   MessageListParams,
   MessagesService,
   ModelsService,
