@@ -24,6 +24,8 @@ export type {
   MessagesService,
   ModelsService,
   ProfilesService,
+  ProjectsService,
+  CalendarService,
   ProfileSuggestionListParams,
   TestSuggestionBody,
   ProfileSuggestionsService,

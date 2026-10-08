@@ -52,6 +52,7 @@ export function removeFromList(data: ConversationListData | undefined, id: strin
 /** Writes a conversation to the detail cache and the top of the list (new or recently active). */
 export function upsertConversation(queryClient: QueryClient, conversation: Conversation) {
   queryClient.setQueryData(queryKeys.conversations.detail(conversation.id), conversation);
+  if (conversation.project_id) return; // a project's chat is listed under its project, not in the sidebar
   queryClient.setQueryData<ConversationListData>(queryKeys.conversations.list(), (data) => moveToTop(data, conversation));
 }
 
@@ -66,6 +67,7 @@ export function patchConversation(
   if (!current) return;
   const next = { ...current, ...patch };
   queryClient.setQueryData(queryKeys.conversations.detail(id), next);
+  if (next.project_id) return; // a project's chat is listed under its project, not in the sidebar
   queryClient.setQueryData<ConversationListData>(queryKeys.conversations.list(), (data) =>
     toTop ? moveToTop(data, next) : patchInList(data, id, patch),
   );

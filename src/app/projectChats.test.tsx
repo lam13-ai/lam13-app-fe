@@ -84,10 +84,29 @@ describe('Demo project conversations', () => {
     await open(); // a fresh adapter, as after a browser refresh
   });
 
-  it('with the HTTP adapter the project lists its demo conversations even though the backend history has none of them', async () => {
-    vi.stubGlobal('fetch', async (url: string) => (url === '/chat/sessions' ? Response.json([]) : Response.json({ detail: 'Not Found' }, { status: 404 })));
-    renderApp('/projects/ai-strategy', { api: createHttpAdapter(), auth: { accessToken: 'test-token-not-real' } });
-    expect(titles(await chats())).toEqual(seedsOf('ai-strategy').map((s) => s.title));
+  it('with the HTTP adapter the project lists the chats the backend returns for it, which are not in the personal history', async () => {
+    const project = { id: 'p1', name: 'Water strategy', instructions: '', summary: '', owner_id: 'u1', role: 'owner', created_at: '2026-10-01T09:00:00', updated_at: '2026-10-07T12:00:00' };
+    const parts: Record<string, unknown> = {
+      '/projects/p1': project,
+      '/projects/p1/chats': [
+        { sessionId: 's-old', title: 'Baseline questions', projectId: 'p1', createdBy: 'u1', createdAt: '2026-10-05T10:00:00', updatedAt: '2026-10-05T11:00:00' },
+        { sessionId: 's-new', title: 'KPI shortlist', projectId: 'p1', createdBy: 'u2', createdAt: '2026-10-06T10:00:00', updatedAt: '2026-10-07T08:00:00' },
+      ],
+      '/projects/p1/files': [],
+      '/projects/p1/folders': [],
+      '/projects/p1/members': [{ user_id: 'u1', name: 'Joseph Boutros', email: 'joseph@example.com', role: 'owner', created_at: '2026-10-01T09:00:00' }],
+      '/projects/p1/contacts': [],
+      '/chat/sessions': [], // the personal history has none of them
+    };
+    vi.stubGlobal('fetch', async (url: string) => (url in parts ? Response.json(parts[url]) : Response.json({ detail: 'Not Found' }, { status: 404 })));
+    renderApp('/projects/p1', { api: createHttpAdapter(), auth: { accessToken: 'test-token-not-real' } });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Water strategy' }, find)).toBeTruthy();
+    const list = await chats();
+    expect(titles(list)).toEqual(['KPI shortlist', 'Baseline questions']); // most recently active first
+    expect(within(list).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/projects/p1/c/s-new', '/projects/p1/c/s-old']);
+    // Rename and delete are offered on each of the project's chats.
+    expect(within(list).getByRole('button', { name: 'Actions for KPI shortlist' })).toBeTruthy();
+    vi.unstubAllGlobals();
   });
 
   it('an unknown conversation id is a not-found page', async () => {

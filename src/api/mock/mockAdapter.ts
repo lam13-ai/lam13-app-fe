@@ -213,6 +213,7 @@ export function createMockAdapter(options: MockAdapterOptions = {}): ApiAdapter 
     return readEventStream(createEventBody(run, random), signal);
   }
 
+  const profiles = createMockProfiles({ now, respond: () => respond(), newId, failWrites: options.failProfileWrites });
   return {
     capabilities: { regenerate: true, voiceNotes: true, transcription: true },
     conversations: {
@@ -533,10 +534,20 @@ export function createMockAdapter(options: MockAdapterOptions = {}): ApiAdapter 
       },
     },
 
-    ...createMockProfiles({ now, respond: () => respond(), newId, failWrites: options.failProfileWrites }),
+    ...profiles,
     meetings: createMockMeetings({ now, respond: () => respond() }),
     whatsapp: createMockWhatsApp({ respond: () => respond() }),
-    projects: createMockProjects({ now, respond: () => respond(), chats: demoProjectChats(now()) }),
+    projects: createMockProjects({
+      now,
+      respond: () => respond(),
+      chats: demoProjectChats(now()),
+      // Linking a contact to a project takes it from My Contacts.
+      findContact: (id) =>
+        profiles.profiles.get(id).then(
+          (p) => ({ id: p.id, name: p.full_name, detail: [p.position, p.company].filter(Boolean).join(', '), email: p.email ?? null }),
+          () => null,
+        ),
+    }),
     calendar: createMockCalendar({ now, respond: () => respond() }),
   };
 }

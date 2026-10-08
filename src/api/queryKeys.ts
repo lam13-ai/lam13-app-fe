@@ -29,6 +29,7 @@ export const queryKeys = {
   },
   calendar: {
     events: () => ['calendar', 'events'] as const,
+    upcoming: () => ['calendar', 'upcoming'] as const,
     tasks: () => ['calendar', 'tasks'] as const,
   },
 };

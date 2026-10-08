@@ -1,18 +1,62 @@
-import { ArrowLeft, SquarePen } from 'lucide-react';
+import { ArrowLeft, MoreHorizontal, Pencil, SquarePen, Trash2 } from 'lucide-react';
 import { useId, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { isApiError } from '@/api';
 import { ErrorState } from '@/components/ErrorState';
 import { PageFrame } from '@/components/PageFrame';
-import { Button, Skeleton, iconProps, smallIconProps } from '@/components/ui';
-import { useProject } from '../hooks/useProjects';
+import { Button, IconButton, Menu, MenuItem, Popover, Skeleton, iconProps, smallIconProps } from '@/components/ui';
+import type { Project } from '@/types/api';
+import { useDeleteProject, useProject, useProjectAction } from '../hooks/useProjects';
 import { Archives } from './Archives';
 import { TeamAndContacts } from './TeamAndContacts';
 import { ProjectChatList, projectNewChatPath } from './ProjectChatList';
+import { ConfirmPanel, NameForm } from './ProjectForms';
 import { Instructions, Tabs, tabPanelProps } from './ProjectSections';
 
 const TABS = ['Chats', 'Instructions', 'Archives', 'Team and Contacts'] as const;
 type Tab = (typeof TABS)[number];
+
+/** The owner's menu on the project page: rename it, or delete it (confirmed, naming what goes with it). */
+function ProjectMenu({ project }: { project: Project }) {
+  const [view, setView] = useState<'menu' | 'rename' | 'delete'>('menu');
+  const action = useProjectAction(project.id);
+  const remove = useDeleteProject();
+  const navigate = useNavigate();
+  return (
+    <Popover
+      placement="bottom-end"
+      kind="dialog"
+      className={view === 'menu' ? 'w-56' : 'w-[min(20rem,calc(100vw-1.5rem))]'}
+      onOpenChange={(open) => {
+        if (!open) setView('menu');
+      }}
+      trigger={(props) => <IconButton {...props} label="Project options" size="md" icon={<MoreHorizontal {...iconProps} />} />}
+    >
+      {view === 'menu' ? (
+        <Menu label="Project options">
+          <MenuItem onSelect={() => setView('rename')} leading={<Pencil {...smallIconProps} />} keepOpen>
+            Rename project
+          </MenuItem>
+          <MenuItem onSelect={() => setView('delete')} leading={<Trash2 {...smallIconProps} />} tone="danger" keepOpen>
+            Delete project
+          </MenuItem>
+        </Menu>
+      ) : view === 'rename' ? (
+        <NameForm
+          title="Rename project"
+          label="Project name"
+          initial={project.name}
+          submitLabel="Save"
+          onSubmit={(name) => action.mutateAsync((projects) => projects.rename(project.id, name))}
+        />
+      ) : (
+        <ConfirmPanel title={`Delete ${project.name}?`} confirmLabel="Delete project" onConfirm={() => remove.mutateAsync(project.id).then(() => void navigate('/projects'))}>
+          Its chats, files and folders are deleted with it, for everyone in the project. This cannot be undone.
+        </ConfirmPanel>
+      )}
+    </Popover>
+  );
+}
 
 /** `/projects/:projectId`: the project's workspace — its chats, instructions, archive, and its team and contacts. */
 export function ProjectDetailView({ projectId }: { projectId: string }) {
@@ -76,15 +120,19 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       leading={back}
       wide
       actions={
-        <Button variant="primary" size="sm" aria-label="New chat" leadingIcon={<SquarePen {...smallIconProps} />} onClick={newChat}>
-          <span className="max-sm:sr-only">New chat</span>
-        </Button>
+        <div className="flex items-center gap-1">
+          {/* Renaming and deleting are the owner's. */}
+          {data.role !== 'member' && <ProjectMenu project={data} />}
+          <Button variant="primary" size="sm" aria-label="New chat" leadingIcon={<SquarePen {...smallIconProps} />} onClick={newChat}>
+            <span className="max-sm:sr-only">New chat</span>
+          </Button>
+        </div>
       }
     >
       <Link to="/projects" className="mb-3 inline-flex min-h-11 items-center gap-2 text-xs font-bold text-fg-muted hover:text-fg md:hidden">
         <ArrowLeft {...smallIconProps} /> All projects
       </Link>
-      <p className="max-w-[70ch] text-sm leading-relaxed text-fg-muted">{data.description}</p>
+      {data.description && <p className="max-w-[70ch] text-sm leading-relaxed text-fg-muted">{data.description}</p>}
 
       <Tabs
         label="Project sections"
@@ -114,7 +162,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           />
         )}
         {tab === 'Instructions' && <Instructions project={data} />}
-        {tab === 'Archives' && <Archives files={data.files} />}
+        {tab === 'Archives' && <Archives project={data} />}
         {tab === 'Team and Contacts' && <TeamAndContacts project={data} />}
       </div>
     </PageFrame>

@@ -17,9 +17,9 @@ import type {
 import { getAccessToken } from './auth';
 import { abortError, ApiError } from './errors';
 import { createMockAdapter } from './mock/mockAdapter';
-import { demoProjectChats, isDemoConversation } from './mock/projectChatFixtures';
+import { createHttpCalendar, createHttpProjects } from './httpWorkspace';
+import { isDemoConversation } from './mock/projectChatFixtures';
 import { createMockWhatsApp } from './mock/whatsapp';
-import { createMockCalendar, createMockProjects } from './mock/workspace';
 import type { ApiAdapter, SendMessageBody } from './services';
 import { readSseMessages, type SseMessage, type StreamEvent } from './stream';
 
@@ -97,18 +97,6 @@ const notSupported = (what: string) => new ApiError(501, 'not_supported', `${wha
 /** A demo conversation is local sample data: nothing from it may reach the backend, and nothing is faked in its place. */
 const notInDemo = (what: string) => new ApiError(501, 'not_supported', `${what} isn't available in demo conversations.`);
 
-/**
- * This browser's localStorage, or undefined when it cannot be used. Reading the property itself throws
- * when site data is blocked, so the access is guarded — not only the calls made on it later.
- */
-function browserStorage(): Storage | undefined {
-  try {
-    return globalThis.localStorage ?? undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 // ── Backend DTOs (lam13-app/api/schemas/chat.py) ─────────────────────────────
 
 interface SessionSummaryDto {
@@ -134,6 +122,8 @@ interface MessageDto {
 interface SessionDetailDto {
   sessionId: string;
   title: string | null;
+  /** Set when the session is a project's chat. */
+  projectId?: string | null;
   messages: MessageDto[];
   /** 'not_started' | 'in_progress' | 'completed' | 'failed' */
   eshmunReportGeneratingStatus?: string;
@@ -147,7 +137,7 @@ interface UploadDto {
 
 // ── Mapping ──────────────────────────────────────────────────────────────────
 
-function toConversation(dto: { sessionId: string; title?: string | null; createdAt?: string; updatedAt?: string }): Conversation {
+function toConversation(dto: { sessionId: string; title?: string | null; createdAt?: string; updatedAt?: string; projectId?: string | null }): Conversation {
   const created = dto.createdAt || new Date().toISOString();
   return {
     id: dto.sessionId,
@@ -155,6 +145,7 @@ function toConversation(dto: { sessionId: string; title?: string | null; created
     created_at: created,
     updated_at: dto.updatedAt || created,
     last_message_preview: null,
+    ...(dto.projectId && { project_id: dto.projectId }),
   };
 }
 
@@ -409,7 +400,7 @@ export async function* translateStream(
         sessionId = str(data.session_id);
         assistantId = str(data.assistantMessageId);
         if (!request.conversationId) {
-          yield { event: 'conversation.created', data: toConversation({ sessionId, title: null, createdAt: startedAt }) };
+          yield { event: 'conversation.created', data: toConversation({ sessionId, title: null, createdAt: startedAt, projectId: request.body.project_id }) };
         }
         const user: Message = {
           id: str(data.message_id) || request.body.client_message_id,
@@ -563,6 +554,8 @@ export function createHttpAdapter(): ApiAdapter {
             user_message: body.content,
             ...(body.attachment_ids?.length && { users_document_ids: body.attachment_ids }),
             ...(body.meeting_ids?.length && { meeting_ids: body.meeting_ids }),
+            // A chat in a project: the backend creates it there, and checks project membership on every turn.
+            ...(body.project_id && { project_id: body.project_id }),
           },
         });
         if (!response.body) throw new ApiError(0, 'network_error', 'The response could not be read.');
@@ -655,11 +648,9 @@ export function createHttpAdapter(): ApiAdapter {
     // TODO(backend): WhatsApp connection is not on the backend yet — a local mock that sends nothing. Replace
     // with the real integration here (OTP, Meta embedded signup, …); the UI only uses WhatsAppService.
     whatsapp: createMockWhatsApp(),
-    // TODO(backend): Projects and Calendar have no backend routes yet — local sample data behind the same services.
-    // Chats started in a project are real backend sessions (which project each belongs to is kept in this browser
-    // only, when its storage can be used); the sample projects' demo conversations are local data.
-    projects: createMockProjects({ storage: browserStorage(), chats: demoProjectChats(Date.now()) }),
-    calendar: createMockCalendar(),
+    // Projects (with their chats, archives, team and contacts) and the calendar: httpWorkspace.ts.
+    projects: createHttpProjects(),
+    calendar: createHttpCalendar(),
 
     // My Contacts: /contacts. The UI searches and sorts the (unpaginated) list itself; version history has
     // no UI yet and is not called.

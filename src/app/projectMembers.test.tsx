@@ -47,9 +47,20 @@ describe('Project members', () => {
     const contacts = within(screen.getByRole('list', { name: 'Project contacts' })).getAllByRole('listitem');
     expect(contacts.map((c) => c.querySelector('p')!.textContent)).toEqual(['Omar Haddad', 'Lena Fischer']);
     expect(contacts[0]!.textContent).toContain('Programme Director, Water Authority');
-    for (const contact of contacts) expect(within(contact).queryByRole('button')).toBeNull(); // shown, not managed
     expect(names()).not.toContain('Omar Haddad'); // a contact is not a team member
-    expect(fetchSpy).not.toHaveBeenCalled();
+
+    // A linked contact can be removed from the project (the contact itself is not deleted)…
+    fireEvent.click(within(contacts[0]!).getByRole('button', { name: 'Remove Omar Haddad from this project' }));
+    const linked = () => within(screen.getByRole('list', { name: 'Project contacts' })).getAllByRole('listitem').map((c) => c.querySelector('p')!.textContent);
+    await waitFor(() => expect(linked()).toEqual(['Lena Fischer']));
+
+    // …and one of the user's own contacts (My Contacts) can be added.
+    fireEvent.click(screen.getByRole('button', { name: 'Add contact' }));
+    const choice = (await screen.findAllByRole('button', {}, find)).find((b) => b.closest('ul')?.getAttribute('aria-labelledby') && b.textContent)!;
+    const added = choice.querySelector('span')!.textContent!;
+    fireEvent.click(choice);
+    await waitFor(() => expect(linked()).toEqual(['Lena Fischer', added]));
+    expect(fetchSpy).not.toHaveBeenCalled(); // the sample (mock) service: nothing leaves the page
   });
 
   it('a project with no contacts shows an empty Contacts section', async () => {
@@ -99,7 +110,7 @@ describe('Project members', () => {
     expect((await projects.get('water-security')).members.map((m) => m.role)).toContain('owner');
   });
 
-  it('Add member validates the email, adds a demo member, confirms without claiming an invitation, and calls no backend', async () => {
+  it('Add member validates the email, adds the member, and confirms without claiming an invitation was sent', async () => {
     await openMembers();
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     fireEvent.click(addMemberButton());
@@ -117,7 +128,7 @@ describe('Project members', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Add member' }));
     await waitFor(() => expect(names()).toEqual(['Joseph Boutros', 'Maya Okafor', 'Daniel Brandt', 'Priya Nair', 'lena.fischer@example.com']));
     expect(within(row('lena.fischer@example.com')).getByText('Member')).toBeTruthy();
-    expect(await screen.findByText('lena.fischer@example.com was added to this project. Demo: no invitation was sent.')).toBeTruthy();
+    expect(await screen.findByText('lena.fischer@example.com was added to this project.')).toBeTruthy();
     expect(screen.queryByText(/invitation (was )?sent to|invited/i)).toBeNull();
     expect(screen.getByText('Shared project · 5 people')).toBeTruthy();
     expect(fetchSpy).not.toHaveBeenCalled();

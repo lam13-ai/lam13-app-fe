@@ -24,6 +24,8 @@ export interface Conversation {
   created_at: IsoDateTime;
   updated_at: IsoDateTime;
   last_message_preview: string | null;
+  /** Set for a project's chat: it is listed under its project, never in the personal sidebar. */
+  project_id?: string | null;
 }
 
 export type MessageRole = 'user' | 'assistant' | 'system';
@@ -265,7 +267,7 @@ export interface WhatsAppVerification {
   notice?: string | null;
 }
 
-// ── Projects & Calendar (frontend-only for now: no backend routes yet) ───────
+// ── Projects & Calendar (backend: /projects…, /calendar…; the mock adapter serves sample data) ───────
 
 export type ArchiveFileKind = 'presentation' | 'document' | 'image';
 
@@ -280,9 +282,21 @@ export interface ArchiveFile {
   /** Slides or pages; absent for images. */
   pages?: number;
   uploaded_at: IsoDateTime;
+  /** The uploader's name. */
   uploaded_by: string;
-  /** `processing`: not yet readable by the assistant. `local`: picked in this browser only, not uploaded. */
-  status: 'ready' | 'processing' | 'local';
+  /** The folder it is filed in; null / absent = not in a folder. */
+  folder_id?: string | null;
+  /**
+   * `ready`: readable by the assistant. `processing`: being indexed. `stored`: kept and downloadable, but a
+   * type the assistant cannot read (DOCX, PPTX). `failed`: indexing failed; the file is still stored.
+   */
+  status: 'ready' | 'processing' | 'stored' | 'failed';
+}
+
+/** A flat folder in a project's Archives. */
+export interface ProjectFolder {
+  id: Id;
+  name: string;
 }
 
 export interface ProjectChat {
@@ -290,6 +304,8 @@ export interface ProjectChat {
   title: string;
   preview: string;
   updated_at: IsoDateTime;
+  /** Listed by the backend for this project: authoritative (it is not in the personal conversation list). */
+  server?: boolean;
 }
 
 /** Information a project's chats draw on: a file, meeting notes, a contact, a note or a link. */
@@ -302,13 +318,26 @@ export interface ProjectContextSource {
   summary: string;
 }
 
+/** One of a member's own contacts, linked to a project. */
+export interface ProjectContact {
+  /** The contact's id (My Contacts). */
+  id: Id;
+  name: string;
+  /** "Position, Company". */
+  detail: string;
+  email: string | null;
+}
+
 export interface ProjectSummary {
   id: Id;
   name: string;
   description: string;
   updated_at: IsoDateTime;
-  chat_count: number;
-  file_count: number;
+  /** Absent when the backend's list does not say (it returns no counts). */
+  chat_count?: number;
+  file_count?: number;
+  /** The signed-in user's role. Owner-only actions (rename, delete, team) are hidden for a member. */
+  role?: 'owner' | 'member';
 }
 
 /** Someone with access to a project. Exactly one owner, who cannot be removed. */
@@ -326,16 +355,29 @@ export interface Project extends ProjectSummary {
   chats: ProjectChat[];
   sources: ProjectContextSource[];
   files: ArchiveFile[];
+  folders: ProjectFolder[];
   members: ProjectMember[];
+  contacts: ProjectContact[];
 }
 
 export interface CalendarEvent {
   id: Id;
   title: string;
   starts_at: IsoDateTime;
-  ends_at: IsoDateTime;
-  /** Where the meeting happens. Not the note taker: that is chosen separately, for the whole calendar. */
-  location: 'meet' | 'teams' | 'zoom' | 'in-person';
+  /** Null for a meeting that was recorded: its end is not known. */
+  ends_at: IsoDateTime | null;
+  /**
+   * Where the meeting happens (not the note taker: that is chosen separately, for the whole calendar).
+   * A platform comes from the join link; `online` = a link on another platform; `in-person` = a place and
+   * no link; null = not known.
+   */
+  location: 'meet' | 'teams' | 'zoom' | 'webex' | 'online' | 'in-person' | null;
+  /** The place as written by the organizer, when there is one. */
+  location_text?: string | null;
+  /** The join link, when there is one. */
+  meeting_url?: string | null;
+  /** Set for a meeting that was already held and recorded: its notes are at /meetings/{meeting_id}. */
+  meeting_id?: string | null;
   participants: string[];
   project: string | null;
 }
@@ -343,9 +385,12 @@ export interface CalendarEvent {
 export interface CalendarTask {
   id: Id;
   title: string;
-  due_at: IsoDateTime;
+  /** Null when the action has no due date (the backend's meeting action items have none). */
+  due_at: IsoDateTime | null;
   completed: boolean;
   /** The meeting this action came out of. */
   meeting: string | null;
+  /** When that meeting was held: where the task sits in the calendar when it has no due date. */
+  meeting_at?: IsoDateTime | null;
   project: string | null;
 }

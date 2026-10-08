@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, MapPin, Video } from 'lucide-react';
 import { useId, useMemo, useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router';
 import { BrandLogo, type Brand } from '@/components/BrandLogo';
@@ -8,7 +8,7 @@ import { Button, IconButton, Menu, MenuItem, Popover, Skeleton, iconProps, small
 import { cn } from '@/lib/cn';
 import { useDemoStore, type NoteTaker } from '@/stores/demoStore';
 import type { CalendarEvent, CalendarTask } from '@/types/api';
-import { useCalendarEvents, useCalendarTasks, useSetTaskCompleted } from '../hooks/useCalendar';
+import { useCalendarEvents, useCalendarTasks, useCalendarUpcoming, useSetTaskCompleted } from '../hooks/useCalendar';
 
 const TABS = ['Calendar', 'Upcoming Meetings', 'Tasks & Actions'] as const;
 type Tab = (typeof TABS)[number];
@@ -76,25 +76,42 @@ function NoteTakerSelect() {
   );
 }
 
-const LOCATIONS: Record<CalendarEvent['location'], { name: string; brand?: Brand }> = {
+const LOCATIONS: Record<NonNullable<CalendarEvent['location']>, { name: string; brand?: Brand }> = {
   meet: { name: 'Google Meet', brand: 'meet' },
   teams: { name: 'Microsoft Teams', brand: 'teams' },
   zoom: { name: 'Zoom', brand: 'zoom' },
+  webex: { name: 'Webex' },
+  online: { name: 'Online meeting' },
   'in-person': { name: 'In person' },
 };
 
-/** Where the meeting happens: the platform's mark (or a pin, in person). `labelled` writes the name beside it. */
+/**
+ * Where the meeting happens: the platform's mark (a camera for one without a logo here, a pin for a place),
+ * linked to the join link when there is one. Nothing when the place is not known. `labelled` writes the
+ * name beside it.
+ */
 function LocationMark({ event, labelled }: { event: CalendarEvent; labelled: boolean }) {
-  const { name, brand } = LOCATIONS[event.location];
+  if (!event.location) return null;
+  const { name: kind, brand } = LOCATIONS[event.location];
+  // A place is named as the organizer wrote it.
+  const name = event.location === 'in-person' && event.location_text ? event.location_text : kind;
+  const Icon = event.location === 'in-person' ? MapPin : Video;
+  const mark = brand ? (
+    <BrandLogo brand={brand} size={28} />
+  ) : (
+    <span aria-hidden="true" className="flex size-7 items-center justify-center rounded-card border border-hairline">
+      <Icon size={15} strokeWidth={1.8} />
+    </span>
+  );
   return (
-    <span data-location={event.location} title={name} className="flex shrink-0 items-center gap-2 text-xs text-fg-muted">
-      <span className={labelled ? 'max-sm:sr-only' : 'sr-only'}>{name}</span>
-      {brand ? (
-        <BrandLogo brand={brand} size={28} />
+    <span data-location={event.location} title={name} className="flex min-w-0 max-w-[45%] shrink-0 items-center gap-2 text-xs text-fg-muted">
+      <span className={cn('truncate', labelled ? 'max-sm:sr-only' : 'sr-only')}>{name}</span>
+      {event.meeting_url ? (
+        <a href={event.meeting_url} target="_blank" rel="noreferrer" aria-label={`Join: ${name}`} className="shrink-0 rounded-card outline-offset-2">
+          {mark}
+        </a>
       ) : (
-        <span aria-hidden="true" className="flex size-7 items-center justify-center rounded-card border border-hairline">
-          <MapPin size={15} strokeWidth={1.8} />
-        </span>
+        mark
       )}
     </span>
   );
@@ -107,13 +124,22 @@ function EventRow({ event, showDate = false }: { event: CalendarEvent; showDate?
         {showDate && <p className="font-bold text-fg">{shortDay(new Date(event.starts_at))}</p>}
         <p className={cn(!showDate && 'font-bold text-fg')}>
           {time(event.starts_at)}
-          {showDate && ` – ${time(event.ends_at)}`}
+          {showDate && event.ends_at && ` – ${time(event.ends_at)}`}
         </p>
-        {!showDate && <p>{time(event.ends_at)}</p>}
+        {!showDate && event.ends_at && <p>{time(event.ends_at)}</p>}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-bold">{event.title}</p>
-        <p className="mt-0.5 truncate text-xs text-fg-muted">{event.participants.join(', ')}</p>
+        <p className="truncate text-sm font-bold">
+          {/* A meeting that was recorded opens its notes. */}
+          {event.meeting_id ? (
+            <Link to={`/meetings/${event.meeting_id}`} className="underline-offset-4 hover:underline">
+              {event.title}
+            </Link>
+          ) : (
+            event.title
+          )}
+        </p>
+        {event.participants.length > 0 && <p className="mt-0.5 truncate text-xs text-fg-muted">{event.participants.join(', ')}</p>}
         {showDate && event.project && <p className="mt-0.5 truncate text-2xs text-fg-muted">{event.project}</p>}
       </div>
       <LocationMark event={event} labelled={showDate} />
@@ -123,7 +149,9 @@ function EventRow({ event, showDate = false }: { event: CalendarEvent; showDate?
 
 function TaskRow({ task, showDate = false }: { task: CalendarTask; showDate?: boolean }) {
   const setCompleted = useSetTaskCompleted();
-  const due = showDate ? `${shortDay(new Date(task.due_at))}, ${time(task.due_at)}` : time(task.due_at);
+  // With a due date: when it is due. Without one (the backend's meeting actions): the day of its meeting.
+  const due = task.due_at && `Due ${showDate ? `${shortDay(new Date(task.due_at))}, ${time(task.due_at)}` : time(task.due_at)}`;
+  const held = !task.due_at && showDate && task.meeting_at ? shortDay(new Date(task.meeting_at)) : null;
   return (
     <li className="border-b border-hairline">
       <label className="flex min-h-11 cursor-pointer items-start gap-3 py-3">
@@ -139,7 +167,7 @@ function TaskRow({ task, showDate = false }: { task: CalendarTask; showDate?: bo
         </span>
         <span className="min-w-0 flex-1">
           <span className={cn('block text-sm', task.completed && 'text-fg-muted line-through')}>{task.title}</span>
-          <span className="mt-0.5 block truncate text-xs text-fg-muted">{[task.meeting && `From ${task.meeting}`, `Due ${due}`].filter(Boolean).join(' · ')}</span>
+          <span className="mt-0.5 block truncate text-xs text-fg-muted">{[task.meeting && `From ${task.meeting}`, due, held].filter(Boolean).join(' · ')}</span>
         </span>
       </label>
     </li>
@@ -147,6 +175,9 @@ function TaskRow({ task, showDate = false }: { task: CalendarTask; showDate?: bo
 }
 
 type Days = Map<string, { events: CalendarEvent[]; tasks: CalendarTask[] }>;
+
+/** Where a task sits in time: its due date, else the meeting it came from. */
+const taskDate = (task: CalendarTask) => task.due_at ?? task.meeting_at ?? '';
 
 /** Month or week grid with selectable days, and the selected day's agenda beside it. */
 function CalendarTab({ byDay, today }: { byDay: Days; today: Date }) {
@@ -293,12 +324,9 @@ function CalendarTab({ byDay, today }: { byDay: Days; today: Date }) {
   );
 }
 
-/** Meetings still to come, soonest first, grouped by day. */
-function UpcomingTab({ events, today }: { events: CalendarEvent[]; today: Date }) {
-  const upcoming = useMemo(
-    () => events.filter((e) => keyOf(e.starts_at) >= dayKey(today)).sort((a, b) => a.starts_at.localeCompare(b.starts_at)),
-    [events, today],
-  );
+/** Meetings still to come, soonest first (the service's own "upcoming" list). */
+function UpcomingTab({ events }: { events: CalendarEvent[] }) {
+  const upcoming = useMemo(() => [...events].sort((a, b) => a.starts_at.localeCompare(b.starts_at)), [events]);
   if (upcoming.length === 0) return <p className="py-16 text-center text-sm text-fg-muted">No upcoming meetings.</p>;
   return (
     <div className="mx-auto max-w-[46rem]">
@@ -316,7 +344,7 @@ function UpcomingTab({ events, today }: { events: CalendarEvent[]; today: Date }
 
 /** Every action from the meetings: open ones first (soonest due), then the completed. */
 function TasksTab({ tasks }: { tasks: CalendarTask[] }) {
-  const sorted = useMemo(() => [...tasks].sort((a, b) => a.due_at.localeCompare(b.due_at)), [tasks]);
+  const sorted = useMemo(() => [...tasks].sort((a, b) => taskDate(a).localeCompare(taskDate(b))), [tasks]);
   const open = sorted.filter((t) => !t.completed);
   const done = sorted.filter((t) => t.completed);
   if (tasks.length === 0) return <p className="py-16 text-center text-sm text-fg-muted">No tasks or actions yet.</p>;
@@ -351,6 +379,7 @@ function TasksTab({ tasks }: { tasks: CalendarTask[] }) {
 /** `/calendar`: the calendar, the upcoming meetings and the tasks that came out of them — three tabs, one page. */
 export function CalendarView() {
   const events = useCalendarEvents();
+  const upcoming = useCalendarUpcoming();
   const tasks = useCalendarTasks();
   const today = useMemo(() => new Date(), []);
   const [tab, setTab] = useState<Tab>('Calendar');
@@ -360,10 +389,10 @@ export function CalendarView() {
     const map: Days = new Map();
     const at = (key: string) => map.get(key) ?? map.set(key, { events: [], tasks: [] }).get(key)!;
     for (const e of events.data ?? []) at(keyOf(e.starts_at)).events.push(e);
-    for (const t of tasks.data ?? []) at(keyOf(t.due_at)).tasks.push(t);
+    for (const t of tasks.data ?? []) if (taskDate(t)) at(keyOf(taskDate(t))).tasks.push(t);
     for (const day of map.values()) {
       day.events.sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-      day.tasks.sort((a, b) => a.due_at.localeCompare(b.due_at));
+      day.tasks.sort((a, b) => taskDate(a).localeCompare(taskDate(b)));
     }
     return map;
   }, [events.data, tasks.data]);
@@ -378,19 +407,20 @@ export function CalendarView() {
   };
 
   let body;
-  if (events.isPending || tasks.isPending) {
+  const queries = [events, upcoming, tasks];
+  if (queries.some((q) => q.isPending)) {
     body = (
       <div role="status" aria-label="Loading calendar" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_21rem]">
         <Skeleton className="h-[26rem]" />
         <Skeleton className="h-64" />
       </div>
     );
-  } else if (events.isError || tasks.isError) {
+  } else if (!events.data || !upcoming.data || !tasks.data) {
     body = (
       <ErrorState
         title="Couldn't load your calendar."
         description="Check your connection and try again."
-        action={{ label: 'Try again', onClick: () => void (events.isError ? events.refetch() : tasks.refetch()) }}
+        action={{ label: 'Try again', onClick: () => queries.forEach((q) => q.isError && void q.refetch()) }}
         className="py-16"
       />
     );
@@ -421,7 +451,7 @@ export function CalendarView() {
         </div>
         <div id={`${tabsId}-panel`} role="tabpanel" aria-labelledby={`${tabsId}-${TABS.indexOf(tab)}`}>
           {tab === 'Calendar' && <CalendarTab byDay={byDay} today={today} />}
-          {tab === 'Upcoming Meetings' && <UpcomingTab events={events.data} today={today} />}
+          {tab === 'Upcoming Meetings' && <UpcomingTab events={upcoming.data} />}
           {tab === 'Tasks & Actions' && <TasksTab tasks={tasks.data} />}
         </div>
       </>

@@ -1,11 +1,12 @@
 import { FolderKanban, Plus } from 'lucide-react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { ErrorState } from '@/components/ErrorState';
 import { PageFrame } from '@/components/PageFrame';
-import { Button, Skeleton, smallIconProps, useToast } from '@/components/ui';
+import { Button, Popover, Skeleton, smallIconProps } from '@/components/ui';
 import { formatRelativeTime } from '@/lib/format';
 import type { ProjectSummary } from '@/types/api';
-import { useProjects } from '../hooks/useProjects';
+import { useCreateProject, useProjects } from '../hooks/useProjects';
+import { NameForm } from './ProjectForms';
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
@@ -26,7 +27,12 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
       </span>
       <span className="mt-auto flex items-center justify-between gap-3 border-t border-hairline pt-3 text-2xs text-fg-muted">
         <span>
-          {plural(project.chat_count, 'chat')} · {plural(project.file_count, 'file')}
+          {/* Counts when the service gives them; otherwise whose project it is. */}
+          {project.chat_count !== undefined && project.file_count !== undefined
+            ? `${plural(project.chat_count, 'chat')} · ${plural(project.file_count, 'file')}`
+            : project.role === 'member'
+              ? 'Shared with you'
+              : 'Your project'}
         </span>
         <span className="shrink-0 tabular-nums">Updated {formatRelativeTime(project.updated_at)}</span>
       </span>
@@ -34,12 +40,36 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
   );
 }
 
+/** "New project": asks for its name, creates it (the user becomes its owner) and opens it. */
+function NewProjectButton({ compact = false }: { compact?: boolean }) {
+  const create = useCreateProject();
+  const navigate = useNavigate();
+  return (
+    <Popover
+      placement={compact ? 'bottom-end' : 'bottom-start'}
+      kind="dialog"
+      className="w-[min(20rem,calc(100vw-1.5rem))]"
+      trigger={(props) => (
+        <Button {...props} variant="primary" size={compact ? 'sm' : undefined} aria-label="New project" leadingIcon={<Plus {...smallIconProps} />}>
+          <span className={compact ? 'max-sm:sr-only' : undefined}>New project</span>
+        </Button>
+      )}
+    >
+      <NameForm
+        title="New project"
+        label="Project name"
+        placeholder="e.g. National Water Security Strategy"
+        submitLabel="Create project"
+        hint="You can add instructions, files and your team once it is created."
+        onSubmit={(name) => create.mutateAsync({ name }).then((project) => void navigate(`/projects/${project.id}`))}
+      />
+    </Popover>
+  );
+}
+
 /** `/projects`: the user's projects — each keeps its chats, context and archived files together. */
 export function ProjectsView() {
   const projects = useProjects();
-  const toast = useToast();
-  // TODO(backend): creating a project needs an endpoint; the button only says so for now.
-  const create = () => toast.show('Creating projects is coming soon.');
 
   let body;
   if (projects.isPending) {
@@ -67,9 +97,7 @@ export function ProjectsView() {
         <p className="max-w-[44ch] text-sm leading-relaxed text-fg-muted">
           A project keeps related chats, instructions and files together, so Lam always has the right context.
         </p>
-        <Button variant="primary" leadingIcon={<Plus {...smallIconProps} />} onClick={create}>
-          New project
-        </Button>
+        <NewProjectButton />
       </div>
     );
   } else {
@@ -89,11 +117,7 @@ export function ProjectsView() {
       title="Projects"
       subtitle="Chats, context and files for each piece of work, in one place."
       wide
-      actions={
-        <Button variant="primary" size="sm" leadingIcon={<Plus {...smallIconProps} />} onClick={create}>
-          <span className="max-sm:sr-only">New project</span>
-        </Button>
-      }
+      actions={<NewProjectButton compact />}
     >
       {body}
     </PageFrame>

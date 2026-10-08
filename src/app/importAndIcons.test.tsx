@@ -101,11 +101,13 @@ describe('Archives: file-type icons', () => {
     }
   });
 
-  it('a file added locally gets the mark of its extension', async () => {
+  it('an uploaded file gets the mark of its extension, and a type the Archives do not take is refused with the reason', async () => {
     await openArchives();
     fireEvent.change(screen.getByLabelText('Choose files to add'), { target: { files: [new File(['x'], 'Notes.docx'), new File(['y'], 'Readme.txt')] } });
+    await screen.findByRole('heading', { level: 3, name: 'Notes.docx' }, find);
     expect(iconOf('Notes.docx').dataset.fileIcon).toBe('word');
-    expect(iconOf('Readme.txt').dataset.fileIcon).toBe('file');
+    expect(await screen.findByText('Readme.txt: Supported files: PDF, DOCX, PPTX, PNG, JPG, GIF, WEBP.', {}, find)).toBeTruthy();
+    expect(screen.queryByRole('heading', { level: 3, name: 'Readme.txt' })).toBeNull();
   });
 });
 

@@ -68,7 +68,7 @@ describe('Projects', () => {
     }
   });
 
-  it('Archives is a file library filtered by type and by name, and adds picked files locally without claiming an upload', async () => {
+  it('Archives is a file library filtered by type and by name, and uploads picked files, saying which ones Lam can read', async () => {
     renderApp('/projects/water-security');
     fireEvent.click(await screen.findByRole('tab', { name: /Archives/ }, find));
     const files = () => within(screen.getByRole('list', { name: 'Files' })).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
@@ -87,11 +87,15 @@ describe('Projects', () => {
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     fireEvent.change(screen.getByLabelText('Choose files to add'), { target: { files: [new File(['x'], 'Q3 review.pptx'), new File(['y'], 'photo.png', { type: 'image/png' })] } });
-    expect(files().slice(0, 2)).toEqual(['Q3 review.pptx', 'photo.png']);
-    expect(screen.getAllByText('Not uploaded')).toHaveLength(2);
-    expect(screen.getAllByText('Readable by Lam').length).toBe(8); // a picked file is never shown as read
-    expect(screen.getByText(/they are not uploaded or read by Lam yet/)).toBeTruthy();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(files()).toHaveLength(11));
+    expect(files()).toEqual(expect.arrayContaining(['Q3 review.pptx', 'photo.png']));
+    const card = (name: string) => screen.getByRole('heading', { level: 3, name }).closest('article')!;
+    expect(within(card('Q3 review.pptx')).getByText('Stored')).toBeTruthy(); // kept for the team; not claimed as read
+    expect(within(card('photo.png')).getByText('Readable by Lam')).toBeTruthy();
+    expect(screen.getAllByText('Readable by Lam').length).toBe(9);
+    expect(screen.getByText(/Lam reads PDFs and images; Word and PowerPoint files are stored for the team/)).toBeTruthy();
+    expect(within(card('photo.png')).getByRole('button', { name: 'Actions for photo.png' })).toBeTruthy(); // download, move, delete
+    expect(fetchSpy).not.toHaveBeenCalled(); // the sample (mock) service
     fetchSpy.mockRestore();
   });
 

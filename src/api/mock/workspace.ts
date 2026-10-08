@@ -1,4 +1,4 @@
-import type { ArchiveFile, CalendarEvent, CalendarTask, Project, ProjectChat, ProjectMember, ProjectSummary } from '@/types/api';
+import type { ArchiveFile, CalendarEvent, CalendarTask, Project, ProjectChat, ProjectContact, ProjectMember, ProjectSummary } from '@/types/api';
 import { ApiError } from '../errors';
 import type { CalendarService, ProjectsService } from '../services';
 import { clone } from './utils';
@@ -30,7 +30,7 @@ function file(now: number, id: string, name: string, kind: ArchiveFile['kind'], 
 }
 
 function createProjects(now: number): Project[] {
-  const projects: Omit<Project, 'chat_count' | 'file_count' | 'members'>[] = [
+  const projects: Omit<Project, 'chat_count' | 'file_count' | 'members' | 'folders' | 'contacts' | 'role'>[] = [
     {
       id: 'water-security',
       name: 'National Water Security Strategy',
@@ -90,8 +90,29 @@ function createProjects(now: number): Project[] {
       files: [],
     },
   ];
-  return projects.map((p) => ({ ...p, chat_count: p.chats.length, file_count: p.files.length, members: (MEMBERS[p.id] ?? []).map((m) => ({ ...m })) }));
+  return projects.map((p) => ({
+    ...p,
+    role: 'owner' as const,
+    chat_count: p.chats.length,
+    file_count: p.files.length,
+    folders: [],
+    members: (MEMBERS[p.id] ?? []).map((m) => ({ ...m })),
+    // The sample projects' contacts are the "contact" entries of their sample context.
+    contacts: p.sources.filter((s) => s.type === 'contact').map((s): ProjectContact => ({ id: s.id, name: s.title, detail: s.detail, email: null })),
+  }));
 }
+
+/** What the Archives accept, as the backend does. */
+const FILE_KINDS: Record<string, ArchiveFile['kind']> = {
+  PDF: 'document',
+  DOCX: 'document',
+  PPTX: 'presentation',
+  PNG: 'image',
+  JPG: 'image',
+  JPEG: 'image',
+  GIF: 'image',
+  WEBP: 'image',
+};
 
 /**
  * Who each sample project is shared with: the same people who appear as file owners in its Archives and
@@ -126,8 +147,46 @@ export function createMockProjects({
   respond = () => Promise.resolve(),
   chats = {},
   storage,
-}: { now?: () => number; respond?: () => Promise<void>; chats?: Record<string, ProjectChat[]>; storage?: Storage } = {}): ProjectsService {
+  findContact = async () => null,
+}: {
+  now?: () => number;
+  respond?: () => Promise<void>;
+  chats?: Record<string, ProjectChat[]>;
+  storage?: Storage;
+  /** One of the user's own contacts, by id (My Contacts), for linking it to a project. */
+  findContact?: (id: string) => Promise<ProjectContact | null>;
+} = {}): ProjectsService {
   const projects = createProjects(now());
+  /** What was uploaded here, so it can be downloaded again in this session. */
+  const uploads = new Map<string, File>();
+  let serial = 0;
+  const nextId = (prefix: string) => `${prefix}-${now().toString(36)}-${(serial += 1)}`;
+  /** The project, after the simulated request, or 404. */
+  const open = async (projectId: string) => {
+    await respond();
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) throw new ApiError(404, 'not_found', 'Project not found.');
+    return project;
+  };
+  const saved = (project: Project) => {
+    project.chat_count = project.chats.length;
+    project.file_count = project.files.length;
+    project.updated_at = new Date(now()).toISOString();
+    return clone(project);
+  };
+  const folderOf = (project: Project, folderId: string) => {
+    const folder = project.folders.find((f) => f.id === folderId);
+    if (!folder) throw new ApiError(404, 'not_found', 'Folder not found.');
+    return folder;
+  };
+  const fileOf = (project: Project, fileId: string) => {
+    const file = project.files.find((f) => f.id === fileId);
+    if (!file) throw new ApiError(404, 'not_found', 'File not found.');
+    return file;
+  };
+  const taken = (project: Project, name: string, exceptId?: string) => {
+    if (project.folders.some((f) => f.name === name && f.id !== exceptId)) throw new ApiError(409, 'conflict', 'A folder with this name already exists in the project.');
+  };
   const links = loadLinks(storage);
   for (const project of projects) {
     project.chats = [...(links[project.id] ?? []), ...(chats[project.id] ?? [])];
@@ -136,9 +195,135 @@ export function createMockProjects({
   return {
     async list() {
       await respond();
-      return projects.map(({ id, name, description, updated_at, chat_count, file_count }): ProjectSummary =>
-        clone({ id, name, description, updated_at, chat_count, file_count }),
+      return projects.map(({ id, name, description, updated_at, chat_count, file_count, role }): ProjectSummary =>
+        clone({ id, name, description, updated_at, chat_count, file_count, role }),
       );
+    },
+    async create({ name, instructions = '', summary = '' }) {
+      await respond();
+      const project: Project = {
+        id: nextId('p'),
+        name: name.trim(),
+        description: summary,
+        updated_at: new Date(now()).toISOString(),
+        role: 'owner',
+        chat_count: 0,
+        file_count: 0,
+        instructions,
+        chats: [],
+        sources: [],
+        files: [],
+        folders: [],
+        members: [{ id: 'm-joseph', name: 'Joseph Boutros', email: null, role: 'owner' }],
+        contacts: [],
+      };
+      projects.unshift(project);
+      const { id, description, updated_at, chat_count, file_count, role } = project;
+      return clone({ id, name: project.name, description, updated_at, chat_count, file_count, role });
+    },
+    async rename(id, name) {
+      const project = await open(id);
+      project.name = name.trim();
+      return saved(project);
+    },
+    async remove(id) {
+      const project = await open(id);
+      projects.splice(projects.indexOf(project), 1);
+    },
+    async renameChat(projectId, chatId, title) {
+      const project = await open(projectId);
+      const chat = project.chats.find((c) => c.id === chatId);
+      if (!chat) throw new ApiError(404, 'not_found', 'Conversation not found');
+      chat.title = title.trim();
+      return saved(project);
+    },
+    async deleteChat(projectId, chatId) {
+      const project = await open(projectId);
+      if (!project.chats.some((c) => c.id === chatId)) throw new ApiError(404, 'not_found', 'Conversation not found');
+      project.chats = project.chats.filter((c) => c.id !== chatId);
+      return saved(project);
+    },
+    async linkContact(projectId, contactId) {
+      const project = await open(projectId);
+      const contact = await findContact(contactId);
+      if (!contact) throw new ApiError(404, 'not_found', 'Contact not found.');
+      if (project.contacts.some((c) => c.id === contact.id)) throw new ApiError(409, 'conflict', 'This contact is already linked to the project.');
+      project.contacts = [...project.contacts, contact];
+      return saved(project);
+    },
+    async unlinkContact(projectId, contactId) {
+      const project = await open(projectId);
+      if (!project.contacts.some((c) => c.id === contactId)) throw new ApiError(404, 'not_found', 'Contact not found in this project.');
+      project.contacts = project.contacts.filter((c) => c.id !== contactId);
+      return saved(project);
+    },
+    async createFolder(projectId, name) {
+      const project = await open(projectId);
+      taken(project, name.trim());
+      project.folders = [...project.folders, { id: nextId('fo'), name: name.trim() }].sort((a, b) => a.name.localeCompare(b.name));
+      return saved(project);
+    },
+    async renameFolder(projectId, folderId, name) {
+      const project = await open(projectId);
+      const folder = folderOf(project, folderId);
+      taken(project, name.trim(), folderId);
+      folder.name = name.trim();
+      return saved(project);
+    },
+    async deleteFolder(projectId, folderId) {
+      const project = await open(projectId);
+      folderOf(project, folderId);
+      project.folders = project.folders.filter((f) => f.id !== folderId);
+      for (const file of project.files) if (file.folder_id === folderId) file.folder_id = null; // its files stay in the project
+      return saved(project);
+    },
+    async uploadFile(projectId, file, folderId) {
+      const project = await open(projectId);
+      if (folderId) folderOf(project, folderId);
+      const extension = (file.name.includes('.') ? file.name.split('.').pop()! : '').toUpperCase();
+      const kind = FILE_KINDS[extension];
+      if (!kind) throw new ApiError(415, 'unsupported', 'Supported files: PDF, DOCX, PPTX, PNG, JPG, GIF, WEBP.');
+      if (file.size === 0) throw new ApiError(400, 'empty', 'The file is empty.');
+      const id = nextId('f');
+      uploads.set(id, file);
+      project.files = [
+        {
+          id,
+          name: file.name,
+          kind,
+          extension,
+          size_bytes: file.size,
+          uploaded_at: new Date(now()).toISOString(),
+          uploaded_by: 'Joseph Boutros',
+          folder_id: folderId ?? null,
+          // As the backend: PDFs and images are readable by the assistant; DOCX and PPTX are stored only.
+          status: extension === 'DOCX' || extension === 'PPTX' ? 'stored' : 'ready',
+        },
+        ...project.files,
+      ];
+      return saved(project);
+    },
+    async moveFile(projectId, fileId, folderId) {
+      const project = await open(projectId);
+      const file = fileOf(project, fileId);
+      if (folderId) folderOf(project, folderId);
+      file.folder_id = folderId;
+      return saved(project);
+    },
+    async deleteFile(projectId, fileId) {
+      const project = await open(projectId);
+      fileOf(project, fileId);
+      project.files = project.files.filter((f) => f.id !== fileId);
+      uploads.delete(fileId);
+      return saved(project);
+    },
+    async fileDownloadUrl(projectId, fileId) {
+      const project = await open(projectId);
+      fileOf(project, fileId);
+      const file = uploads.get(fileId);
+      // The sample library has no file behind its entries.
+      if (!file) throw new ApiError(404, 'not_found', "This sample file can't be downloaded.");
+      return URL.createObjectURL(file);
     },
     async linkChat(projectId, chat) {
       await respond();
@@ -248,10 +433,23 @@ function createCalendar(now: number): { events: CalendarEvent[]; tasks: Calendar
 
 export function createMockCalendar({ now = Date.now, respond = () => Promise.resolve() } = {}): CalendarService {
   const { events, tasks } = createCalendar(now());
+  const starts = (a: CalendarEvent, b: CalendarEvent) => a.starts_at.localeCompare(b.starts_at);
   return {
     async events() {
       await respond();
-      return clone(events);
+      return clone(events).sort(starts);
+    },
+    async upcoming() {
+      await respond();
+      // From the start of today (the backend's is from this instant): the sample day stays the same all day.
+      const from = new Date(dayStart(now(), 0)).toISOString();
+      return clone(events.filter((e) => e.starts_at >= from)).sort(starts);
+    },
+    async event(id) {
+      await respond();
+      const event = events.find((e) => e.id === id);
+      if (!event) throw new ApiError(404, 'not_found', 'Event not found.');
+      return clone(event);
     },
     async tasks() {
       await respond();

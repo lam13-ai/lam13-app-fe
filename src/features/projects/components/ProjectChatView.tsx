@@ -70,7 +70,7 @@ function ProjectDetails({ project, open, onClose }: { project: Project; open: bo
       <ScrollArea className="min-h-0 flex-1 px-5 py-5">
         <div {...tabPanelProps(id, SECTIONS, section)}>
           {section === 'Instructions' && <Instructions project={project} />}
-          {section === 'Archives' && <Archives files={project.files} compact />}
+          {section === 'Archives' && <Archives project={project} compact />}
         </div>
       </ScrollArea>
     </Drawer>
@@ -82,11 +82,14 @@ function ProjectDetails({ project, open, onClose }: { project: Project; open: bo
  * ordinary chat view, with the project in its header and the project's details one click away.
  */
 export function ProjectChatView({
+  projectId: routeProjectId,
   project,
   conversationId,
   conversation,
   viewKey,
 }: {
+  /** From the URL: known before the project has loaded, so a message sent early still goes to this project. */
+  projectId: string;
   /** Undefined while the project loads. */
   project: Project | undefined;
   conversationId?: string;
@@ -111,7 +114,8 @@ export function ProjectChatView({
         conversationId={conversationId}
         conversation={conversation}
         scope={{
-          path: (id) => (project ? projectChatPath(project.id, id) : `/c/${id}`),
+          projectId: routeProjectId,
+          path: (id) => projectChatPath(routeProjectId, id),
           newTitle: 'New chat',
           context: project ? (
             // The popover's own wrapper is shrink-to-fit: cap it so a long project name truncates instead of widening the header.

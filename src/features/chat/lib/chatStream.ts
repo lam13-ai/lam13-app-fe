@@ -46,6 +46,8 @@ export interface SendOptions {
   clientMessageId?: string;
   /** Identifies the new-chat view that started a lazily created conversation. */
   origin?: string;
+  /** The chat is in this project: a new one is created there, and it never shows in the personal sidebar. */
+  projectId?: string;
 }
 
 /**
@@ -64,6 +66,8 @@ export function createChatActions({ api, queryClient }: Deps) {
     key: string;
     draft: StreamDraft;
     origin?: string;
+    /** The chat's project, if any: its chat list is refreshed when the turn ends (new title, new time). */
+    projectId?: string;
     open: (signal: AbortSignal) => Promise<EventStream>;
     /** A new chat's optimistic sidebar row, swapped for the real conversation when it is created. */
     pending?: Conversation;
@@ -150,6 +154,8 @@ export function createChatActions({ api, queryClient }: Deps) {
             } else {
               upsertConversation(queryClient, event.data);
             }
+            // A new chat in a project: the project's own list shows it.
+            if (event.data.project_id) void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(event.data.project_id) });
             store().rekey(key, id);
             key = id;
             if (params.origin) store().setCreated({ id, origin: params.origin });
@@ -210,6 +216,7 @@ export function createChatActions({ api, queryClient }: Deps) {
               { updated_at: new Date().toISOString(), last_message_preview: draft.assistant.content.slice(0, 80) },
               { toTop: true },
             );
+            if (params.projectId) void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(params.projectId) });
             release();
             break;
           case 'error':
@@ -301,7 +308,7 @@ export function createChatActions({ api, queryClient }: Deps) {
     // A fresh new chat shows in the sidebar at once, titled from the message; it becomes the real
     // conversation (same row) when the server creates it.
     const pending: Conversation | undefined =
-      !conversationId && input.kind === 'text'
+      !conversationId && input.kind === 'text' && !options.projectId
         ? { id: `local:c:${clientId}`, title: titleFromMessage(content), created_at: createdAt, updated_at: createdAt, last_message_preview: null }
         : undefined;
     if (pending) upsertConversation(queryClient, pending);
@@ -309,6 +316,7 @@ export function createChatActions({ api, queryClient }: Deps) {
     return run({
       key,
       origin: options.origin,
+      projectId: options.projectId,
       pending,
       draft: { conversationId: conversationId ?? null, user, assistant, status: 'sending', error: null, title: null },
       open: (signal) =>
@@ -324,6 +332,7 @@ export function createChatActions({ api, queryClient }: Deps) {
                 effort,
                 ...(input.attachments?.length && { attachment_ids: input.attachments.map((a) => a.id) }),
                 ...(input.meetingIds?.length && { meeting_ids: input.meetingIds }),
+                ...(options.projectId && { project_id: options.projectId }),
               },
           { signal },
         ),

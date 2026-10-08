@@ -42,7 +42,9 @@ function ProjectChatRoute({ projectId, conversationId }: { projectId: string; co
   }
   // As in ChatRoute: a new chat keeps its view when it moves to the created conversation's URL.
   const viewKey = (location.state as { viewKey?: string } | null)?.viewKey ?? conversationId ?? `new:${location.key}`;
-  return <ProjectChatView key={viewKey} viewKey={viewKey} project={project.data} conversationId={conversationId} conversation={conversation.data} />;
+  return (
+    <ProjectChatView key={viewKey} viewKey={viewKey} projectId={projectId} project={project.data} conversationId={conversationId} conversation={conversation.data} />
+  );
 }
 
 /** `/projects` — the list; `/projects/:projectId` — one project's workspace; and its chats (above). */

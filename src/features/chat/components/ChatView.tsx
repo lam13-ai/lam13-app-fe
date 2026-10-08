@@ -56,6 +56,8 @@ export interface ChatScope {
   context: ReactNode;
   /** Header controls (e.g. Project details). */
   actions?: ReactNode;
+  /** The chats here belong to this project: sent with every message, so a new chat is created in it. */
+  projectId?: string;
 }
 
 /**
@@ -98,6 +100,7 @@ export function ChatView({ conversationId, conversation, viewKey, scope }: ChatV
   }, [askedMeeting, location.pathname, navigate]);
 
   const scopePath = scope?.path;
+  const projectId = scope?.projectId;
   const history = useMessages(key, effectiveId);
   const active = useStreamStore((s) => s.active[key]);
   const failures = useStreamStore((s) => s.failures);
@@ -122,7 +125,7 @@ export function ChatView({ conversationId, conversation, viewKey, scope }: ChatV
     const meetingIds = meeting ? [meeting.id] : undefined;
     if (meeting) useComposerStore.getState().clearMeeting(draftKey);
     if (files.drafts.length === 0) {
-      void actions.send(conversationId, text, { origin, meetingIds });
+      void actions.send(conversationId, text, { origin, meetingIds, projectId });
       return;
     }
     // Upload first (the backend needs document ids), then send; a failed upload restores the text.
@@ -130,7 +133,7 @@ export function ChatView({ conversationId, conversation, viewKey, scope }: ChatV
       try {
         const attachments = await files.upload(conversationId ?? null);
         files.clear();
-        await actions.send(conversationId, text, { origin, attachments, meetingIds });
+        await actions.send(conversationId, text, { origin, attachments, meetingIds, projectId });
       } catch (error) {
         useComposerStore.getState().setDraft(draftKey, text);
         if (meeting) useComposerStore.getState().setMeeting(draftKey, meeting);
@@ -195,7 +198,7 @@ export function ChatView({ conversationId, conversation, viewKey, scope }: ChatV
           error: history.isFetchNextPageError,
           load: () => void history.fetchNextPage(),
         }}
-        onRetry={active ? undefined : (message) => void actions.retry(key, message, history.messages, { origin })}
+        onRetry={active ? undefined : (message) => void actions.retry(key, message, history.messages, { origin, projectId })}
         streaming={Boolean(active)}
         activity={activity}
         working={active?.phase === 'solving'}
@@ -232,7 +235,7 @@ export function ChatView({ conversationId, conversation, viewKey, scope }: ChatV
               !env.features.voiceNotes
                 ? undefined
                 : capabilities.voiceNotes
-                  ? (recording, signal) => actions.sendVoice(conversationId, recording, { origin, signal })
+                  ? (recording, signal) => actions.sendVoice(conversationId, recording, { origin, signal, projectId })
                   : capabilities.transcription
                     ? transcribeAndSend
                     : undefined

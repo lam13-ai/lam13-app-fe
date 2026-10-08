@@ -52,8 +52,9 @@ export type SendMessageBody =
   /**
    * `attachment_ids`: images previously uploaded via `attachments.upload` (api-contract.md §4.7).
    * `meeting_ids`: meetings added as context for this message.
+   * `project_id`: the project this chat belongs to (a new chat is created in it; omitted for a personal chat).
    */
-  | (SendMessageBase & { kind: 'text'; content: string; attachment_ids?: string[]; meeting_ids?: string[] })
+  | (SendMessageBase & { kind: 'text'; content: string; attachment_ids?: string[]; meeting_ids?: string[]; project_id?: string })
   | (SendMessageBase & { kind: 'voice'; audio_id: string });
 
 /** Fields of `POST /audio` (multipart/form-data, api-contract.md §4.4). */
@@ -242,23 +243,72 @@ export interface ApiCapabilities {
   transcription: boolean;
 }
 
-/** Projects: a workspace's chats, context and archived files. Frontend-only for now (a local mock in both adapters). */
+/**
+ * Projects: a workspace's chats, instructions, archived files, team and contacts. The HTTP adapter calls
+ * the backend (`/projects…`); the mock adapter serves sample data. Every change resolves with the project
+ * as it is afterwards. Rejects with ApiError: 404 (no such project, or not a member), 403 (a member doing
+ * an owner-only thing), 409 (already there), 4xx with the backend's own message otherwise.
+ */
 export interface ProjectsService {
+  /** GET /projects — only projects the user owns or is a member of. */
   list(): Promise<ProjectSummary[]>;
+  /** GET /projects/{id} with its chats, files, folders, members and contacts. */
   get(id: string): Promise<Project>;
+  /** POST /projects — the signed-in user becomes the owner. */
+  create(body: { name: string; instructions?: string; summary?: string }): Promise<ProjectSummary>;
+  /** PATCH /projects/{id} `{name}` — owner only. */
+  rename(id: string, name: string): Promise<Project>;
+  /** DELETE /projects/{id} — owner only. Removes its chats, files and folders too. */
+  remove(id: string): Promise<void>;
+  /** PATCH /projects/{id} `{instructions}`. */
   saveInstructions(id: string, instructions: string): Promise<Project>;
-  /** Adds a conversation to a project (no-op when it is already there). */
+  /**
+   * A conversation opened under the project is the project's. The backend ties a chat to its project when
+   * it is created (`project_id` on the first message), so over HTTP this only reloads the project.
+   */
   linkChat(projectId: string, chat: { id: string; title: string }): Promise<Project>;
-  /** Adds a member by email (409 when they already are one). Sends no invitation. */
+  /** PATCH /projects/{id}/chats/{chatId} `{title}`. */
+  renameChat(projectId: string, chatId: string, title: string): Promise<Project>;
+  /** DELETE /projects/{id}/chats/{chatId} — the chat's creator or the project owner (403 otherwise). */
+  deleteChat(projectId: string, chatId: string): Promise<Project>;
+  /** POST /projects/{id}/members `{email}` — an existing Lam13 account (404 otherwise; 409 when already in). */
   addMember(projectId: string, member: { email: string; role: 'member' }): Promise<Project>;
-  /** Removes a member (403 for the owner). */
+  /** DELETE /projects/{id}/members/{memberId} — owner only; the owner cannot be removed (409). */
   removeMember(projectId: string, memberId: string): Promise<Project>;
+  /** POST /projects/{id}/contacts `{contact_id}` — one of the user's own contacts (409 when already linked). */
+  linkContact(projectId: string, contactId: string): Promise<Project>;
+  /** DELETE /projects/{id}/contacts/{contactId} — whoever linked it, or the owner (403 otherwise). */
+  unlinkContact(projectId: string, contactId: string): Promise<Project>;
+  /** POST /projects/{id}/folders `{name}` (409 when the name is taken). */
+  createFolder(projectId: string, name: string): Promise<Project>;
+  /** PATCH /projects/{id}/folders/{folderId} `{name}`. */
+  renameFolder(projectId: string, folderId: string, name: string): Promise<Project>;
+  /** DELETE /projects/{id}/folders/{folderId} — owner only; its files stay in the project. */
+  deleteFolder(projectId: string, folderId: string): Promise<Project>;
+  /** POST /projects/{id}/files (multipart `file`, optional `folder_id`) — PDF, DOCX, PPTX or an image, up to 50 MB. */
+  uploadFile(projectId: string, file: File, folderId?: string | null): Promise<Project>;
+  /** PATCH /projects/{id}/files/{fileId} `{folder_id}` — null takes it out of its folder. */
+  moveFile(projectId: string, fileId: string, folderId: string | null): Promise<Project>;
+  /** DELETE /projects/{id}/files/{fileId} — its uploader or the owner (403 otherwise). */
+  deleteFile(projectId: string, fileId: string): Promise<Project>;
+  /** GET /projects/{id}/files/{fileId}/download — a link that works for a few minutes. */
+  fileDownloadUrl(projectId: string, fileId: string): Promise<string>;
 }
 
-/** Calendar: upcoming meetings and the tasks that came out of them. Frontend-only for now. */
+/**
+ * Calendar: scheduled events, meetings already recorded, and the actions that came out of them. The HTTP
+ * adapter calls the backend (`/calendar…`, read-only); the mock adapter serves sample data.
+ */
 export interface CalendarService {
+  /** GET /calendar/events — the user's own events and recorded meetings, and their projects' events. */
   events(): Promise<CalendarEvent[]>;
+  /** GET /calendar/events/upcoming — what starts from now on, soonest first. */
+  upcoming(): Promise<CalendarEvent[]>;
+  /** GET /calendar/events/{id} — 404 for someone else's. */
+  event(id: string): Promise<CalendarEvent>;
+  /** GET /calendar/tasks — the action items of the user's meetings. */
   tasks(): Promise<CalendarTask[]>;
+  /** PATCH /meetings/{meetingId}/action-items/{index} — the task's id names both. */
   setTaskCompleted(id: string, completed: boolean): Promise<CalendarTask>;
 }
 

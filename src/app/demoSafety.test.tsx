@@ -10,7 +10,7 @@ import { renderApp } from './testUtils';
  * Safety of the demo layer in the real (HTTP) adapter:
  * 1. a demo conversation never reaches the backend's upload or transcription endpoints — and real
  *    conversations still do, with the same requests as before;
- * 2. the adapter (and so the app) starts when browser storage is blocked.
+ * 2. the adapter (and so the app) starts when browser storage is blocked, and keeps nothing about projects there.
  */
 
 const TOKEN = 'test-token-not-real';
@@ -110,7 +110,7 @@ describe('demo conversations never reach the upload or transcription endpoints',
 
   it('in the app: attaching a file in a demo chat sends nothing to the backend and says why; the text is kept', async () => {
     const { calls, to } = backend();
-    renderApp('/projects/water-security/c/ws-c1', { api: createHttpAdapter(), auth: { accessToken: TOKEN } });
+    renderApp('/c/ws-c1', { api: createHttpAdapter(), auth: { accessToken: TOKEN } });
     await screen.findByRole('log', { name: 'Conversation' }, find);
     { const pill = screen.queryByRole('button', { name: /ask lam13/i }); if (pill) fireEvent.click(pill); }
     fireEvent.change(document.querySelector('input[type="file"][hidden]')!, { target: { files: [pdf()] } });
@@ -130,7 +130,7 @@ describe('demo conversations never reach the upload or transcription endpoints',
   it('in the app: recording in a demo chat is not transcribed by the backend and says why', async () => {
     media = installFakeMedia();
     const { to } = backend();
-    renderApp('/projects/water-security/c/ws-c1', { api: createHttpAdapter(), auth: { accessToken: TOKEN } });
+    renderApp('/c/ws-c1', { api: createHttpAdapter(), auth: { accessToken: TOKEN } });
     await screen.findByRole('log', { name: 'Conversation' }, find);
     await act(async () => fireEvent.click(await screen.findByRole('button', { name: 'Record voice message' }, find)));
     await screen.findByRole('button', { name: 'Stop recording' });
@@ -156,64 +156,28 @@ describe('blocked browser storage', () => {
       restore: () => (original ? Object.defineProperty(globalThis, 'localStorage', original) : delete (globalThis as { localStorage?: Storage }).localStorage),
     };
   }
-  /** A storage whose property can be read but whose every operation throws (quota / policy). */
-  const brokenStorage = () => {
-    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
-    const fail = () => {
-      throw new DOMException('The operation is insecure.', 'SecurityError');
-    };
-    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: fail, setItem: fail, removeItem: fail, clear: fail, key: fail, length: 0 } });
-    return () => (original ? Object.defineProperty(globalThis, 'localStorage', original) : undefined);
-  };
+  const PROJECT = { id: 'p1', name: 'Water strategy', instructions: '', summary: '', owner_id: 'u1', role: 'owner', created_at: '2026-10-01T09:00:00', updated_at: '2026-10-07T12:00:00' };
 
-  it('creating the adapter does not throw when reading localStorage throws, and projects work for the session', async () => {
+  it('the real adapter does not use browser storage at all: projects and their chats are the backend’s', async () => {
     const blocked = blockStorage();
     try {
+      const { to } = backend((call) => (call.url === '/projects' ? Response.json([PROJECT]) : undefined));
       const api = createHttpAdapter();
-      expect(blocked.access).toHaveBeenCalled(); // the blocked property was reached — and survived
-      expect((await api.projects.list()).length).toBeGreaterThan(0);
-      const before = (await api.projects.get('ai-strategy')).chats.length;
-      const after = await api.projects.linkChat('ai-strategy', { id: 'real-1', title: 'A real chat' });
-      expect(after.chats).toHaveLength(before + 1); // kept in memory when it cannot be stored
+      expect((await api.projects.list()).map((p) => p.name)).toEqual(['Water strategy']);
+      expect(to('/projects')).toHaveLength(1);
+      expect(blocked.access).not.toHaveBeenCalled(); // nothing about projects is kept in this browser
     } finally {
       blocked.restore();
     }
   });
 
-  it('storage that can be read as a property but fails on every operation is tolerated too', async () => {
-    const restore = brokenStorage();
-    try {
-      const api = createHttpAdapter();
-      const after = await api.projects.linkChat('ai-strategy', { id: 'real-2', title: 'Another chat' });
-      expect(after.chats.some((c) => c.id === 'real-2')).toBe(true);
-    } finally {
-      restore();
-    }
-  });
-
-  it('with working storage a link is still persisted and read back by a new adapter', async () => {
-    const store = new Map<string, string>();
-    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
-    Object.defineProperty(globalThis, 'localStorage', {
-      configurable: true,
-      value: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) },
-    });
-    try {
-      await createHttpAdapter().projects.linkChat('ai-strategy', { id: 'real-3', title: 'Persisted chat' });
-      expect([...store.keys()]).toEqual(['lam13.projectChats.v1']);
-      expect((await createHttpAdapter().projects.get('ai-strategy')).chats.some((c) => c.id === 'real-3')).toBe(true); // as after a reload
-    } finally {
-      if (original) Object.defineProperty(globalThis, 'localStorage', original);
-    }
-  });
-
   it('the app renders with the real adapter when storage is blocked', async () => {
-    backend();
+    backend((call) => (call.url === '/projects' ? Response.json([PROJECT]) : undefined));
     const blocked = blockStorage();
     try {
       renderApp('/projects', { api: createHttpAdapter(), auth: { accessToken: TOKEN } });
       expect(await screen.findByRole('heading', { level: 1, name: 'Projects' }, find)).toBeTruthy();
-      expect(within(await screen.findByRole('list', { name: 'Projects' }, find)).getAllByRole('link').length).toBeGreaterThan(0);
+      expect(within(await screen.findByRole('list', { name: 'Projects' }, find)).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/projects/p1']);
     } finally {
       blocked.restore();
     }

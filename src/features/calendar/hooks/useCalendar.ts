@@ -7,6 +7,11 @@ export function useCalendarEvents() {
   return useQuery({ queryKey: queryKeys.calendar.events(), queryFn: () => api.calendar.events() });
 }
 
+export function useCalendarUpcoming() {
+  const api = useApi();
+  return useQuery({ queryKey: queryKeys.calendar.upcoming(), queryFn: () => api.calendar.upcoming() });
+}
+
 export function useCalendarTasks() {
   const api = useApi();
   return useQuery({ queryKey: queryKeys.calendar.tasks(), queryFn: () => api.calendar.tasks() });
