@@ -70,12 +70,12 @@ describe('the request', () => {
       }
       return json(finished);
     });
-    const files = ['a.png', 'b.png', 'c.png', 'd.png', 'e.png'].map(file);
+    const files = ['a.png', 'b.png', 'c.png'].map(file);
     const result = await generatePresentation(files, { config: config() });
     expect(seen!.url).toBe('https://api.test/generate/pptx/deck/start');
     expect(seen!.init!.method).toBe('POST');
     const body = seen!.init!.body as FormData;
-    expect(body.getAll(FILE_FIELD).map((f) => (f as File).name)).toEqual(['a.png', 'b.png', 'c.png', 'd.png', 'e.png']);
+    expect(body.getAll(FILE_FIELD).map((f) => (f as File).name)).toEqual(['a.png', 'b.png', 'c.png']);
     expect(seen!.init!.headers).toEqual({}); // no Content-Type (the browser adds the boundary), and no token unless asked for
     expect(result.downloadUrl).toBe('https://api.test/studio/download/img2pptx__1');
   });
@@ -113,7 +113,7 @@ describe('the request', () => {
 
   it('non-2xx start responses (e.g. the service refusing too many images or a wrong format) become an http error', async () => {
     for (const status of [400, 413, 415, 422, 500, 502, 503]) {
-      const fetch = service(async () => new Response(JSON.stringify({ detail: 'more than 5 images' }), { status }));
+      const fetch = service(async () => new Response(JSON.stringify({ detail: 'at most 3 images per deck, you sent 4' }), { status }));
       const error = await rejection(generatePresentation([file()], { config: config() }));
       expect([error instanceof PresentationError, error.category]).toEqual([true, 'http']);
       expect(fetch).toHaveBeenCalledTimes(1); // refused at the start: nothing is polled

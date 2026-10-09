@@ -2,25 +2,21 @@ import { Download, FileText } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button, Spinner, smallIconProps } from '@/components/ui';
 import { formatElapsed, formatWhen, statusesAt, type GenerationState } from '../lib/generation';
-import { ImagePreviewGrid, type SelectedImage } from './ImageToPptView';
 
 /**
- * The submitted run (the Kothar frontend's `ProcessingFlow`, on this app's surface): the images that were
- * sent, one status line that advances in place, then the result or the failure.
+ * One run's answer (the Kothar frontend's `ProcessingFlow`, on this app's surface): one status line that
+ * advances in place, then the result or the failure.
  *
  * Stage copy is UX progress only — high-level phases of making a deck by elapsed time, never backend telemetry.
  */
 export function ProcessingFlow({
-  images,
   generation,
   onRetry,
-  onStartOver,
   onCancel,
 }: {
-  images: SelectedImage[];
   generation: Extract<GenerationState, { startedAt: number }>;
-  onRetry: () => void;
-  onStartOver: () => void;
+  /** Omitted when the images are no longer held (a result restored after a reload). */
+  onRetry?: () => void;
   /** Development-only escape hatch out of an in-flight run (as in the source implementation). */
   onCancel: () => void;
 }) {
@@ -40,21 +36,14 @@ export function ProcessingFlow({
   const currentStatus = statusesAt(elapsed).at(-1);
 
   return (
-    <div className="flex flex-col gap-5">
-      <section aria-label="Submitted images">
-        <p className="eyebrow mb-2">
-          {images.length} image{images.length > 1 ? 's' : ''} submitted
-        </p>
-        <ImagePreviewGrid images={images} />
-      </section>
-
+    <div className="flex max-w-[85%] flex-col gap-3 md:max-w-[75%]">
       {/* One persistent box for the whole run — the text updates in place rather than stacking a message per stage. */}
-      <section aria-label="Progress" className="rounded-card border border-border bg-bg-subtle p-4">
-        <p className="flex items-center gap-2.5 text-sm">
-          {processing && <Spinner size={14} state="active" />}
-          <span>{currentStatus}</span>
-        </p>
-        {processing && (
+      {processing && (
+        <section aria-label="Presentation progress" className="rounded-card border border-border bg-bg-subtle p-4">
+          <p className="flex items-center gap-2.5 text-sm">
+            <Spinner size={14} state="active" />
+            <span>{currentStatus}</span>
+          </p>
           <p className="mt-2 text-2xs text-fg-muted">
             Processing for {formatElapsed(elapsed)}
             {import.meta.env.DEV && (
@@ -66,8 +55,8 @@ export function ProcessingFlow({
               </>
             )}
           </p>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* Only the current stage is announced; the elapsed timer is not. */}
       <p className="sr-only" aria-live="polite">
@@ -98,7 +87,7 @@ export function ProcessingFlow({
             </p>
           )}
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div>
             {/* the URL lives only behind this action, exactly as returned */}
             <a
               href={generation.result.downloadUrl}
@@ -110,28 +99,24 @@ export function ProcessingFlow({
               <Download {...smallIconProps} />
               Download presentation
             </a>
-            <Button variant="outline" size="sm" onClick={onStartOver}>
-              Create another presentation
-            </Button>
           </div>
         </section>
       )}
 
       {generation.status === 'error' && (
-        <section aria-label="Generation failed" className="flex flex-col gap-3 rounded-card border border-border bg-bg p-4">
+        <section aria-label="Presentation failed" className="flex flex-col gap-3 rounded-card border border-border bg-bg p-4">
           <p className="eyebrow text-danger">Generation failed</p>
           <p role="alert" className="text-sm font-bold">
             {generation.message}
           </p>
-          <p className="text-sm text-fg-muted">Please try again. If the issue continues, upload your images again.</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="primary" size="sm" onClick={onRetry}>
-              Try again
-            </Button>
-            <Button variant="outline" size="sm" onClick={onStartOver}>
-              Start over
-            </Button>
-          </div>
+          <p className="text-sm text-fg-muted">{onRetry ? 'Please try again. If the issue continues, send your images again.' : 'Send your images again to retry.'}</p>
+          {onRetry && (
+            <div>
+              <Button variant="primary" size="sm" onClick={onRetry}>
+                Try again
+              </Button>
+            </div>
+          )}
         </section>
       )}
     </div>

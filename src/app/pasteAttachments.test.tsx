@@ -5,7 +5,8 @@ import { renderApp } from './testUtils';
 
 /**
  * Pasting files into the message box is one more input to the attachment pipeline the file picker uses:
- * same validation, same chips (preview / remove), uploaded only when the message is sent.
+ * same validation, same chips (preview / remove). A document is uploaded only when the message is sent; images
+ * (PNG / JPG, three at most) are sent as a presentation instead.
  */
 
 const file = (bytes: number, type: string, name = '') => new File([new Uint8Array(bytes)], name, { type });
@@ -63,21 +64,24 @@ describe('pasting images and files into the message box', () => {
   it('names a nameless JPEG pasted-image.jpg, and keeps a copied file’s own name (files exposed only as items too)', async () => {
     await setup();
     paste(clipboard({ files: [file(1024, 'image/jpeg')] }));
+    expect(chipNames()).toEqual(['pasted-image.jpg']);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove pasted-image.jpg' }));
     paste(clipboard({ files: [file(4096, 'application/pdf', 'Board pack Q3.pdf')], via: 'items' }));
-    expect(chipNames()).toEqual(['pasted-image.jpg', 'Board pack Q3.pdf']);
+    expect(chipNames()).toEqual(['Board pack Q3.pdf']);
   });
 
-  it('uses the picker’s validation: wrong type, oversize and the attachment limit are rejected with its messages', async () => {
+  it('validates as the picker does: wrong type, oversize and the image limit are rejected with their messages', async () => {
     await setup();
     paste(clipboard({ files: [file(10, 'text/csv', 'numbers.csv'), file(ATTACHMENT_LIMITS.maxBytes + 1, 'image/png', 'huge.png')] }));
-    expect(await screen.findByText('numbers.csv: Only PDF, PNG, JPEG, WebP and GIF files can be attached.')).toBeTruthy();
+    expect(await screen.findByText('numbers.csv: Only PDF documents and PNG or JPG images can be attached.')).toBeTruthy();
     expect(await screen.findByText('huge.png: Files can be up to 25 MB.')).toBeTruthy();
     expect(chips()).toBeNull();
 
-    const many = Array.from({ length: ATTACHMENT_LIMITS.maxFiles + 1 }, (_, i) => file(10, 'image/png', `shot-${i + 1}.png`));
+    // Images sent in a chat become a presentation: three at most.
+    const many = Array.from({ length: 4 }, (_, i) => file(10 + i, 'image/png', `shot-${i + 1}.png`));
     paste(clipboard({ files: many }));
-    expect(chipNames()).toHaveLength(ATTACHMENT_LIMITS.maxFiles);
-    expect(await screen.findByText(`shot-7.png: You can attach up to ${ATTACHMENT_LIMITS.maxFiles} files.`)).toBeTruthy();
+    expect(chipNames()).toEqual(['shot-1.png', 'shot-2.png', 'shot-3.png']);
+    expect(await screen.findByText('You can upload a maximum of 3 images at a time.')).toBeTruthy();
   });
 
   it('attaches the files of a mixed paste and lets its plain text paste as usual', async () => {
@@ -93,24 +97,40 @@ describe('pasting images and files into the message box', () => {
     expect(chips()).toBeNull();
   });
 
-  it('is sent with the message through the normal flow: one upload, one message', async () => {
+  it('a pasted document is sent with the message through the normal flow: one upload, one message', async () => {
     const { upload, send } = await setup();
-    paste(clipboard({ files: [file(10, 'image/png')] }));
+    paste(clipboard({ files: [file(10, 'application/pdf', 'Board pack Q3.pdf')] }));
     fireEvent.change(box(), { target: { value: 'What does this show?' } });
     await act(async () => fireEvent.keyDown(box(), { key: 'Enter' }));
 
     await waitFor(() => expect(send).toHaveBeenCalledOnce());
     expect(upload).toHaveBeenCalledOnce();
-    expect(upload.mock.calls[0]![0]).toMatchObject({ filename: 'pasted-image.png' });
+    expect(upload.mock.calls[0]![0]).toMatchObject({ filename: 'Board pack Q3.pdf' });
     const ref = await upload.mock.results[0]!.value;
     expect(send.mock.calls[0]![1]).toMatchObject({ content: 'What does this show?', attachment_ids: [ref.id] });
+    await waitFor(() => expect(chips()).toBeNull());
+  });
+
+  it('a pasted image is sent as a presentation, not as a chat message (chatImageToPpt.test.tsx covers the run)', async () => {
+    const { upload, send, api } = await setup();
+    const generate = vi.spyOn(api.presentations, 'generate');
+    paste(clipboard({ files: [file(10, 'image/png')] }));
+    fireEvent.change(box(), { target: { value: 'What does this show?' } });
+    await act(async () => fireEvent.keyDown(box(), { key: 'Enter' }));
+    await waitFor(() => expect(generate).toHaveBeenCalledOnce());
+    expect(generate.mock.calls[0]![0].map((f) => f.name)).toEqual(['pasted-image.png']);
+    expect(upload).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
     await waitFor(() => expect(chips()).toBeNull());
   });
 
   it('the attach button’s file picker still attaches through the same path', async () => {
     await setup();
     const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
-    fireEvent.change(input, { target: { files: [file(10, 'image/webp', 'map.webp')] } });
-    expect(chipNames()).toEqual(['map.webp']);
+    fireEvent.change(input, { target: { files: [file(10, 'image/png', 'map.png')] } });
+    expect(chipNames()).toEqual(['map.png']);
+    fireEvent.change(input, { target: { files: [file(10, 'image/webp', 'map.webp')] } }); // not PNG / JPG: refused, never converted
+    expect(chipNames()).toEqual(['map.png']);
+    expect(await screen.findByText(/Unsupported file type\. Please upload JPG, JPEG, or PNG images only\. Skipped map\.webp\./)).toBeTruthy();
   });
 });

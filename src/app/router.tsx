@@ -10,7 +10,6 @@ const granolaCallbackRoute = async () => ({ Component: (await import('./routes/G
 const projectsRoute = async () => ({ Component: (await import('./routes/ProjectsRoute')).default });
 const projectChatRoute = async () => ({ Component: (await import('./routes/ProjectChatRoute')).default });
 const calendarRoute = async () => ({ Component: (await import('./routes/CalendarRoute')).default });
-const imageToPptRoute = async () => ({ Component: (await import('./routes/ImageToPptRoute')).default });
 const meetingsRoute = async () => ({ Component: (await import('./routes/MeetingsRoute')).default });
 const notFoundRoute = async () => ({ Component: (await import('./routes/NotFoundRoute')).default });
 const loginRoute = async () => ({ Component: (await import('./routes/LoginRoute')).default });
@@ -64,7 +63,6 @@ export const routes: RouteObject[] = [
           { path: 'projects/:projectId/c/:conversationId', lazy: projectChatRoute, errorElement: <RouteError /> },
           { path: 'contacts', lazy: contactsRoute, errorElement: <RouteError /> },
           { path: 'calendar', lazy: calendarRoute, errorElement: <RouteError /> },
-          { path: 'image-to-ppt', lazy: imageToPptRoute, errorElement: <RouteError /> },
           { path: 'meetings', lazy: meetingsRoute, errorElement: <RouteError /> },
           { path: 'meetings/:meetingId', lazy: meetingsRoute, errorElement: <RouteError /> },
           { path: 'integrations', lazy: integrationsRoute, errorElement: <RouteError /> },

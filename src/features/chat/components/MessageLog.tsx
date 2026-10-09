@@ -1,5 +1,5 @@
 import { ArrowDown } from 'lucide-react';
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useRef, type ReactNode } from 'react';
 import { useApi } from '@/api';
 import { Spinner, iconProps } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -31,6 +31,15 @@ export interface MessageLogProps {
   activity?: string;
   /** More work is running after the answer's text so far (an agent): its status shows under the text. */
   working?: boolean;
+  /** Other things said in this conversation (presentation runs), placed by time among the turns. */
+  inserts?: LogInsert[];
+}
+
+export interface LogInsert {
+  key: string;
+  /** When it happened (ms): it follows the last turn that started before it. */
+  at: number;
+  node: ReactNode;
 }
 
 interface MessageRowProps {
@@ -98,7 +107,9 @@ function groupTurns(messages: MessageView[]): Turn[] {
   return turns;
 }
 
-export function MessageLog({ messages, failures, older, onRetry, streaming = false, activity, working = false }: MessageLogProps) {
+const NO_INSERTS: LogInsert[] = [];
+
+export function MessageLog({ messages, failures, older, onRetry, streaming = false, activity, working = false, inserts = NO_INSERTS }: MessageLogProps) {
   const logRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -118,6 +129,10 @@ export function MessageLog({ messages, failures, older, onRetry, streaming = fal
   }, [older.loading, resetLoadOlder]);
 
   const turns = groupTurns(messages);
+  // Each insert follows the last turn that started before it (-1: before every turn).
+  const turnTimes = turns.map((turn) => Date.parse(turn.messages[0]!.created_at));
+  const insertsAfter = (index: number) =>
+    inserts.filter((insert) => turnTimes.findLastIndex((time) => !(time > insert.at)) === index).map((insert) => <div key={insert.key}>{insert.node}</div>);
   const last = messages.at(-1);
   const canRegenerate = useApi().capabilities.regenerate;
 
@@ -170,18 +185,24 @@ export function MessageLog({ messages, failures, older, onRetry, streaming = fal
             </div>
           )}
 
-          {turns.map((turn, i) => (
-            <div
-              key={turn.key}
-              className={cn(
-                'flex flex-col gap-2.5 [&:not(:first-child)]:mt-4',
-                // The latest turn fills at least the viewport so its user message can sit at the top.
-                i === turns.length - 1 && turn.anchored && 'min-h-[100cqh]',
-              )}
-            >
-              {renderMessages(turn.messages)}
-            </div>
-          ))}
+          {insertsAfter(-1)}
+          {turns.flatMap((turn, i) => {
+            const after = insertsAfter(i);
+            return [
+              <div
+                key={turn.key}
+                className={cn(
+                  'flex flex-col gap-2.5 [&:not(:first-child)]:mt-4',
+                  // The latest turn fills at least the viewport so its user message can sit at the top
+                  // (unless something follows it: that would be pushed out of sight).
+                  i === turns.length - 1 && turn.anchored && after.length === 0 && 'min-h-[100cqh]',
+                )}
+              >
+                {renderMessages(turn.messages)}
+              </div>,
+              ...after,
+            ];
+          })}
         </div>
       </div>
 

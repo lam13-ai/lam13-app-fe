@@ -2,7 +2,8 @@
  * Single source of truth for the Image → PPT upload contract (ported from the Kothar frontend's `upload.ts`;
  * only the limit differs). When the service changes its formats or limits, change them here only.
  */
-export const MAX_IMAGES = 5;
+/** The generation service takes at most three images per deck ("at most 3 images per deck" is its own refusal). */
+export const MAX_IMAGES = 3;
 export const ACCEPTED_MIME = ['image/jpeg', 'image/png'];
 export const ACCEPTED_EXTENSIONS = ['.jpg', '.jpeg', '.png'];
 /** Value for <input type="file" accept="…"> */
@@ -61,7 +62,7 @@ export function validateSelection<T extends FileLike>(existing: T[], incoming: T
       text: `Unsupported file type. Please upload JPG, JPEG, or PNG images only. Skipped ${nameList(unsupported)}.`,
     });
   if (duplicates) notices.push({ tone: 'warning', text: duplicates === 1 ? 'That image is already selected.' : 'Those images are already selected.' });
-  if (overflow) notices.push({ tone: 'warning', text: `You can upload up to ${MAX_IMAGES} images at a time.` });
+  if (overflow) notices.push({ tone: 'warning', text: `You can upload a maximum of ${MAX_IMAGES} images at a time.` });
 
   return { accepted, notices };
 }

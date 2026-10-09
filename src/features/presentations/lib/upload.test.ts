@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { imagesFromPaste, type PasteEventLike } from './clipboard';
 import { displayFileName, formatElapsed, formatWhen, statusesAt, STATUS_STEPS } from './generation';
 import { ACCEPT_ATTR, ACCEPTED_EXTENSIONS, ACCEPTED_MIME, FORMAT_LABEL, MAX_IMAGES, validateSelection, type FileLike } from './upload';
 
-/** The upload rules, the paste path and the status timeline (the Kothar frontend's tests, with the limit at five). */
+/** The upload rules and the status timeline (the Kothar frontend's tests, with the limit at three). */
 
 const f = (name: string, type = 'image/png', size = 1, lastModified = 1): FileLike => ({ name, type, size, lastModified });
 
@@ -15,9 +14,9 @@ describe('validateSelection', () => {
     expect(r.notices[0]!.text).toMatch(/notes\.pdf/);
   });
 
-  it('the limit is five images: one to five are accepted, a sixth is rejected', () => {
-    expect(MAX_IMAGES).toBe(5);
-    for (let n = 1; n <= 5; n++) {
+  it('the limit is three images: one, two and three are accepted, a fourth is rejected', () => {
+    expect(MAX_IMAGES).toBe(3);
+    for (let n = 1; n <= 3; n++) {
       const r = validateSelection(
         [],
         Array.from({ length: n }, (_, i) => f(`${i}.png`)),
@@ -25,28 +24,30 @@ describe('validateSelection', () => {
       expect(r.accepted).toHaveLength(n);
       expect(r.notices).toEqual([]);
     }
-    const five = Array.from({ length: 5 }, (_, i) => f(`${i}.png`));
-    for (const extra of [[f('6.png')], [f('6.png'), f('7.jpg', 'image/jpeg')]]) {
-      const r = validateSelection(five, extra);
+    const three = Array.from({ length: 3 }, (_, i) => f(`${i}.png`));
+    for (const extra of [[f('4.png')], [f('4.png'), f('5.jpg', 'image/jpeg')]]) {
+      const r = validateSelection(three, extra);
       expect(r.accepted).toEqual([]);
-      expect(r.notices.map((n) => n.text)).toEqual(['You can upload up to 5 images at a time.']);
+      expect(r.notices.map((n) => n.text)).toEqual(['You can upload a maximum of 3 images at a time.']);
     }
-    // a single batch of seven keeps the first five only
-    const batch = validateSelection(
-      [],
-      ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((n) => f(`${n}.png`)),
-    );
-    expect(batch.accepted.map((a) => a.name)).toEqual(['a.png', 'b.png', 'c.png', 'd.png', 'e.png']);
-    expect(batch.notices.at(-1)!.text).toBe('You can upload up to 5 images at a time.');
+    // four (or more) in a single batch: the first three are kept, the rest are refused
+    for (const names of [['a', 'b', 'c', 'd'], ['a', 'b', 'c', 'd', 'e', 'f']]) {
+      const batch = validateSelection(
+        [],
+        names.map((n) => f(`${n}.png`)),
+      );
+      expect(batch.accepted.map((a) => a.name)).toEqual(['a.png', 'b.png', 'c.png']);
+      expect(batch.notices.at(-1)!.text).toBe('You can upload a maximum of 3 images at a time.');
+    }
   });
 
   it('fills up to the limit without wiping the existing selection; removing one makes room again', () => {
-    const existing = [f('1.png'), f('2.png'), f('3.png')];
-    const r = validateSelection(existing, [f('4.png'), f('5.png'), f('6.png')]);
-    expect(r.accepted.map((a) => a.name)).toEqual(['4.png', '5.png']);
+    const existing = [f('1.png')];
+    const r = validateSelection(existing, [f('2.png'), f('3.png'), f('4.png')]);
+    expect(r.accepted.map((a) => a.name)).toEqual(['2.png', '3.png']);
     const afterRemove = [...existing, ...r.accepted].slice(1);
-    const readd = validateSelection(afterRemove, [f('6.png')]);
-    expect(afterRemove.length + readd.accepted.length).toBe(5);
+    const readd = validateSelection(afterRemove, [f('4.png')]);
+    expect(afterRemove.length + readd.accepted.length).toBe(3);
     expect(readd.notices).toEqual([]);
   });
 
@@ -88,59 +89,6 @@ describe('validateSelection', () => {
   it('a mixed selection keeps the supported files and only those', () => {
     const r = validateSelection([], [f('a.png'), f('b.gif', 'image/gif'), f('c.jpg', 'image/jpeg'), f('d.webp', 'image/webp')]);
     expect(r.accepted.map((a) => a.name)).toEqual(['a.png', 'c.jpg']);
-  });
-});
-
-describe('imagesFromPaste', () => {
-  const blob = (type: string, bytes = [1, 2, 3]) => new File([new Uint8Array(bytes)], 'image', { type });
-  const paste = (...items: Array<{ kind: string; type: string; file?: File }>): PasteEventLike => ({
-    clipboardData: { items: items.map((i) => ({ kind: i.kind, type: i.type, getAsFile: () => i.file ?? null })), files: [] },
-  });
-  const image = (type: string, bytes?: number[]) => ({ kind: 'file', type, file: blob(type, bytes) });
-  const text = { kind: 'string', type: 'text/plain' };
-  const counter = () => {
-    let n = 0;
-    return () => ++n;
-  };
-
-  it('a pasted PNG or JPEG becomes a named File; image/jpg is still JPEG; successive pastes are numbered', () => {
-    const next = counter();
-    const [png] = imagesFromPaste(paste(image('image/png')), next);
-    expect([png!.name, png!.type]).toEqual(['pasted-image.png', 'image/png']);
-    const [jpg] = imagesFromPaste(paste(image('image/jpg')), next);
-    expect([jpg!.name, jpg!.type]).toEqual(['pasted-image-2.jpg', 'image/jpeg']);
-  });
-
-  it('clipboard text does not produce an upload, and the same paste is handled only once', () => {
-    expect(imagesFromPaste(paste(text), counter())).toEqual([]);
-    const event = paste(image('image/png'));
-    const next = counter();
-    expect(imagesFromPaste(event, next)).toHaveLength(1);
-    expect(imagesFromPaste(event, next)).toEqual([]);
-  });
-
-  it('unsupported pasted images are handed to validation and rejected there, naming what was pasted', () => {
-    for (const type of ['image/gif', 'image/webp', 'image/svg+xml', 'image/bmp', 'image/heic']) {
-      const files = imagesFromPaste(paste(text, image(type)), counter());
-      expect(files).toHaveLength(1);
-      const { accepted, notices } = validateSelection([], files);
-      expect(accepted).toEqual([]);
-      expect(notices[0]!.text).toMatch(/Unsupported file type/);
-    }
-    expect(imagesFromPaste(paste(image('image/gif')), counter())[0]!.name).toBe('pasted-image.gif');
-  });
-
-  it('the five-image limit still applies to pasted images', () => {
-    const existing = Array.from({ length: MAX_IMAGES }, (_, i) => new File([new Uint8Array([i])], `img-${i}.png`, { type: 'image/png', lastModified: i }));
-    const pasted = imagesFromPaste(paste(image('image/png', [9, 9, 9])), counter());
-    const { accepted, notices } = validateSelection(existing, pasted);
-    expect(accepted).toEqual([]);
-    expect(notices.at(-1)!.text).toMatch(/up to 5 images/);
-  });
-
-  it('files exposed only through clipboardData.files are picked up', () => {
-    const event: PasteEventLike = { clipboardData: { items: [], files: [blob('image/png')] } };
-    expect(imagesFromPaste(event, counter())[0]!.name).toBe('pasted-image.png');
   });
 });
 

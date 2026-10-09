@@ -1,7 +1,7 @@
 import { CalendarDays, FileText, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ApiError, ATTACHMENT_LIMITS, toErrorInfo, useApi } from '@/api';
+import { ApiError, toErrorInfo, useApi } from '@/api';
 import { ErrorState } from '@/components/ErrorState';
 import { Spinner, VisuallyHidden, smallIconProps, useToast } from '@/components/ui';
 import { cn } from '@/lib/cn';
@@ -10,6 +10,15 @@ import { createId } from '@/lib/id';
 import { useComposerStore, type MeetingContext } from '@/stores/composerStore';
 import { useStreamStore, type StreamPhase } from '@/stores/streamStore';
 import { useUiStore } from '@/stores/uiStore';
+import {
+  cancelRun,
+  moveRuns,
+  PRESENTATION_IMAGE_ACCEPT,
+  PresentationTurn,
+  startRun,
+  usePresentationRuns,
+  validatePresentationImages,
+} from '@/features/presentations';
 import type { Recording } from '@/features/voice';
 import type { Conversation } from '@/types/api';
 import type { AgentStatus } from '@/types/chat';
@@ -35,6 +44,11 @@ const ACTIVITY_LABELS: Record<StreamPhase, string> = {
   generating: 'Generating response…', // response_started
   answering: 'Putting the answer together…', // tokens arriving
 };
+
+const isPdf = (file: File) => file.type === 'application/pdf' || (!file.type && /\.pdf$/i.test(file.name));
+/** Anything that is, or claims to be, a picture. Sent in a chat these become a presentation (PNG / JPG only). */
+const isImage = (file: File) => file.type.startsWith('image/') || (!file.type && /\.(png|jpe?g|gif|webp|bmp|svg|tiff?|heic|heif|avif)$/i.test(file.name));
+const MIXED = 'Send images and documents separately: images are turned into a presentation.';
 
 export interface ChatViewProps {
   /** Undefined for a new, unsaved chat (`/`). */
@@ -102,6 +116,15 @@ export function ChatView({ conversationId, conversation, viewKey, scope }: ChatV
   const scopePath = scope?.path;
   const projectId = scope?.projectId;
   const history = useMessages(key, effectiveId);
+  // Image → PPT runs of this conversation (features/presentations). One runs at a time; while it does, the
+  // composer is busy and its Stop cancels the run.
+  const runs = usePresentationRuns(key);
+  const generating = runs.find((run) => run.generation.status === 'processing');
+  // Runs started in an unsaved chat follow it to the conversation it becomes.
+  useEffect(() => {
+    if (effectiveId) moveRuns(newChatKey(origin), effectiveId);
+  }, [effectiveId, origin]);
+  const pendingImages = files.drafts.filter((d) => isImage(d.file));
   const active = useStreamStore((s) => s.active[key]);
   const failures = useStreamStore((s) => s.failures);
 
@@ -121,6 +144,25 @@ export function ChatView({ conversationId, conversation, viewKey, scope }: ChatV
   const activity = active && ACTIVITY_LABELS[active.phase];
   const title = conversationId ? conversation?.title : (scope?.newTitle ?? AGENT_NAME);
   const send = (text: string) => {
+    // Images are sent to be turned into a presentation — no prompt needed, and no chat request is made for
+    // them. Text typed with them is shown with the images (the generation service takes images only).
+    if (pendingImages.length > 0) {
+      if (generating) return; // one run at a time
+      if (!api.presentations.available) {
+        toast.show('Image to PPT is not set up on this deployment yet.');
+        if (text) queueMicrotask(() => useComposerStore.getState().setDraft(draftKey, text)); // the composer clears it after this returns
+        return;
+      }
+      startRun(
+        key,
+        pendingImages.map((d) => d.file),
+        text,
+        api.presentations.generate,
+        Boolean(effectiveId),
+      );
+      files.clear();
+      return;
+    }
     // The meeting context goes with this message, then the chip clears (restored if the send fails first).
     const meetingIds = meeting ? [meeting.id] : undefined;
     if (meeting) useComposerStore.getState().clearMeeting(draftKey);
@@ -141,8 +183,39 @@ export function ChatView({ conversationId, conversation, viewKey, scope }: ChatV
       }
     })();
   };
-  /** Picked or pasted files: one validation path, rejections reported the same way. */
-  const addFiles = (picked: File[]) => files.add(picked).forEach((r) => toast.show(`${r.name}: ${r.reason}`));
+  /**
+   * Picked, pasted or dropped files: one path. Images are checked by the presentation rules (PNG / JPG only,
+   * three at most, no duplicates) before anything is sent; PDFs keep the document rules. The two are not mixed
+   * in one message, because images are not sent to the chat.
+   */
+  const addFiles = (picked: File[]) => {
+    const report = (rejected: { name: string; reason: string }[]) => rejected.forEach((r) => toast.show(`${r.name}: ${r.reason}`));
+    const held = files.peek().map((d) => d.file);
+    const images = picked.filter(isImage);
+    const pdfs = picked.filter((f) => !isImage(f) && isPdf(f));
+    picked.filter((f) => !isImage(f) && !isPdf(f)).forEach((f) => toast.show(`${f.name}: Only PDF documents and PNG or JPG images can be attached.`));
+    if (images.length > 0) {
+      if (held.some(isPdf)) toast.show(MIXED);
+      else {
+        const { accepted, notices } = validatePresentationImages(held.filter(isImage), images);
+        notices.forEach((notice) => toast.show(notice.text));
+        report(files.add(accepted));
+      }
+    }
+    if (pdfs.length > 0) {
+      if (files.peek().some((d) => isImage(d.file))) toast.show(MIXED);
+      else report(files.add(pdfs));
+    }
+  };
+  /** A cancelled run gives its images and text back to the composer. */
+  const restore = ({ files: given, text }: { files: File[]; text: string }) => {
+    files.add(given);
+    if (text) useComposerStore.getState().setDraft(draftKey, text);
+  };
+  const cancelGeneration = () => {
+    const given = generating && cancelRun(generating.id);
+    if (given) restore(given);
+  };
   const loadingHistory = Boolean(conversationId) && history.isPending;
 
   const transcribe = (recording: Recording, signal: AbortSignal) =>
@@ -185,7 +258,7 @@ export function ChatView({ conversationId, conversation, viewKey, scope }: ChatV
         action={{ label: 'Try again', onClick: () => void history.refetch() }}
       />
     );
-  } else if (history.messages.length === 0) {
+  } else if (history.messages.length === 0 && runs.length === 0) {
     body = <EmptyState onSuggestion={send} entering={enteringNewChat} />;
   } else {
     body = (
@@ -202,6 +275,7 @@ export function ChatView({ conversationId, conversation, viewKey, scope }: ChatV
         streaming={Boolean(active)}
         activity={activity}
         working={active?.phase === 'solving'}
+        inserts={runs.map((run) => ({ key: run.id, at: run.generation.startedAt, node: <PresentationTurn run={run} onCancelled={restore} /> }))}
       />
     );
   }
@@ -209,6 +283,15 @@ export function ChatView({ conversationId, conversation, viewKey, scope }: ChatV
   return (
     <section
       aria-label="Chat"
+      // Files dropped anywhere on the chat take the same path as picked or pasted ones.
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('Files')) e.preventDefault();
+      }}
+      onDrop={(e) => {
+        if (e.dataTransfer.files.length === 0) return;
+        e.preventDefault();
+        addFiles(Array.from(e.dataTransfer.files));
+      }}
       className="flex h-full min-h-0 flex-col overflow-hidden bg-bg md:rounded-card md:border md:border-frame md:shadow-card"
     >
       <ChatHeader
@@ -226,11 +309,12 @@ export function ChatView({ conversationId, conversation, viewKey, scope }: ChatV
         <div className="mx-auto w-full max-w-[var(--chat-max-w)]">
           <Composer
             draftKey={draftKey}
-            streaming={Boolean(active)}
+            streaming={Boolean(active) || Boolean(generating)}
             finishing={active?.phase === 'finishing'}
+            canSendEmpty={pendingImages.length > 0}
             disabled={loadingHistory || (history.isError && history.messages.length === 0)}
             onSend={send}
-            onStop={() => actions.stop(key)}
+            onStop={() => (generating ? cancelGeneration() : actions.stop(key))}
             onSendVoice={
               !env.features.voiceNotes
                 ? undefined
@@ -303,7 +387,7 @@ export function ChatView({ conversationId, conversation, viewKey, scope }: ChatV
             type="file"
             multiple
             hidden
-            accept={ATTACHMENT_LIMITS.mimeTypes.join(',')}
+            accept={`application/pdf,${PRESENTATION_IMAGE_ACCEPT}`}
             onChange={(e) => {
               addFiles(Array.from(e.target.files ?? []));
               e.target.value = '';

@@ -235,12 +235,12 @@ export interface WhatsAppService {
 }
 
 /**
- * Image → PPT: one PowerPoint from up to five PNG / JPG images. The HTTP adapter talks to the generation
- * service (src/api/presentation.ts: start a job, poll it, build the download link); the mock adapter answers
- * with a sample result. The page validates the files before calling `generate`.
+ * Image → PPT: one PowerPoint from a few PNG / JPG images sent in a chat. The HTTP adapter talks to the
+ * generation service (src/api/presentation.ts: start a job, poll it, build the download link); the mock
+ * adapter answers with a sample result. The chat composer validates the files before calling `generate`.
  */
 export interface PresentationsService {
-  /** False when the build has no generation service configured: the page says so and offers no Generate. */
+  /** False when the build has no generation service configured: sending images says so and starts nothing. */
   available: boolean;
   /** Resolves when the deck is ready. Aborting `signal` ends the request and its polling. Rejects on any failure. */
   generate(files: File[], options?: { signal?: AbortSignal }): Promise<PresentationResult>;

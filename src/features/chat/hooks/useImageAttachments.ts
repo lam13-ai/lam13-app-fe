@@ -90,5 +90,8 @@ export function useImageAttachments() {
     [api, update],
   );
 
-  return { drafts, add, remove, clear, upload };
+  /** What is held at this instant (not the last render's): for validating a second add in the same tick. */
+  const peek = useCallback(() => current.current, []);
+
+  return { drafts, add, remove, clear, upload, peek };
 }

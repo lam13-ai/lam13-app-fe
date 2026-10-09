@@ -35,6 +35,8 @@ export interface ComposerProps {
   onPasteFiles?: (files: File[]) => void;
   /** Files picked for the next message, shown above the input (keeps the composer open). */
   attachments?: ReactNode;
+  /** What is attached can be sent on its own (images for a presentation): Send works with no text. */
+  canSendEmpty?: boolean;
 }
 
 /**
@@ -56,6 +58,7 @@ export function Composer({
   onAddMeeting,
   onPasteFiles,
   attachments,
+  canSendEmpty = false,
 }: ComposerProps) {
   const draft = useComposerStore((s) => s.drafts[draftKey] ?? '');
   const setDraft = useComposerStore((s) => s.setDraft);
@@ -75,8 +78,8 @@ export function Composer({
   const voiceActive = Boolean(onSendVoice) && recorder.state.status !== 'idle' && recorder.state.status !== 'sent';
 
   const expanded = open || draft.length > 0 || streaming || voiceActive || Boolean(attachments);
-  const canSend = !streaming && !disabled && draft.trim().length > 0;
-  const mode: SendButtonMode = streaming ? 'stop' : draft.trim() || !onSendVoice ? 'send' : 'voice';
+  const canSend = !streaming && !disabled && (draft.trim().length > 0 || canSendEmpty);
+  const mode: SendButtonMode = streaming ? 'stop' : draft.trim() || canSendEmpty || !onSendVoice ? 'send' : 'voice';
 
   // Keyed on the textarea being shown: a transcript set while the voice panel is up must still size it
   // (and its scroll fades) once the textarea is back.
