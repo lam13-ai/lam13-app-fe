@@ -549,5 +549,13 @@ export function createMockAdapter(options: MockAdapterOptions = {}): ApiAdapter 
         ),
     }),
     calendar: createMockCalendar({ now, respond: () => respond() }),
+    // The sample backend makes no deck: after a moment it answers as the service does for a finished job.
+    presentations: {
+      available: true,
+      async generate(files, options) {
+        await respond(options?.signal);
+        return { kind: 'url', downloadUrl: 'https://mock.local/studio/download/img2pptx__mock', asked: files.length, slideCount: files.length };
+      },
+    },
   };
 }

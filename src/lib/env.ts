@@ -21,10 +21,21 @@ function optional(value: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+/** A positive number of milliseconds, or the fallback for anything else. */
+function millis(value: string | undefined, fallback: number): number {
+  const parsed = Number(optional(value));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export function parseEnv(raw: ImportMetaEnv) {
   const apiBaseUrl = (optional(raw.VITE_API_BASE_URL) ?? '').replace(/\/+$/, '');
   if (apiBaseUrl && !/^https?:\/\//.test(apiBaseUrl)) {
     throw new Error('VITE_API_BASE_URL must be an absolute http(s) URL.');
+  }
+
+  const presentationEndpoint = (optional(raw.VITE_PRESENTATION_ENDPOINT) ?? '').replace(/\/+$/, '');
+  if (presentationEndpoint && !/^https?:\/\//.test(presentationEndpoint)) {
+    throw new Error('VITE_PRESENTATION_ENDPOINT must be an absolute http(s) URL.');
   }
 
   // The local dev auth provider is only honoured in development builds; production always uses Kinde.
@@ -45,6 +56,19 @@ export function parseEnv(raw: ImportMetaEnv) {
     vapi: Object.freeze({
       publicKey: optional(raw.VITE_VAPI_PUBLIC_KEY),
       assistantId: optional(raw.VITE_VAPI_ASSISTANT_ID),
+    }),
+    /**
+     * Image → PPT: a separate service from the chat API. `endpoint` is its base URL (every path is derived
+     * from it in src/api/presentation.ts); empty = the feature is not set up, and the page says so.
+     */
+    presentation: Object.freeze({
+      endpoint: presentationEndpoint,
+      /** Send the signed-in user's bearer token to the service (only when it is configured to check it). */
+      requireAuth: flag(raw.VITE_PRESENTATION_REQUIRE_AUTH, false),
+      /** Wait before retrying a status check that failed transiently. */
+      pollMs: millis(raw.VITE_PRESENTATION_POLL_MS, 10_000),
+      /** Ceiling for one generation (the service asks for 15 minutes). */
+      pollTimeoutMs: millis(raw.VITE_PRESENTATION_POLL_TIMEOUT_MS, 900_000),
     }),
     features: Object.freeze({
       calling: flag(raw.VITE_FEATURE_CALLING, true),

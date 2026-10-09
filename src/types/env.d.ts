@@ -13,6 +13,10 @@ interface ImportMetaEnv {
   readonly VITE_VAPI_ASSISTANT_ID?: string;
   readonly VITE_FEATURE_CALLING?: string;
   readonly VITE_FEATURE_VOICE_NOTES?: string;
+  readonly VITE_PRESENTATION_ENDPOINT?: string;
+  readonly VITE_PRESENTATION_REQUIRE_AUTH?: string;
+  readonly VITE_PRESENTATION_POLL_MS?: string;
+  readonly VITE_PRESENTATION_POLL_TIMEOUT_MS?: string;
 }
 
 interface ImportMeta {

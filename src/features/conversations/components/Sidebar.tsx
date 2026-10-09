@@ -1,5 +1,5 @@
 import { Link, NavLink, useNavigate } from 'react-router';
-import { CalendarDays, FolderKanban, LogOut, PanelLeftClose, PanelLeftOpen, Plug, Shield, SquarePen, Users, X } from 'lucide-react';
+import { CalendarDays, FolderKanban, LogOut, PanelLeftClose, PanelLeftOpen, Plug, Presentation, Shield, SquarePen, Users, X } from 'lucide-react';
 import { Wordmark } from '@/components/AgentMark';
 import { LegalLinks } from '@/components/LegalLinks';
 import { ThemeMenu } from '@/components/ThemeMenu';
@@ -15,6 +15,7 @@ const NAV = [
   { to: '/projects', label: 'Projects', Icon: FolderKanban },
   { to: '/contacts', label: 'My Contacts', Icon: Users },
   { to: '/calendar', label: 'Calendar', Icon: CalendarDays },
+  { to: '/image-to-ppt', label: 'Image to PPT', Icon: Presentation },
   { to: '/integrations', label: 'Integrations', Icon: Plug },
 ] as const;
 

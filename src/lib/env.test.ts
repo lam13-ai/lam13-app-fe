@@ -32,6 +32,24 @@ describe('parseEnv', () => {
     }
   });
 
+  it('Image to PPT: not set up by default; the endpoint is normalised and validated without echoing its value', () => {
+    expect(parseEnv(base).presentation).toEqual({ endpoint: '', requireAuth: false, pollMs: 10_000, pollTimeoutMs: 900_000 });
+    const env = parseEnv({
+      ...base,
+      VITE_PRESENTATION_ENDPOINT: 'https://service.example.com//',
+      VITE_PRESENTATION_REQUIRE_AUTH: 'true',
+      VITE_PRESENTATION_POLL_MS: '2500',
+      VITE_PRESENTATION_POLL_TIMEOUT_MS: 'not-a-number',
+    });
+    expect(env.presentation).toEqual({ endpoint: 'https://service.example.com', requireAuth: true, pollMs: 2500, pollTimeoutMs: 900_000 });
+    expect(() => parseEnv({ ...base, VITE_PRESENTATION_ENDPOINT: 'internal-host-name' })).toThrow(/VITE_PRESENTATION_ENDPOINT/);
+    try {
+      parseEnv({ ...base, VITE_PRESENTATION_ENDPOINT: 'internal-host-name' });
+    } catch (error) {
+      expect(String(error)).not.toContain('internal-host-name');
+    }
+  });
+
   it('honours VITE_AUTH_MODE=dev only in development builds', () => {
     expect(parseEnv({ ...base, VITE_AUTH_MODE: 'dev' }).authMode).toBe('kinde');
     expect(parseEnv({ ...base, DEV: true, PROD: false, VITE_AUTH_MODE: 'dev' }).authMode).toBe('dev');

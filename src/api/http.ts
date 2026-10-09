@@ -20,6 +20,7 @@ import { createMockAdapter } from './mock/mockAdapter';
 import { createHttpProjects } from './httpWorkspace';
 import { isDemoConversation } from './mock/projectChatFixtures';
 import { createMockWhatsApp } from './mock/whatsapp';
+import { generatePresentation } from './presentation';
 import { createMockCalendar } from './mock/workspace';
 import type { ApiAdapter, SendMessageBody } from './services';
 import { readSseMessages, type SseMessage, type StreamEvent } from './stream';
@@ -657,6 +658,11 @@ export function createHttpAdapter(): ApiAdapter {
     // DEMO: the calendar shows the local sample data, as before the backend integration: no request is made.
     // The backend-backed one is `createHttpCalendar()` (httpWorkspace.ts), ready to be put here.
     calendar: createMockCalendar(),
+    // Image → PPT: the separate generation service (presentation.ts). Not set up without its endpoint.
+    presentations: {
+      available: Boolean(env.presentation.endpoint),
+      generate: (files, options) => generatePresentation(files, options),
+    },
 
     // My Contacts: /contacts. The UI searches and sorts the (unpaginated) list itself; version history has
     // no UI yet and is not called.

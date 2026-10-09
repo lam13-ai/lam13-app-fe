@@ -22,6 +22,7 @@ import type {
   WhatsAppConnection,
   WhatsAppVerification,
 } from '@/types/api';
+import type { PresentationResult } from './presentation';
 import type { EventStream } from './stream';
 
 /**
@@ -233,6 +234,18 @@ export interface WhatsAppService {
   disconnect(): Promise<WhatsAppConnection>;
 }
 
+/**
+ * Image → PPT: one PowerPoint from up to five PNG / JPG images. The HTTP adapter talks to the generation
+ * service (src/api/presentation.ts: start a job, poll it, build the download link); the mock adapter answers
+ * with a sample result. The page validates the files before calling `generate`.
+ */
+export interface PresentationsService {
+  /** False when the build has no generation service configured: the page says so and offers no Generate. */
+  available: boolean;
+  /** Resolves when the deck is ready. Aborting `signal` ends the request and its polling. Rejects on any failure. */
+  generate(files: File[], options?: { signal?: AbortSignal }): Promise<PresentationResult>;
+}
+
 /** What the connected backend supports; the UI hides the rest instead of offering failing actions. */
 export interface ApiCapabilities {
   /** `messages.regenerate` (Regenerate, and Retry of a server-side answer in place). */
@@ -332,4 +345,5 @@ export interface ApiAdapter {
   whatsapp: WhatsAppService;
   projects: ProjectsService;
   calendar: CalendarService;
+  presentations: PresentationsService;
 }

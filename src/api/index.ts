@@ -26,6 +26,7 @@ export type {
   ProfilesService,
   ProjectsService,
   CalendarService,
+  PresentationsService,
   ProfileSuggestionListParams,
   TestSuggestionBody,
   ProfileSuggestionsService,
@@ -34,6 +35,7 @@ export type {
   TranscriptionInput,
 } from './services';
 export { createHttpAdapter, request, requestJson, type RequestOptions } from './http';
+export type { PresentationResult } from './presentation';
 export { readEventStream, type EventStream, type StreamEvent, type StreamEventName } from './stream';
 export { isDemoConversation } from './mock/projectChatFixtures';
 export { createMockAdapter, INSTANT_TIMING, REALISTIC_TIMING, type MockAdapterOptions, type MockTiming } from './mock/mockAdapter';
